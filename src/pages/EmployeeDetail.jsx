@@ -122,8 +122,8 @@ export default function EmployeeDetail({ employee }) {
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-              <span className="text-lg font-bold text-indigo-600">
+            <div className="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+              <span className="text-lg font-bold text-brand-600">
                 {(employee?.first_name?.[0] || '')}{(employee?.last_name?.[0] || '')}
               </span>
             </div>
@@ -202,7 +202,7 @@ export default function EmployeeDetail({ employee }) {
               onClick={() => setPaintMode(!paintMode)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 paintMode
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-brand-600 text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -215,7 +215,7 @@ export default function EmployeeDetail({ employee }) {
                     key={c.code}
                     onClick={() => setSelectedCode(c.code)}
                     className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${
-                      selectedCode === c.code ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105' : ''
+                      selectedCode === c.code ? 'ring-2 ring-offset-1 ring-brand-400 scale-105' : ''
                     }`}
                     style={{
                       backgroundColor: c.hex.bg,

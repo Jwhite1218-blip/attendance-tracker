@@ -169,7 +169,7 @@ export default function QuickMark() {
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-indigo-500 rounded-full transition-all"
+                    className="h-full bg-brand-500 rounded-full transition-all"
                     style={{ width: `${(markedCount / roster.length) * 100}%` }}
                   />
                 </div>
@@ -185,10 +185,10 @@ export default function QuickMark() {
           <div>
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Employee header */}
-              <div className="p-5 bg-gradient-to-r from-indigo-50 to-white">
+              <div className="p-5 bg-gradient-to-r from-brand-50 to-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-full bg-indigo-600 flex items-center justify-center flex-shrink-0">
+                    <div className="w-14 h-14 rounded-full bg-brand-600 flex items-center justify-center flex-shrink-0">
                       <span className="text-lg font-bold text-white">
                         {currentEmployee.first_name?.[0]}{currentEmployee.last_name?.[0]}
                       </span>
@@ -212,7 +212,7 @@ export default function QuickMark() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs text-gray-400">Employee</p>
-                    <p className="text-2xl font-bold text-indigo-600">{currentIdx + 1}<span className="text-gray-300 text-base">/{roster.length}</span></p>
+                    <p className="text-2xl font-bold text-brand-600">{currentIdx + 1}<span className="text-gray-300 text-base">/{roster.length}</span></p>
                   </div>
                 </div>
               </div>
@@ -292,7 +292,7 @@ export default function QuickMark() {
                 <button
                   onClick={handleNext}
                   disabled={currentIdx === roster.length - 1}
-                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   Next →
                 </button>
@@ -312,7 +312,7 @@ export default function QuickMark() {
                       onClick={() => setCurrentIdx(idx)}
                       className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium border transition-all ${
                         idx === currentIdx
-                          ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-200'
+                          ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-200'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >

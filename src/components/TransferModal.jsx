@@ -81,7 +81,7 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
             <button
               onClick={handleTransfer}
               disabled={!selectedLocation}
-              className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               Transfer Employee
             </button>

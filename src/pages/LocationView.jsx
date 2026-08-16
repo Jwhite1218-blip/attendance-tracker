@@ -59,7 +59,7 @@ export default function LocationView() {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
         <p className="text-gray-500">Location not found.</p>
-        <Link to="/" className="text-indigo-600 hover:underline mt-2 inline-block">Back to Dashboard</Link>
+        <Link to="/" className="text-brand-600 hover:underline mt-2 inline-block">Back to Dashboard</Link>
       </div>
     )
   }
@@ -68,9 +68,9 @@ export default function LocationView() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-          <Link to="/" className="hover:text-indigo-600">Dashboard</Link>
+          <Link to="/" className="hover:text-brand-600">Dashboard</Link>
           <span>/</span>
-          <Link to={`/location/${id}`} className="hover:text-indigo-600" onClick={() => setSelectedEmployee(null)}>
+          <Link to={`/location/${id}`} className="hover:text-brand-600" onClick={() => setSelectedEmployee(null)}>
             {location.name}
           </Link>
           <span>/</span>
@@ -78,7 +78,7 @@ export default function LocationView() {
         </div>
         <EmployeeDetail employee={selectedEmployee} />
         <div className="mt-6">
-          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-indigo-600 hover:underline">
+          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-brand-600 hover:underline">
             ← Back to {location.name} roster
           </button>
         </div>
@@ -132,7 +132,7 @@ export default function LocationView() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onMouseLeave={() => setIsPainting(false)}>
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-        <Link to="/" className="hover:text-indigo-600">Dashboard</Link>
+        <Link to="/" className="hover:text-brand-600">Dashboard</Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{location.name}</span>
       </div>
@@ -190,14 +190,14 @@ export default function LocationView() {
       {/* Paint Mode Bar */}
       <div className="flex flex-wrap items-center gap-3 mb-4 bg-white border border-gray-200 rounded-xl p-3">
         <button onClick={() => setPaintMode(!paintMode)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
           {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
         </button>
         {paintMode && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
               <button key={c.code} onClick={() => setSelectedCode(c.code)}
-                className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${selectedCode === c.code ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105' : ''}`}
+                className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${selectedCode === c.code ? 'ring-2 ring-offset-1 ring-brand-400 scale-105' : ''}`}
                 style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }} title={c.label}>
                 {c.shortLabel}
               </button>
@@ -217,7 +217,7 @@ export default function LocationView() {
                 {dates.map(d => (
                   <th key={d} className="text-center px-2 py-3" style={{ minWidth: '90px' }}>
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{formatDate(d)}</div>
-                    <button onClick={() => handleSetAll(d, '')} className="mt-1 text-[10px] text-gray-400 hover:text-indigo-500">Clear All</button>
+                    <button onClick={() => handleSetAll(d, '')} className="mt-1 text-[10px] text-gray-400 hover:text-brand-500">Clear All</button>
                   </th>
                 ))}
               </tr>
@@ -227,17 +227,17 @@ export default function LocationView() {
                 <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}>
                   <td className={`sticky left-0 z-10 px-4 py-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                     <button onClick={() => setSelectedEmployee(emp)} className="flex items-center gap-3 text-left group w-full">
-                      <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-semibold text-indigo-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
+                      <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 transition-colors truncate flex items-center gap-1">
+                        <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate flex items-center gap-1">
                           {emp.first_name} {emp.last_name}
                           {emp.isTransferred && <span className="text-amber-500 text-[10px]" title={`Covering from ${LOCATION_MAP[emp.originalLocation]?.name}`}>⚠</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{emp.position}</p>
                       </div>
-                      <svg className="w-4 h-4 text-gray-300 group-hover:text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <svg className="w-4 h-4 text-gray-300 group-hover:text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
@@ -256,7 +256,7 @@ export default function LocationView() {
                           className="w-full flex justify-center"
                         >
                           {code ? <StatusBadge code={code} size="small" /> : (
-                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-indigo-300 hover:text-indigo-400 transition-colors w-[28px] h-[22px]">·</span>
+                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-brand-300 hover:text-brand-400 transition-colors w-[28px] h-[22px]">·</span>
                           )}
                         </button>
                       </td>

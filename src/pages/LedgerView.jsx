@@ -236,7 +236,7 @@ export default function LedgerView() {
           {/* Ledger grids */}
           {years.map(year => (
             <div key={year} className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-              <div className="bg-indigo-600 text-white text-sm font-bold px-3 py-2">{year}</div>
+              <div className="bg-brand-600 text-white text-sm font-bold px-3 py-2">{year}</div>
               <div className="overflow-x-auto">
                 <table className="w-full border-collapse">
                   <thead>
@@ -251,7 +251,7 @@ export default function LedgerView() {
                     {MONTHS.map((monthName, monthIdx) => {
                       const numDays = daysInMonth(year, monthIdx)
                       return (
-                        <tr key={monthIdx} className="hover:bg-indigo-50/30">
+                        <tr key={monthIdx} className="hover:bg-brand-50/30">
                           <td className="sticky left-0 bg-white text-xs font-semibold text-gray-700 px-2 py-1 border-b border-gray-100" style={{ minWidth: '64px' }}>{monthName}</td>
                           {Array.from({ length: 31 }).map((_, i) => {
                             const day = i + 1
@@ -263,7 +263,7 @@ export default function LedgerView() {
                               <td key={i} className="border-b border-l border-gray-100 p-0">
                                 <button
                                   onClick={() => handleCellClick(year, monthIdx, day)}
-                                  className="w-full h-7 flex items-center justify-center text-[9px] font-bold hover:ring-1 hover:ring-inset hover:ring-indigo-300 transition-all"
+                                  className="w-full h-7 flex items-center justify-center text-[9px] font-bold hover:ring-1 hover:ring-inset hover:ring-brand-300 transition-all"
                                   style={code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
                                   title={`${monthName} ${day}, ${year} — ${info?.label || 'Present'}`}
                                 >{code || ''}</button>
