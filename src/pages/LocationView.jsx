@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import employees from '../data/employees.json'
+import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
+import TransferModal from '../components/TransferModal.jsx'
 
 function getWeekDates(weekOffset = 0) {
   const today = new Date()
@@ -33,9 +34,11 @@ export default function LocationView() {
   const [selectedCode, setSelectedCode] = useState('U')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
-  const roster = useMemo(() => employees.filter(e => e.location === id), [id])
+  const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey])
 
   const locKey = `${id}-${weekOffset}`
 
@@ -61,7 +64,6 @@ export default function LocationView() {
     )
   }
 
-  // If an employee is selected, show their detail view
   if (selectedEmployee) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -76,10 +78,7 @@ export default function LocationView() {
         </div>
         <EmployeeDetail employee={selectedEmployee} />
         <div className="mt-6">
-          <button
-            onClick={() => setSelectedEmployee(null)}
-            className="text-sm text-indigo-600 hover:underline"
-          >
+          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-indigo-600 hover:underline">
             ← Back to {location.name} roster
           </button>
         </div>
@@ -97,11 +96,7 @@ export default function LocationView() {
     const currentIdx = CODE_CYCLE.indexOf(current)
     const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
     if (nextCode === '') {
-      setAttendance(prev => {
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
+      setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
     } else {
       setAttendance(prev => ({ ...prev, [key]: { code: nextCode, date, empId } }))
     }
@@ -112,11 +107,7 @@ export default function LocationView() {
       const updated = { ...prev }
       roster.forEach(emp => {
         const key = `${emp.kronos_id || emp.id}-${date}`
-        if (code === '') {
-          delete updated[key]
-        } else {
-          updated[key] = { code, date, empId: emp.kronos_id || emp.id }
-        }
+        if (code === '') { delete updated[key] } else { updated[key] = { code, date, empId: emp.kronos_id || emp.id } }
       })
       return updated
     })
@@ -130,32 +121,30 @@ export default function LocationView() {
         stats.total++
         const key = `${emp.kronos_id || emp.id}-${d}`
         const code = attendance[key]?.code
-        if (code) {
-          stats[code] = (stats[code] || 0) + 1
-          stats.marked++
-        }
+        if (code) { stats[code] = (stats[code] || 0) + 1; stats.marked++ }
       })
     })
     return stats
   }, [attendance, roster, dates])
 
+  const transferredHere = roster.filter(e => e.isTransferred)
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
-      onMouseLeave={() => setIsPainting(false)}
-    >
-      {/* Breadcrumb */}
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onMouseLeave={() => setIsPainting(false)}>
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
         <Link to="/" className="hover:text-indigo-600">Dashboard</Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{location.name}</span>
       </div>
 
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{location.name}</h1>
           <p className="text-sm text-gray-500 mt-1">
             {location.type} · {roster.length} staff · {location.id}
+            {transferredHere.length > 0 && (
+              <span className="text-amber-600 ml-2">· {transferredHere.length} covering from other schools</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -169,6 +158,20 @@ export default function LocationView() {
         </div>
       </div>
 
+      {/* Transferred employees banner */}
+      {transferredHere.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
+          <p className="text-sm text-amber-700 font-medium">⚠ Staff covering from other schools:</p>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {transferredHere.map(e => (
+              <span key={e.id} className="text-xs bg-white border border-amber-200 rounded px-2 py-1">
+                {e.first_name} {e.last_name} ← {LOCATION_MAP[e.originalLocation]?.name || e.originalLocation}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Quick Stats */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
@@ -178,8 +181,7 @@ export default function LocationView() {
         {ATTENDANCE_CODES.filter(c => c.code && weekStats[c.code] > 0).map(c => (
           <div key={c.code} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
             <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border px-1 py-0.5 min-w-[24px]"
-              style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
-            >{c.shortLabel}</span>
+              style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
             <span className="text-sm font-semibold text-gray-700">{weekStats[c.code]}</span>
           </div>
         ))}
@@ -187,34 +189,22 @@ export default function LocationView() {
 
       {/* Paint Mode Bar */}
       <div className="flex flex-wrap items-center gap-3 mb-4 bg-white border border-gray-200 rounded-xl p-3">
-        <button
-          onClick={() => setPaintMode(!paintMode)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            paintMode ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
+        <button onClick={() => setPaintMode(!paintMode)}
+          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
           {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
         </button>
         {paintMode && (
           <div className="flex items-center gap-1.5 flex-wrap">
             {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
-              <button
-                key={c.code}
-                onClick={() => setSelectedCode(c.code)}
-                className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${
-                  selectedCode === c.code ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105' : ''
-                }`}
-                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
-                title={c.label}
-              >
+              <button key={c.code} onClick={() => setSelectedCode(c.code)}
+                className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${selectedCode === c.code ? 'ring-2 ring-offset-1 ring-indigo-400 scale-105' : ''}`}
+                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }} title={c.label}>
                 {c.shortLabel}
               </button>
             ))}
           </div>
         )}
-        <span className="text-xs text-gray-400 ml-auto">
-          {paintMode ? 'Click or drag to mark' : 'Click cells to cycle codes · Click name for full history'}
-        </span>
+        <span className="text-xs text-gray-400 ml-auto">{paintMode ? 'Click or drag to mark' : 'Click cells to cycle codes · Click name for full history'}</span>
       </div>
 
       {/* Attendance Grid */}
@@ -223,18 +213,11 @@ export default function LocationView() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="sticky left-0 bg-gray-50 z-10 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>
-                  Employee
-                </th>
+                <th className="sticky left-0 bg-gray-50 z-10 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>Employee</th>
                 {dates.map(d => (
                   <th key={d} className="text-center px-2 py-3" style={{ minWidth: '90px' }}>
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{formatDate(d)}</div>
-                    <button
-                      onClick={() => handleSetAll(d, '')}
-                      className="mt-1 text-[10px] text-gray-400 hover:text-indigo-500"
-                    >
-                      Clear All
-                    </button>
+                    <button onClick={() => handleSetAll(d, '')} className="mt-1 text-[10px] text-gray-400 hover:text-indigo-500">Clear All</button>
                   </th>
                 ))}
               </tr>
@@ -243,18 +226,14 @@ export default function LocationView() {
               {roster.map((emp, idx) => (
                 <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}>
                   <td className={`sticky left-0 z-10 px-4 py-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <button
-                      onClick={() => setSelectedEmployee(emp)}
-                      className="flex items-center gap-3 text-left group w-full"
-                    >
+                    <button onClick={() => setSelectedEmployee(emp)} className="flex items-center gap-3 text-left group w-full">
                       <div className="w-9 h-9 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-semibold text-indigo-600">
-                          {emp.first_name?.[0]}{emp.last_name?.[0]}
-                        </span>
+                        <span className="text-xs font-semibold text-indigo-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 transition-colors truncate">
+                        <p className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 transition-colors truncate flex items-center gap-1">
                           {emp.first_name} {emp.last_name}
+                          {emp.isTransferred && <span className="text-amber-500 text-[10px]" title={`Covering from ${LOCATION_MAP[emp.originalLocation]?.name}`}>⚠</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{emp.position}</p>
                       </div>
@@ -273,19 +252,11 @@ export default function LocationView() {
                           onClick={() => handleToggle(emp.kronos_id || emp.id, d)}
                           onMouseDown={() => paintMode && setIsPainting(true)}
                           onMouseUp={() => setIsPainting(false)}
-                          onMouseEnter={() => {
-                            if (paintMode && isPainting) {
-                              handleToggle(emp.kronos_id || emp.id, d)
-                            }
-                          }}
+                          onMouseEnter={() => { if (paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
                           className="w-full flex justify-center"
                         >
-                          {code ? (
-                            <StatusBadge code={code} size="small" />
-                          ) : (
-                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-indigo-300 hover:text-indigo-400 transition-colors w-[28px] h-[22px]">
-                              ·
-                            </span>
+                          {code ? <StatusBadge code={code} size="small" /> : (
+                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-indigo-300 hover:text-indigo-400 transition-colors w-[28px] h-[22px]">·</span>
                           )}
                         </button>
                       </td>
@@ -298,9 +269,20 @@ export default function LocationView() {
         </div>
       </div>
 
-      <p className="text-xs text-gray-400 mt-4">
-        Click a cell to cycle through attendance codes. Click an employee name to see their full year calendar & history.
-      </p>
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs text-gray-400">Click a cell to cycle through codes. Click an employee name to see their full year calendar & history.</p>
+        <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
+          🔄 Transfer an employee to another school
+        </button>
+      </div>
+
+      {showTransfer && roster[0] && (
+        <TransferModal
+          employee={roster[0]}
+          onClose={() => setShowTransfer(false)}
+          onTransferred={() => setRefreshKey(k => k + 1)}
+        />
+      )}
     </div>
   )
 }
