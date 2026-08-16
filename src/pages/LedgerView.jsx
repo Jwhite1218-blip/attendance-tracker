@@ -114,7 +114,7 @@ export default function LedgerView() {
 
   if (!employee) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-8 text-gray-500">
+      <div className="max-w-7xl mx-auto px-4 py-8 text-charcoal-200">
         Select a school and employee to view their attendance ledger.
       </div>
     )
@@ -123,8 +123,8 @@ export default function LedgerView() {
   return (
     <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Ledger View</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-white">Ledger View</h1>
+        <p className="text-sm text-charcoal-200 mt-1">
           Classic sheet-style attendance ledger — pick a school, pick an employee, mark their year.
         </p>
       </div>
@@ -279,7 +279,7 @@ export default function LedgerView() {
             </div>
           ))}
 
-          <p className="text-xs text-gray-400">Click any day cell to cycle through codes. Data is shared with the Year Calendar view.</p>
+          <p className="text-xs text-charcoal-300">Click any day cell to cycle through codes. Data is shared with the Year Calendar view.</p>
         </div>
 
         {/* Key sidebar */}

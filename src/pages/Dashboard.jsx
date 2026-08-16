@@ -37,8 +37,8 @@ export default function Dashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+        <p className="text-sm text-charcoal-200 mt-1">
           {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
           {transferredCount > 0 && <span className="text-amber-600"> · {transferredCount} on transfer</span>}
         </p>
@@ -82,7 +82,7 @@ export default function Dashboard() {
       )}
 
       {/* Location Grid */}
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Locations</h2>
+      <h2 className="text-lg font-semibold text-white mb-4">Locations</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {LOCATIONS
           .filter(loc => locationCounts[loc.id])

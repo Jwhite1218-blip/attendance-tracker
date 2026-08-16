@@ -58,8 +58,8 @@ export default function LocationView() {
   if (!location) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-gray-500">Location not found.</p>
-        <Link to="/" className="text-brand-600 hover:underline mt-2 inline-block">Back to Dashboard</Link>
+        <p className="text-charcoal-200">Location not found.</p>
+        <Link to="/" className="text-brand-300 hover:underline mt-2 inline-block">Back to Dashboard</Link>
       </div>
     )
   }
@@ -67,18 +67,18 @@ export default function LocationView() {
   if (selectedEmployee) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center gap-2 text-sm text-gray-500 mb-6">
-          <Link to="/" className="hover:text-brand-600">Dashboard</Link>
+        <div className="flex items-center gap-2 text-sm text-charcoal-200 mb-6">
+          <Link to="/" className="hover:text-brand-300">Dashboard</Link>
           <span>/</span>
-          <Link to={`/location/${id}`} className="hover:text-brand-600" onClick={() => setSelectedEmployee(null)}>
+          <Link to={`/location/${id}`} className="hover:text-brand-300" onClick={() => setSelectedEmployee(null)}>
             {location.name}
           </Link>
           <span>/</span>
-          <span className="text-gray-900 font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>
+          <span className="text-white font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>
         </div>
         <EmployeeDetail employee={selectedEmployee} />
         <div className="mt-6">
-          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-brand-600 hover:underline">
+          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-brand-300 hover:underline">
             ← Back to {location.name} roster
           </button>
         </div>
@@ -131,16 +131,16 @@ export default function LocationView() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onMouseLeave={() => setIsPainting(false)}>
-      <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-        <Link to="/" className="hover:text-brand-600">Dashboard</Link>
+      <div className="flex items-center gap-2 text-sm text-charcoal-200 mb-4">
+        <Link to="/" className="hover:text-brand-300">Dashboard</Link>
         <span>/</span>
-        <span className="text-gray-900 font-medium">{location.name}</span>
+        <span className="text-white font-medium">{location.name}</span>
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{location.name}</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold text-white">{location.name}</h1>
+          <p className="text-sm text-charcoal-200 mt-1">
             {location.type} · {roster.length} staff · {location.id}
             {transferredHere.length > 0 && (
               <span className="text-amber-600 ml-2">· {transferredHere.length} covering from other schools</span>
@@ -270,7 +270,7 @@ export default function LocationView() {
       </div>
 
       <div className="mt-4 flex items-center justify-between">
-        <p className="text-xs text-gray-400">Click a cell to cycle through codes. Click an employee name to see their full year calendar & history.</p>
+        <p className="text-xs text-charcoal-300">Click a cell to cycle through codes. Click an employee name to see their full year calendar & history.</p>
         <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
           🔄 Transfer an employee to another school
         </button>

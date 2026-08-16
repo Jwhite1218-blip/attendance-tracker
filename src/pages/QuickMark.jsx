@@ -121,8 +121,8 @@ export default function QuickMark() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Quick Mark</h1>
-      <p className="text-sm text-gray-500 mb-6">
+      <h1 className="text-2xl font-bold text-white mb-1">Quick Mark</h1>
+      <p className="text-sm text-charcoal-200 mb-6">
         Pick a school, mark each employee, auto-advance to the next. Keyboard: 1-9 for codes, → or Enter for next, ← for back, Space to cycle.
       </p>
 
@@ -243,11 +243,11 @@ export default function QuickMark() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => handleMark('')}
-                    className={`px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all ${
-                      currentCode === ''
-                        ? 'border-green-400 bg-green-50 text-green-700 ring-2 ring-green-200'
-                        : 'border-gray-200 bg-gray-50 text-gray-500 hover:border-green-300'
-                    }`}
+                    className="px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all"
+                    style={currentCode === ''
+                      ? { backgroundColor: CODE_MAP[''].hex.bg, color: CODE_MAP[''].hex.text, borderColor: CODE_MAP[''].hex.border, boxShadow: `0 0 0 2px ${CODE_MAP[''].hex.border}` }
+                      : { backgroundColor: '#f9fafb', color: '#6b7280', borderColor: '#e5e7eb' }
+                    }
                   >
                     <div className="text-base">✓</div>
                     Present
@@ -338,7 +338,8 @@ export default function QuickMark() {
               <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">Code Reference</h3>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-1 min-w-[32px] bg-green-50 text-green-700 border-green-300">✓</span>
+                  <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-1 min-w-[32px]"
+                    style={{ backgroundColor: CODE_MAP[''].hex.bg, color: CODE_MAP[''].hex.text, borderColor: CODE_MAP[''].hex.border }}>✓</span>
                   <span className="text-xs text-gray-600">Present</span>
                 </div>
                 {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
