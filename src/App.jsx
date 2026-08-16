@@ -5,6 +5,7 @@ import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import QuickMark from './pages/QuickMark.jsx'
 import warrenLogo from './assets/warren-logo.png'
+import aramarkLogo from './assets/aramark-logo.png'
 
 export default function App() {
   const location = useLocation()
@@ -17,9 +18,9 @@ export default function App() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-charcoal-800">
       {/* Nav */}
-      <nav className="bg-charcoal-700 border-b border-charcoal-600 sticky top-0 z-50">
+      <nav className="bg-charcoal-900 border-b border-charcoal-600 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/" className="flex items-center gap-3">
@@ -31,6 +32,7 @@ export default function App() {
                 <span className="text-[10px] text-charcoal-200">Food Service Attendance · {new Date().getFullYear()}</span>
               </div>
             </Link>
+
             <div className="flex items-center gap-1 flex-wrap">
               {navItems.map(item => (
                 <Link
@@ -45,6 +47,11 @@ export default function App() {
                   {item.label}
                 </Link>
               ))}
+            </div>
+
+            {/* Vendor logo — Aramark provides the food service staff being tracked */}
+            <div className="hidden sm:flex items-center pl-4 border-l border-charcoal-600 ml-2">
+              <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-8 object-contain" />
             </div>
           </div>
         </div>
