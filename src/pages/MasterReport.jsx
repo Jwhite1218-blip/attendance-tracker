@@ -1,55 +1,125 @@
 import { useState, useMemo, useEffect } from 'react'
-import { SCHOOLS, generateRoster, getWeekDates, formatDate, STATUS_OPTIONS } from '../data/schools.js'
-import StatusBadge from '../components/StatusBadge.jsx'
+import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
+import employees from '../data/employees.json'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
+import { StatusBadge } from '../components/StatusBadge.jsx'
 
 export default function MasterReport() {
-  const [weekOffset, setWeekOffset] = useState(0)
+  const [year, setYear] = useState(new Date().getFullYear())
   const [allAttendance, setAllAttendance] = useState({})
+  const [filterLocation, setFilterLocation] = useState('all')
 
-  const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
-
-  // Load ALL saved attendance from localStorage for all schools
+  // Load ALL saved attendance from localStorage for all employees for the selected year
   useEffect(() => {
     const data = {}
-    SCHOOLS.forEach(school => {
-      const saved = localStorage.getItem(`attendance-${school.id}-${weekOffset}`)
+    employees.forEach(emp => {
+      const key = `att-emp-${emp.kronos_id || emp.id}-${year}`
+      const saved = localStorage.getItem(key)
       if (saved) {
-        Object.assign(data, JSON.parse(saved))
+        try {
+          const records = JSON.parse(saved)
+          Object.entries(records).forEach(([dateKey, record]) => {
+            data[`${emp.kronos_id || emp.id}-${dateKey}`] = record
+          })
+        } catch {}
+      }
+      // Also load location-based weekly attendance
+      for (let w = -4; w <= 4; w++) {
+        const locKey = `att-loc-${emp.location}-${w}`
+        const locSaved = localStorage.getItem(locKey)
+        if (locSaved) {
+          try {
+            const locRecords = JSON.parse(locSaved)
+            Object.entries(locRecords).forEach(([k, record]) => {
+              if (k.startsWith(`${emp.kronos_id || emp.id}-`)) {
+                data[k] = record
+              }
+            })
+          } catch {}
+        }
       }
     })
     setAllAttendance(data)
-  }, [weekOffset])
+  }, [year])
 
-  // Calculate per-school stats
-  const schoolStats = useMemo(() => {
-    return SCHOOLS.map(school => {
-      const roster = generateRoster(school)
-      const stats = { present: 0, absent: 0, late: 0, excused: 0, remote: 0, unmarked: 0, total: 0 }
+  // Per-location stats
+  const locationStats = useMemo(() => {
+    const filteredLocs = filterLocation === 'all'
+      ? LOCATIONS.filter(l => employees.some(e => e.location === l.id))
+      : LOCATIONS.filter(l => l.id === filterLocation)
+
+    return filteredLocs.map(loc => {
+      const roster = employees.filter(e => e.location === loc.id)
+      const stats = { total: roster.length, marked: 0 }
+      ATTENDANCE_CODES.forEach(c => { if (c.code) stats[c.code] = 0 })
+
       roster.forEach(emp => {
-        dates.forEach(d => {
-          const key = `${emp.id}-${d}`
-          const status = allAttendance[key]?.status
-          stats.total++
-          if (status) stats[status]++
-          else stats.unmarked++
+        const empId = emp.kronos_id || emp.id
+        Object.entries(allAttendance).forEach(([key, record]) => {
+          if (key.startsWith(`${empId}-`) && record.code) {
+            stats[record.code] = (stats[record.code] || 0) + 1
+            stats.marked++
+          }
         })
       })
-      const marked = stats.total - stats.unmarked
-      stats.presentRate = marked > 0 ? ((stats.present / marked) * 100).toFixed(1) : '—'
-      return { school, roster, stats }
-    })
-  }, [allAttendance, dates])
 
-  // Calculate totals
-  const totals = useMemo(() => {
-    const t = { present: 0, absent: 0, late: 0, excused: 0, remote: 0, unmarked: 0, total: 0 }
-    schoolStats.forEach(s => {
-      Object.keys(t).forEach(k => { t[k] += s.stats[k] })
+      const presentDays = roster.length * 260 // approx working days in a year
+      stats.absenceRate = stats.marked > 0
+        ? ((stats.marked / (roster.length * 260)) * 100).toFixed(1)
+        : '—'
+
+      return { location: loc, roster, stats }
     })
-    const marked = t.total - t.unmarked
-    t.presentRate = marked > 0 ? ((t.present / marked) * 100).toFixed(1) : '—'
+  }, [allAttendance, filterLocation, year])
+
+  // Totals across all locations
+  const totals = useMemo(() => {
+    const t = { total: 0, marked: 0 }
+    ATTENDANCE_CODES.forEach(c => { if (c.code) t[c.code] = 0 })
+
+    locationStats.forEach(({ stats }) => {
+      t.total += stats.total
+      t.marked += stats.marked
+      ATTENDANCE_CODES.forEach(c => {
+        if (c.code) t[c.code] += stats[c.code] || 0
+      })
+    })
+
     return t
-  }, [schoolStats])
+  }, [locationStats])
+
+  // Per-employee detail (top absentees)
+  const topAbsentees = useMemo(() => {
+    const empStats = employees.map(emp => {
+      const empId = emp.kronos_id || emp.id
+      let marked = 0
+      let unexcused = 0
+      ATTENDANCE_CODES.forEach(c => {
+        if (c.code && (c.color === 'absent' || c.code === 'NCNS')) {
+          // Count unexcused-type absences
+        }
+      })
+
+      Object.entries(allAttendance).forEach(([key, record]) => {
+        if (key.startsWith(`${empId}-`) && record.code) {
+          marked++
+          const info = CODE_MAP[record.code]
+          if (info && (info.code === 'U' || info.code === 'NCNS' || info.code === 'CC')) {
+            unexcused++
+          }
+        }
+      })
+
+      return { employee: emp, marked, unexcused }
+    })
+
+    return empStats
+      .filter(e => e.unexcused > 0)
+      .sort((a, b) => b.unexcused - a.unexcused)
+      .slice(0, 10)
+  }, [allAttendance])
+
+  const allCodes = ATTENDANCE_CODES.filter(c => c.code !== '')
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -57,128 +127,172 @@ export default function MasterReport() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Master Report</h1>
-          <p className="text-sm text-gray-500 mt-1">Aggregated attendance across all {SCHOOLS.length} schools</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Aggregated attendance across all {LOCATIONS.length} locations
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setWeekOffset(w => w - 1)}
-            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+        <div className="flex items-center gap-3">
+          {/* Year selector */}
+          <div className="flex items-center gap-2">
+            <button onClick={() => setYear(y => y - 1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <span className="text-sm font-bold text-gray-900 min-w-[50px] text-center">{year}</span>
+            <button onClick={() => setYear(y => y + 1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
+          {/* Location filter */}
+          <select
+            value={filterLocation}
+            onChange={e => setFilterLocation(e.target.value)}
+            className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="text-sm font-medium text-gray-700 px-3 py-2">
-            Week of {formatDate(dates[0])}
-          </span>
-          <button
-            onClick={() => setWeekOffset(w => w + 1)}
-            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+            <option value="all">All Locations</option>
+            {LOCATIONS.filter(l => employees.some(e => e.location === l.id)).map(l => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
       {/* Overall Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-        {STATUS_OPTIONS.map(s => (
-          <div key={s.value} className="bg-white rounded-xl border border-gray-200 p-4">
-            <div className="flex items-center gap-2 mb-1">
-              <StatusBadge status={s.value} small />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 uppercase tracking-wide">Total Staff</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{totals.total}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <p className="text-xs text-gray-400 uppercase tracking-wide">Records Marked</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{totals.marked}</p>
+        </div>
+        {allCodes.slice(0, 4).map(c => (
+          <div key={c.code} className="bg-white rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border px-1 py-0.5 min-w-[24px]"
+                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
+              >{c.shortLabel}</span>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{totals[s.value]}</p>
-            <p className="text-xs text-gray-500 mt-1">
-              {totals.total > 0 ? `${((totals[s.value] / totals.total) * 100).toFixed(1)}% of all records` : '—'}
-            </p>
+            <p className="text-2xl font-bold text-gray-900">{totals[c.code] || 0}</p>
           </div>
         ))}
       </div>
 
-      {/* Overall present rate banner */}
-      <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-indigo-700">Overall Present Rate</p>
-            <p className="text-xs text-indigo-500 mt-1">Across all {SCHOOLS.length} schools, this week</p>
-          </div>
-          <p className="text-4xl font-bold text-indigo-700">{totals.presentRate}%</p>
-        </div>
-      </div>
-
-      {/* Per-School Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Per-Location Table */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3">School</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Employees</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Records</th>
-                {STATUS_OPTIONS.map(s => (
-                  <th key={s.value} className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">{s.label}</th>
+                <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3 sticky left-0 bg-gray-50">Location</th>
+                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Staff</th>
+                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Marked</th>
+                {allCodes.map(c => (
+                  <th key={c.code} className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3" title={c.label}>
+                    {c.shortLabel}
+                  </th>
                 ))}
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Unmarked</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Present %</th>
               </tr>
             </thead>
             <tbody>
-              {schoolStats.map(({ school, stats }, idx) => (
-                <tr key={school.id} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                  <td className="px-4 py-3">
-                    <p className="text-sm font-medium text-gray-900">{school.name}</p>
-                    <p className="text-xs text-gray-500">{school.code} · {school.location}</p>
+              {locationStats.map(({ location: loc, stats }, idx) => (
+                <tr key={loc.id} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                  <td className="px-4 py-3 sticky left-0" style={{ backgroundColor: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    <p className="text-sm font-medium text-gray-900">{loc.name}</p>
+                    <p className="text-xs text-gray-500">{loc.type}</p>
                   </td>
-                  <td className="text-center text-sm text-gray-700 px-2 py-3">{school.rosterSize}</td>
-                  <td className="text-center text-sm text-gray-500 px-2 py-3">{stats.total}</td>
-                  {STATUS_OPTIONS.map(s => (
-                    <td key={s.value} className="text-center px-2 py-3">
-                      <span className={`text-sm font-semibold ${
-                        stats[s.value] > 0 ? 'text-gray-900' : 'text-gray-300'
-                      }`}>
-                        {stats[s.value]}
+                  <td className="text-center text-sm text-gray-700 px-2 py-3">{stats.total}</td>
+                  <td className="text-center text-sm text-gray-500 px-2 py-3">{stats.marked}</td>
+                  {allCodes.map(c => (
+                    <td key={c.code} className="text-center px-2 py-3">
+                      <span className={`text-sm font-semibold ${stats[c.code] > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+                        {stats[c.code] || 0}
                       </span>
                     </td>
                   ))}
-                  <td className="text-center text-sm text-gray-400 px-2 py-3">{stats.unmarked}</td>
-                  <td className="text-center px-2 py-3">
-                    <span className={`text-sm font-bold ${
-                      stats.presentRate === '—' ? 'text-gray-300' :
-                      parseFloat(stats.presentRate) >= 80 ? 'text-present-text' :
-                      parseFloat(stats.presentRate) >= 60 ? 'text-late-text' : 'text-absent-text'
-                    }`}>
-                      {stats.presentRate === '—' ? '—' : `${stats.presentRate}%`}
-                    </span>
-                  </td>
                 </tr>
               ))}
             </tbody>
-            {/* Totals Row */}
-            <tfoot>
-              <tr className="bg-gray-50 border-t-2 border-gray-200">
-                <td className="px-4 py-3 text-sm font-bold text-gray-900">TOTALS</td>
-                <td className="text-center text-sm font-bold text-gray-900 px-2 py-3">
-                  {SCHOOLS.reduce((sum, s) => sum + s.rosterSize, 0)}
-                </td>
-                <td className="text-center text-sm font-bold text-gray-900 px-2 py-3">{totals.total}</td>
-                {STATUS_OPTIONS.map(s => (
-                  <td key={s.value} className="text-center text-sm font-bold text-gray-900 px-2 py-3">{totals[s.value]}</td>
-                ))}
-                <td className="text-center text-sm font-bold text-gray-500 px-2 py-3">{totals.unmarked}</td>
-                <td className="text-center text-sm font-bold text-indigo-700 px-2 py-3">
-                  {totals.presentRate === '—' ? '—' : `${totals.presentRate}%`}
-                </td>
-              </tr>
-            </tfoot>
+            {filterLocation === 'all' && (
+              <tfoot>
+                <tr className="bg-gray-50 border-t-2 border-gray-200">
+                  <td className="px-4 py-3 text-sm font-bold text-gray-900 sticky left-0 bg-gray-50">TOTALS</td>
+                  <td className="text-center text-sm font-bold text-gray-900 px-2 py-3">{totals.total}</td>
+                  <td className="text-center text-sm font-bold text-gray-900 px-2 py-3">{totals.marked}</td>
+                  {allCodes.map(c => (
+                    <td key={c.code} className="text-center text-sm font-bold text-gray-900 px-2 py-3">{totals[c.code] || 0}</td>
+                  ))}
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>
 
-      <p className="text-xs text-gray-400 mt-4">
-        Data is read from locally saved attendance in your browser. Mark attendance for each school to see it appear here.
-      </p>
+      {/* Top Absentees */}
+      {topAbsentees.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
+          <div className="px-5 py-4 border-b border-gray-100">
+            <h2 className="text-sm font-semibold text-gray-700">Top Unexcused Absences — {year}</h2>
+            <p className="text-xs text-gray-400 mt-1">Employees with the most U, NCNS, or CC codes this year</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-100 bg-gray-50">
+                  <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-2">Employee</th>
+                  <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Location</th>
+                  <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Position</th>
+                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Unexcused</th>
+                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Total Marked</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topAbsentees.map((e, idx) => (
+                  <tr key={e.employee.id} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                    <td className="px-4 py-2">
+                      <span className="text-sm font-medium text-gray-900">{e.employee.first_name} {e.employee.last_name}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="text-sm text-gray-600">{LOCATION_MAP[e.employee.location]?.name || e.employee.location}</span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="text-sm text-gray-500">{e.employee.position}</span>
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      <span className="text-sm font-bold text-red-600">{e.unexcused}</span>
+                    </td>
+                    <td className="text-center px-2 py-2">
+                      <span className="text-sm text-gray-500">{e.marked}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Code Legend */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Code Reference</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {ATTENDANCE_CODES.map(c => (
+            <div key={c.code || 'present'} className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[32px]"
+                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
+              >
+                {c.shortLabel}
+              </span>
+              <div>
+                <p className="text-xs font-medium text-gray-700">{c.label}</p>
+                <p className="text-[10px] text-gray-400">{c.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

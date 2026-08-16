@@ -1,8 +1,39 @@
 import { Link } from 'react-router-dom'
-import { SCHOOLS } from '../data/schools.js'
+import { LOCATIONS } from '../data/locations.js'
+import employees from '../data/employees.json'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 
 export default function Dashboard() {
-  const totalEmployees = SCHOOLS.reduce((sum, s) => sum + s.rosterSize, 0)
+  const totalEmployees = employees.length
+
+  // Count employees per location
+  const locationCounts = {}
+  employees.forEach(e => {
+    const loc = e.location || 'Unknown'
+    locationCounts[loc] = (locationCounts[loc] || 0) + 1
+  })
+
+  // Load all attendance from localStorage for current year
+  const year = new Date().getFullYear()
+  let totalMarked = 0
+  let totalByCode = {}
+  ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
+
+  employees.forEach(emp => {
+    const key = `att-emp-${emp.kronos_id || emp.id}-${year}`
+    const saved = localStorage.getItem(key)
+    if (saved) {
+      try {
+        const records = JSON.parse(saved)
+        Object.values(records).forEach(r => {
+          if (r.code) {
+            totalMarked++
+            totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
+          }
+        })
+      } catch {}
+    }
+  })
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -10,65 +41,114 @@ export default function Dashboard() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {SCHOOLS.length} schools · {totalEmployees} total employees
+          {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
         </p>
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Total Schools</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{SCHOOLS.length}</p>
+          <p className="text-sm font-medium text-gray-500">Locations</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{LOCATIONS.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Total Employees</p>
+          <p className="text-sm font-medium text-gray-500">Total Staff</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalEmployees}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Avg Roster Size</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{Math.round(totalEmployees / SCHOOLS.length)}</p>
+          <p className="text-sm font-medium text-gray-500">Days Tracked ({year})</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{totalMarked}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Largest School</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">
-            {SCHOOLS.reduce((max, s) => s.rosterSize > max.rosterSize ? s : max).name.split(' ')[0]}
-          </p>
+          <p className="text-sm font-medium text-gray-500">Attendance Codes</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{ATTENDANCE_CODES.length - 1}</p>
         </div>
       </div>
 
-      {/* School Grid */}
-      <h2 className="text-lg font-semibold text-gray-900 mb-4">Schools</h2>
+      {/* Quick Code Summary */}
+      {totalMarked > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Year-to-Date Summary</h2>
+          <div className="flex flex-wrap gap-3">
+            {ATTENDANCE_CODES.filter(c => c.code && totalByCode[c.code] > 0).map(c => (
+              <div key={c.code} className="flex items-center gap-2">
+                <span
+                  className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[28px]"
+                  style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
+                >
+                  {c.shortLabel}
+                </span>
+                <span className="text-sm font-semibold text-gray-700">{totalByCode[c.code]}</span>
+                <span className="text-xs text-gray-400">{c.label}</span>
+              </div>
+            ))}
+            {totalMarked === 0 && (
+              <p className="text-sm text-gray-400">No attendance marked yet for {year}.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Location Grid */}
+      <h2 className="text-lg font-semibold text-gray-900 mb-4">Locations</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {SCHOOLS.map(school => (
-          <Link
-            key={school.id}
-            to={`/schools/${school.id}`}
-            className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all group"
-          >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
-                  {school.name}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">{school.location}</p>
-              </div>
-              <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-md">
-                {school.code}
-              </span>
-            </div>
-            <div className="mt-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
-                  <span className="text-sm font-semibold text-indigo-600">{school.rosterSize}</span>
+        {LOCATIONS
+          .filter(loc => locationCounts[loc.id])
+          .map(loc => {
+            const count = locationCounts[loc.id] || 0
+            return (
+              <Link
+                key={loc.id}
+                to={`/location/${loc.id}`}
+                className="bg-white rounded-xl border border-gray-200 p-5 hover:border-indigo-300 hover:shadow-md transition-all group"
+              >
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                      {loc.name}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-1">{loc.type}</p>
+                  </div>
+                  <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-md">
+                    {loc.id}
+                  </span>
                 </div>
-                <span className="text-sm text-gray-500">employees</span>
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+                      <span className="text-sm font-semibold text-indigo-600">{count}</span>
+                    </div>
+                    <span className="text-sm text-gray-500">staff</span>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </Link>
+            )
+          })
+        }
+      </div>
+
+      {/* Code Legend */}
+      <div className="mt-8 bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-3">Attendance Code Reference</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+          {ATTENDANCE_CODES.map(c => (
+            <div key={c.code || 'present'} className="flex items-center gap-2">
+              <span
+                className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[32px]"
+                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
+              >
+                {c.shortLabel}
+              </span>
+              <div>
+                <p className="text-xs font-medium text-gray-700">{c.label}</p>
+                <p className="text-[10px] text-gray-400">{c.description}</p>
               </div>
-              <svg className="w-5 h-5 text-gray-400 group-hover:text-indigo-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
             </div>
-          </Link>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   )

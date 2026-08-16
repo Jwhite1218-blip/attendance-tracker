@@ -1,30 +1,62 @@
-import { STATUS_OPTIONS } from '../data/schools.js'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 
-const STATUS_CLASSES = {
-  present: 'bg-present-bg text-present-text border-present-border',
-  absent:  'bg-absent-bg text-absent-text border-absent-border',
-  late:    'bg-late-bg text-late-text border-late-border',
-  excused: 'bg-excused-bg text-excused-text border-excused-border',
-  remote:  'bg-remote-bg text-remote-text border-remote-border',
-}
+const CODE_CLASSES = Object.fromEntries(
+  ATTENDANCE_CODES.map(c => [
+    c.code,
+    {
+      bg: c.hex.bg,
+      text: c.hex.text,
+      border: c.hex.border,
+    }
+  ])
+)
 
-const STATUS_LABELS = Object.fromEntries(STATUS_OPTIONS.map(s => [s.value, s.label]))
+export function StatusBadge({ code, size = 'normal' }) {
+  const info = CODE_MAP[code]
+  if (!info && code !== '') return null
 
-export default function StatusBadge({ status, small = false }) {
-  const classes = STATUS_CLASSES[status] || 'bg-gray-100 text-gray-500 border-gray-200'
-  const label = STATUS_LABELS[status] || status
+  const cls = CODE_CLASSES[code] || CODE_CLASSES['']
+  const label = info?.shortLabel || 'P'
+  const isPresent = code === '' || !code
 
-  if (small) {
-    return (
-      <span className={`inline-flex items-center rounded border ${classes} px-1.5 py-0.5 text-xs font-medium`}>
-        {label}
-      </span>
-    )
-  }
+  const sizeClasses = size === 'small'
+    ? 'text-[10px] px-1 py-0.5 min-w-[24px]'
+    : size === 'tiny'
+    ? 'text-[9px] px-0.5 py-0.5 min-w-[18px]'
+    : 'text-xs px-2 py-1 min-w-[36px]'
 
   return (
-    <span className={`inline-flex items-center justify-center rounded-md border ${classes} ${small ? 'px-1.5 py-0.5 text-xs' : 'px-3 py-1.5 text-xs font-medium'} w-full`}>
+    <span
+      className={`inline-flex items-center justify-center rounded font-semibold border ${sizeClasses}`}
+      style={{
+        backgroundColor: cls.bg,
+        color: cls.text,
+        borderColor: cls.border,
+      }}
+      title={info?.label || 'Present'}
+    >
       {label}
+    </span>
+  )
+}
+
+export function StatusBadgeLarge({ code }) {
+  const info = CODE_MAP[code]
+  if (!info && code !== '') return null
+
+  const cls = CODE_CLASSES[code] || CODE_CLASSES['']
+
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium"
+      style={{
+        backgroundColor: cls.bg,
+        color: cls.text,
+        borderColor: cls.border,
+      }}
+    >
+      <span className="font-bold">{info?.shortLabel || 'P'}</span>
+      <span>{info?.label || 'Present'}</span>
     </span>
   )
 }
