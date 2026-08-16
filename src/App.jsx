@@ -2,12 +2,14 @@ import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import Dashboard from './pages/Dashboard.jsx'
 import LocationView from './pages/LocationView.jsx'
 import MasterReport from './pages/MasterReport.jsx'
+import LedgerView from './pages/LedgerView.jsx'
 
 export default function App() {
   const location = useLocation()
 
   const navItems = [
     { path: '/', label: 'Dashboard' },
+    { path: '/ledger', label: 'Ledger View' },
     { path: '/reports/master', label: 'Master Report' },
   ]
 
@@ -52,6 +54,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/location/:id" element={<LocationView />} />
         <Route path="/reports/master" element={<MasterReport />} />
+        <Route path="/ledger" element={<LedgerView />} />
       </Routes>
     </div>
   )
