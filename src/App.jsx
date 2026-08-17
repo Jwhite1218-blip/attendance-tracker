@@ -4,7 +4,7 @@ import LocationView from './pages/LocationView.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import QuickMark from './pages/QuickMark.jsx'
-import PinGate, { isMaster, logout } from './components/PinGate.jsx'
+import PinGate, { logout } from './components/PinGate.jsx'
 import warrenLogo from './assets/warren-logo.png'
 import aramarkLogo from './assets/aramark-logo.png'
 
