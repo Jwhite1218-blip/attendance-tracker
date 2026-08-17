@@ -29,7 +29,8 @@ export function logout() {
 }
 
 export default function PinGate({ children }) {
-  const [authed, setAuthed] = useState(null)
+  // Use 'checking' string sentinel so it's distinct from null (= not authed)
+  const [authed, setAuthed] = useState('checking')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [showPin, setShowPin] = useState(false)
@@ -51,9 +52,12 @@ export default function PinGate({ children }) {
     }
   }
 
-  if (authed === null) return <div className="min-h-screen bg-charcoal-800" />
+  // Still checking session — show brief loading
+  if (authed === 'checking') return <div className="min-h-screen bg-charcoal-800" />
+  // Authenticated — render the app
   if (authed) return children
 
+  // Not authenticated — show PIN gate
   return (
     <div className="min-h-screen bg-charcoal-800 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
