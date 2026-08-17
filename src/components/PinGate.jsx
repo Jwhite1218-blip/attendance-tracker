@@ -1,44 +1,18 @@
 import { useState, useEffect } from 'react'
 
 // ┌─────────────────────────────────────────────┐
-// │  PIN Configuration                          │
-// │  Change these PINs to whatever you want.    │
-// │  Master PIN = full access to everything.    │
-// │  School PINs = access to that school only.   │
+// │  Change this PIN to whatever you want       │
 // └─────────────────────────────────────────────┘
-
-const MASTER_PIN = '4421'
-
-const SCHOOL_PINS = {
-  // Format: 'SCHOOL_ID': 'PIN'
-  // Uncomment and set PINs for schools that need restricted access
-  // Leave a school out of this map = no restricted PIN for it
-  // 'WTHS': '1001',
-  // 'WCHS': '1002',
-  // 'WAHS': '1003',
-  // 'WNHS': '1004',
-  // 'SCE': '1005',
-  // 'SME': '1006',
-  // 'SWS': '1007',
-  // 'LRS': '1008',
-  // 'MTH': '1009',
-  // 'MTHS': '1010',
-  // 'PIO': '1011',
-  // 'BP': '1012',
-  // 'CEC': '1013',
-  // 'OAK': '1014',
-  // 'GRH': '1015',
-}
+const ACCESS_PIN = '4421'
 
 const STORAGE_KEY = 'att-auth-session'
-const SESSION_DURATION = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
+const SESSION_DURATION = 8 * 60 * 60 * 1000 // 8 hours
 
 export function getAuthState() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const data = JSON.parse(raw)
-    // Check session expiry
     if (Date.now() - data.timestamp > SESSION_DURATION) {
       sessionStorage.removeItem(STORAGE_KEY)
       return null
@@ -49,23 +23,13 @@ export function getAuthState() {
   }
 }
 
-export function isMaster() {
-  const auth = getAuthState()
-  return auth?.role === 'master'
-}
-
-export function getAccessibleLocation() {
-  const auth = getAuthState()
-  return auth?.role === 'school' ? auth.locationId : null
-}
-
 export function logout() {
   sessionStorage.removeItem(STORAGE_KEY)
   window.location.reload()
 }
 
 export default function PinGate({ children }) {
-  const [authed, setAuthed] = useState(null) // null = checking, false = show gate, object = authed
+  const [authed, setAuthed] = useState(null)
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [showPin, setShowPin] = useState(false)
@@ -76,46 +40,23 @@ export default function PinGate({ children }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    setError('')
-
-    if (pin === MASTER_PIN) {
-      const session = { role: 'master', timestamp: Date.now() }
+    if (pin === ACCESS_PIN) {
+      const session = { timestamp: Date.now() }
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
       setAuthed(session)
       setPin('')
-      return
-    }
-
-    // Check school PINs
-    const schoolEntry = Object.entries(SCHOOL_PINS).find(([, p]) => p === pin)
-    if (schoolEntry) {
-      const [locationId] = schoolEntry
-      const session = { role: 'school', locationId, timestamp: Date.now() }
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-      setAuthed(session)
+    } else {
+      setError('Invalid PIN. Please try again.')
       setPin('')
-      return
     }
-
-    setError('Invalid PIN. Please try again.')
-    setPin('')
   }
 
-  // Still checking session
-  if (authed === null) {
-    return <div className="min-h-screen bg-charcoal-800" />
-  }
+  if (authed === null) return <div className="min-h-screen bg-charcoal-800" />
+  if (authed) return children
 
-  // Authenticated — render the app
-  if (authed) {
-    return children
-  }
-
-  // Show PIN gate
   return (
     <div className="min-h-screen bg-charcoal-800 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Logo / Brand */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-3 mb-3">
             <div className="w-12 h-12 bg-charcoal-900 rounded-lg flex items-center justify-center border border-brand-600/40">
@@ -128,11 +69,8 @@ export default function PinGate({ children }) {
           <p className="text-xs text-charcoal-300 mt-1">Food Service Attendance Portal</p>
         </div>
 
-        {/* PIN Entry Card */}
         <form onSubmit={handleSubmit} className="bg-charcoal-700 rounded-xl border border-charcoal-600 p-6 shadow-xl">
-          <label className="block text-sm font-medium text-charcoal-200 mb-3">
-            Enter Access PIN
-          </label>
+          <label className="block text-sm font-medium text-charcoal-200 mb-3">Enter Access PIN</label>
           <div className="relative">
             <input
               type={showPin ? 'text' : 'password'}
@@ -163,9 +101,7 @@ export default function PinGate({ children }) {
             </button>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-400 mt-3 text-center">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-400 mt-3 text-center">{error}</p>}
 
           <button
             type="submit"
@@ -173,12 +109,6 @@ export default function PinGate({ children }) {
           >
             Unlock
           </button>
-
-          <div className="mt-4 pt-4 border-t border-charcoal-600 text-center">
-            <p className="text-xs text-charcoal-400">
-              Authorized personnel only
-            </p>
-          </div>
         </form>
 
         <p className="text-center text-xs text-charcoal-500 mt-4">
