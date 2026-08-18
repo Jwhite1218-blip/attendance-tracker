@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
+import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
 import { StatusBadge, StatusBadgeLarge } from '../components/StatusBadge.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
 import TransferModal from '../components/TransferModal.jsx'
@@ -48,20 +49,32 @@ export default function LocationView() {
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey])
 
-  const locKey = `${id}-${weekOffset}`
-
+  // Load this week's attendance for the roster from the shared store
   useEffect(() => {
-    const saved = localStorage.getItem(`att-loc-${locKey}`)
-    if (saved) {
-      setAttendance(JSON.parse(saved))
-    } else {
-      setAttendance({})
-    }
-  }, [locKey])
+    const next = {}
+    roster.forEach(emp => {
+      const empId = emp.kronos_id || emp.id
+      dates.forEach(d => {
+        const code = getAttendanceCode(empId, d)
+        if (code) next[`${empId}-${d}`] = { code, date: d, empId }
+      })
+    })
+    setAttendance(next)
+  }, [roster, dates])
 
-  useEffect(() => {
-    localStorage.setItem(`att-loc-${locKey}`, JSON.stringify(attendance))
-  }, [attendance, locKey])
+  const weekStats = useMemo(() => {
+    const stats = { total: 0, marked: 0 }
+    ATTENDANCE_CODES.forEach(c => { if (c.code) stats[c.code] = 0 })
+    roster.forEach(emp => {
+      dates.forEach(d => {
+        stats.total++
+        const key = `${emp.kronos_id || emp.id}-${d}`
+        const code = attendance[key]?.code
+        if (code) { stats[code] = (stats[code] || 0) + 1; stats.marked++ }
+      })
+    })
+    return stats
+  }, [attendance, roster, dates])
 
   if (!location) {
     return (
@@ -104,12 +117,14 @@ export default function LocationView() {
   const handleToggle = (empId, date) => {
     const key = `${empId}-${date}`
     if (paintMode) {
+      setAttendanceCode(empId, date, selectedCode)
       setAttendance(prev => ({ ...prev, [key]: { code: selectedCode, date, empId } }))
       return
     }
     const current = attendance[key]?.code ?? ''
     const currentIdx = CODE_CYCLE.indexOf(current)
     const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
+    setAttendanceCode(empId, date, nextCode)
     if (nextCode === '') {
       setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
     } else {
@@ -119,6 +134,7 @@ export default function LocationView() {
 
   const handleSetCode = (empId, date, code) => {
     const key = `${empId}-${date}`
+    setAttendanceCode(empId, date, code)
     if (code === '') {
       setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
     } else {
@@ -127,6 +143,7 @@ export default function LocationView() {
   }
 
   const handleSetAll = (date, code) => {
+    roster.forEach(emp => setAttendanceCode(emp.kronos_id || emp.id, date, code))
     setAttendance(prev => {
       const updated = { ...prev }
       roster.forEach(emp => {
@@ -136,20 +153,6 @@ export default function LocationView() {
       return updated
     })
   }
-
-  const weekStats = useMemo(() => {
-    const stats = { total: 0, marked: 0 }
-    ATTENDANCE_CODES.forEach(c => { if (c.code) stats[c.code] = 0 })
-    roster.forEach(emp => {
-      dates.forEach(d => {
-        stats.total++
-        const key = `${emp.kronos_id || emp.id}-${d}`
-        const code = attendance[key]?.code
-        if (code) { stats[code] = (stats[code] || 0) + 1; stats.marked++ }
-      })
-    })
-    return stats
-  }, [attendance, roster, dates])
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8" onMouseLeave={() => setIsPainting(false)}>

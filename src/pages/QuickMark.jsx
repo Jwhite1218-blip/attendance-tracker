@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
+import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
@@ -15,7 +16,7 @@ export default function QuickMark() {
   const [showTransfer, setShowTransfer] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  // When location changes, load roster and attendance
+  // When location changes, load roster
   useEffect(() => {
     if (!selectedLocation) {
       setRoster([])
@@ -24,18 +25,18 @@ export default function QuickMark() {
     const r = getRosterForLocation(selectedLocation)
     setRoster(r)
     setCurrentIdx(0)
-
-    // Load attendance for this location + date
-    const key = `att-loc-${selectedLocation}-quickmark`
-    const saved = localStorage.getItem(key)
-    setAttendance(saved ? JSON.parse(saved) : {})
   }, [selectedLocation, refreshKey])
 
-  // Save attendance
+  // Load attendance for this roster + date from the shared store
   useEffect(() => {
-    if (!selectedLocation) return
-    localStorage.setItem(`att-loc-${selectedLocation}-quickmark`, JSON.stringify(attendance))
-  }, [attendance, selectedLocation])
+    const next = {}
+    roster.forEach(emp => {
+      const key = emp.kronos_id || emp.id
+      const code = getAttendanceCode(key, date)
+      if (code) next[`${key}-${date}`] = { code, date, empId: key }
+    })
+    setAttendance(next)
+  }, [roster, date])
 
   const currentEmployee = roster[currentIdx]
   const empKey = currentEmployee?.kronos_id || currentEmployee?.id
@@ -44,6 +45,7 @@ export default function QuickMark() {
 
   const handleMark = (code) => {
     if (!currentEmployee) return
+    setAttendanceCode(empKey, date, code)
     if (code === '') {
       setAttendance(prev => {
         const next = { ...prev }

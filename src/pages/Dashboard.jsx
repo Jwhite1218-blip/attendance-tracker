@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { LOCATIONS } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
 
 export default function Dashboard() {
@@ -15,19 +16,13 @@ export default function Dashboard() {
   ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
 
   employees.forEach(emp => {
-    const key = `att-emp-${emp.kronos_id || emp.id}-${year}`
-    const saved = localStorage.getItem(key)
-    if (saved) {
-      try {
-        const records = JSON.parse(saved)
-        Object.values(records).forEach(r => {
-          if (r.code) {
-            totalMarked++
-            totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
-          }
-        })
-      } catch {}
-    }
+    const records = getEmployeeYearAttendance(emp.kronos_id || emp.id, year)
+    Object.values(records).forEach(r => {
+      if (r.code) {
+        totalMarked++
+        totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
+      }
+    })
   })
 
   return (

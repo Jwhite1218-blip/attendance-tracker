@@ -3,6 +3,7 @@ import employees from '../data/employees.json'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import TransferModal from '../components/TransferModal.jsx'
 
 const MONTHS = [
@@ -76,8 +77,7 @@ export default function LedgerView() {
     if (!empKey) return
     const data = {}
     years.forEach(y => {
-      const saved = localStorage.getItem(`att-emp-${empKey}-${y}`)
-      data[y] = saved ? JSON.parse(saved) : {}
+      data[y] = getEmployeeYearAttendance(empKey, y)
     })
     setAttendanceByYear(data)
   }, [empKey, startYear])
@@ -88,17 +88,8 @@ export default function LedgerView() {
     const currentIdx = CODE_CYCLE.indexOf(current)
     const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
 
-    setAttendanceByYear(prev => {
-      const yearData = { ...(prev[year] || {}) }
-      if (nextCode === '') {
-        delete yearData[dateKey]
-      } else {
-        yearData[dateKey] = { code: nextCode, date: dateKey }
-      }
-      const updated = { ...prev, [year]: yearData }
-      localStorage.setItem(`att-emp-${empKey}-${year}`, JSON.stringify(yearData))
-      return updated
-    })
+    const yearData = setAttendanceCode(empKey, dateKey, nextCode)
+    setAttendanceByYear(prev => ({ ...prev, [year]: yearData }))
   }
 
   const summary = useMemo(() => {

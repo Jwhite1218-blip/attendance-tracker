@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
+import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -49,21 +50,12 @@ export default function EmployeeDetail({ employee }) {
 
   useEffect(() => {
     if (!empKey) return
-    const saved = localStorage.getItem(`att-emp-${empKey}-${year}`)
-    if (saved) {
-      setAttendance(JSON.parse(saved))
-    } else {
-      setAttendance({})
-    }
+    setAttendance(getEmployeeYearAttendance(empKey, year))
   }, [empKey, year])
-
-  useEffect(() => {
-    if (!empKey) return
-    localStorage.setItem(`att-emp-${empKey}-${year}`, JSON.stringify(attendance))
-  }, [attendance, empKey, year])
 
   const handleDayClick = (dateKey) => {
     if (paintMode) {
+      setAttendanceCode(empKey, dateKey, selectedCode)
       setAttendance(prev => ({
         ...prev,
         [dateKey]: { code: selectedCode, date: dateKey }
@@ -72,6 +64,7 @@ export default function EmployeeDetail({ employee }) {
       const current = attendance[dateKey]?.code ?? ''
       const currentIdx = CODE_CYCLE.indexOf(current)
       const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
+      setAttendanceCode(empKey, dateKey, nextCode)
       if (nextCode === '') {
         setAttendance(prev => {
           const next = { ...prev }
@@ -89,6 +82,7 @@ export default function EmployeeDetail({ employee }) {
 
   const handleDayMouseEnter = (dateKey) => {
     if (paintMode && isPainting) {
+      setAttendanceCode(empKey, dateKey, selectedCode)
       setAttendance(prev => ({
         ...prev,
         [dateKey]: { code: selectedCode, date: dateKey }
