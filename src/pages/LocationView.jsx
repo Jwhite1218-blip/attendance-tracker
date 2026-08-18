@@ -329,7 +329,17 @@ export default function LocationView() {
                     return (
                       <td key={d} className="text-center px-2 py-3">
                         <button
-                          onClick={() => handleToggle(emp.kronos_id || emp.id, d)}
+                          onClick={() => {
+                            if (paintMode) {
+                              handleToggle(emp.kronos_id || emp.id, d)
+                            } else {
+                              setPicker({
+                                empId: emp.kronos_id || emp.id,
+                                date: d,
+                                empName: `${emp.first_name} ${emp.last_name}`,
+                              })
+                            }
+                          }}
                           onMouseDown={() => paintMode && setIsPainting(true)}
                           onMouseUp={() => setIsPainting(false)}
                           onMouseEnter={() => { if (paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
