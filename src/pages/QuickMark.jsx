@@ -185,7 +185,7 @@ export default function QuickMark() {
           <div>
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Employee header */}
-              <div className="p-5 bg-gradient-to-r from-brand-50 to-white">
+              <div className="p-3 sm:p-5 bg-gradient-to-r from-brand-50 to-white">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-full bg-brand-600 flex items-center justify-center flex-shrink-0">
@@ -279,7 +279,7 @@ export default function QuickMark() {
                 <button
                   onClick={handlePrev}
                   disabled={currentIdx === 0}
-                  className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 sm:px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   ← Previous
                 </button>
@@ -292,7 +292,7 @@ export default function QuickMark() {
                 <button
                   onClick={handleNext}
                   disabled={currentIdx === roster.length - 1}
-                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  className="px-3 sm:px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   Next →
                 </button>
