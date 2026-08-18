@@ -11,3 +11,5 @@
   for = "/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
+
+# Build trigger: force deploy for hooks fix
