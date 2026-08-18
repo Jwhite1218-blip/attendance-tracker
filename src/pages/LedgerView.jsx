@@ -4,6 +4,7 @@ import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
+import { isFlagged } from '../data/hrFlags.js'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
@@ -155,7 +156,7 @@ export default function LedgerView() {
               className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700"
             >
               {filteredEmployees.map(e => (
-                <option key={e.id} value={e.id}>
+                <option key={e.id} value={e.id} style={isFlagged(e.kronos_id || e.id) ? { color: '#dc2626' } : undefined}>
                   {e.last_name}, {e.first_name} — {LOCATION_MAP[e.location]?.shortName || e.location || 'Unassigned'}
                 </option>
               ))}
@@ -195,7 +196,7 @@ export default function LedgerView() {
             <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-gray-100">
               <div className="p-3">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide">Name</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{employee.first_name} {employee.last_name}</p>
+                <p className={`text-sm font-semibold mt-0.5 ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>{employee.first_name} {employee.last_name}</p>
               </div>
               <div className="p-3">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide">Personnel #</p>
