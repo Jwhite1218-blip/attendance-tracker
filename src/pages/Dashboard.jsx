@@ -1,13 +1,18 @@
 import { Link } from 'react-router-dom'
-import { LOCATIONS } from '../data/locations.js'
+import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
+import { getAllFlaggedEmployees } from '../data/hrFlags.js'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 
 export default function Dashboard() {
   const employees = getEmployeesWithEffectiveLocations()
   const totalEmployees = employees.length
   const locationCounts = getLocationCounts()
+
+  const flaggedEmployees = getAllFlaggedEmployees()
+    .map(flag => ({ ...flag, employee: employees.find(e => (e.kronos_id || e.id) === flag.empId) }))
+    .filter(f => f.employee)
 
   // Load all attendance from localStorage for current year
   const year = new Date().getFullYear()
@@ -50,6 +55,38 @@ export default function Dashboard() {
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalMarked}</p>
         </div>
       </div>
+
+      {/* HR Attendance Flags */}
+      {flaggedEmployees.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
+          <h2 className="text-sm font-semibold text-red-700 mb-1">🚩 HR Attendance Flags</h2>
+          <p className="text-xs text-gray-400 mb-3">
+            Automatically flagged after 3 unexcused absences or lates in a school year. Flags are permanent — this is a documented record, not a live status.
+          </p>
+          <div className="divide-y divide-gray-100">
+            {flaggedEmployees.map(f => (
+              <div key={f.empId} className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-red-600">{f.employee.first_name} {f.employee.last_name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {LOCATION_MAP[f.employee.location]?.name || f.employee.location} · {f.employee.position}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {f.triggers.map((t, i) => (
+                      <span key={i} className="text-[10px] font-medium bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
+                        {t.date} · {CODE_MAP[t.code]?.shortLabel}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 whitespace-nowrap sm:text-right">
+                  Flagged {new Date(f.flaggedAt).toLocaleDateString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick Code Summary */}
       {totalMarked > 0 && (

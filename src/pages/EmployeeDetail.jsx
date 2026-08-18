@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
+import { isFlagged } from '../data/hrFlags.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -142,7 +143,7 @@ export default function EmployeeDetail({ employee }) {
               </span>
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-900">
+              <h2 className={`text-lg sm:text-xl font-bold ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>
                 {employee?.first_name} {employee?.last_name}
               </h2>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500">

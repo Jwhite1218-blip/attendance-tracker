@@ -5,6 +5,8 @@
 //
 // Storage key: att-emp-{employeeId}-{year} -> { [dateKey]: { code, date } }
 
+import { checkAndFlag } from './hrFlags.js'
+
 function storageKey(empId, year) {
   return `att-emp-${empId}-${year}`
 }
@@ -38,5 +40,6 @@ export function setAttendanceCode(empId, dateKey, code) {
     yearData[dateKey] = { code, date: dateKey }
   }
   localStorage.setItem(storageKey(empId, year), JSON.stringify(yearData))
+  checkAndFlag(empId, year, yearData)
   return yearData
 }

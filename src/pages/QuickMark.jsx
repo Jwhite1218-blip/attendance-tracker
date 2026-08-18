@@ -3,6 +3,7 @@ import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
+import { isFlagged } from '../data/hrFlags.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
@@ -204,7 +205,7 @@ export default function QuickMark() {
                       </span>
                     </div>
                     <div>
-                      <h2 className="text-xl font-bold text-gray-900">
+                      <h2 className={`text-xl font-bold ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>
                         {currentEmployee.first_name} {currentEmployee.last_name}
                       </h2>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-sm text-gray-500 mt-0.5">
@@ -310,7 +311,8 @@ export default function QuickMark() {
               <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">{LOCATION_MAP[selectedLocation]?.name} Roster</p>
               <div className="flex flex-wrap gap-1.5">
                 {roster.map((emp, idx) => {
-                  const k = `${emp.kronos_id || emp.id}-${date}`
+                  const empId = emp.kronos_id || emp.id
+                  const k = `${empId}-${date}`
                   const code = attendance[k]?.code
                   return (
                     <button
@@ -322,7 +324,7 @@ export default function QuickMark() {
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <span className="text-gray-700">{emp.last_name}, {emp.first_name[0]}.</span>
+                      <span className={isFlagged(empId) ? 'text-red-600 font-semibold' : 'text-gray-700'}>{emp.last_name}, {emp.first_name[0]}.</span>
                       {code && (
                         <span
                           className="inline-flex items-center justify-center rounded text-[9px] font-bold px-1 min-w-[20px]"

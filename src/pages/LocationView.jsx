@@ -4,6 +4,7 @@ import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
+import { isFlagged } from '../data/hrFlags.js'
 import { StatusBadge, StatusBadgeLarge } from '../components/StatusBadge.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
@@ -246,7 +247,7 @@ export default function LocationView() {
                   <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                  <p className={`text-sm font-medium flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900'}`}>
                     {emp.first_name} {emp.last_name}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{emp.position}</p>
@@ -312,7 +313,7 @@ export default function LocationView() {
                         <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate flex items-center gap-1">
+                        <p className={`text-sm font-medium transition-colors truncate flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900 group-hover:text-brand-700'}`}>
                           {emp.first_name} {emp.last_name}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{emp.position}</p>
