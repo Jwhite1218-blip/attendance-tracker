@@ -1,41 +1,56 @@
-import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import LocationView from './pages/LocationView.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import QuickMark from './pages/QuickMark.jsx'
-import PinGate, { logout } from './components/PinGate.jsx'
+import PinGate, { logout, useAuth } from './components/PinGate.jsx'
+import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import aramarkLogo from './assets/aramark-logo.png'
 
 export default function App() {
+  return (
+    <PinGate>
+      <AppShell />
+    </PinGate>
+  )
+}
+
+function AppShell() {
   const location = useLocation()
+  const { role, locationId } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navItems = [
-    { path: '/', label: 'Dashboard' },
+    ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
     { path: '/quickmark', label: 'Quick Mark' },
     { path: '/ledger', label: 'Ledger View' },
-    { path: '/reports/master', label: 'Master Report' },
+    ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
+
+  const homePath = role === 'school' ? `/location/${locationId}` : '/'
+  const schoolName = role === 'school' ? LOCATION_MAP[locationId]?.name : null
 
   // Close mobile menu on route change
   const handleNavClick = () => setMobileMenuOpen(false)
 
-  const Inner = (
+  return (
     <div className="min-h-screen bg-charcoal-800">
       <nav className="bg-charcoal-900 border-b border-charcoal-600 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo - always visible */}
-            <Link to="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0" onClick={handleNavClick}>
+            <Link to={homePath} className="flex items-center gap-2 sm:gap-3 flex-shrink-0" onClick={handleNavClick}>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-charcoal-800 rounded-md flex items-center justify-center overflow-hidden border border-brand-600/40 flex-shrink-0">
                 <img src={warrenLogo} alt="Warren Township" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
               </div>
               <div className="hidden xs:block sm:block">
                 <span className="text-sm sm:text-base font-bold text-brand-200 block leading-none tracking-wide">WARREN TOWNSHIP</span>
-                <span className="text-[9px] sm:text-[10px] text-charcoal-200">Food Service Attendance · {new Date().getFullYear()}</span>
+                <span className="text-[9px] sm:text-[10px] text-charcoal-200">
+                  {schoolName ? schoolName : 'Food Service Attendance'} · {new Date().getFullYear()}
+                </span>
               </div>
             </Link>
 
@@ -126,14 +141,12 @@ export default function App() {
       </nav>
 
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
         <Route path="/location/:id" element={<LocationView />} />
         <Route path="/quickmark" element={<QuickMark />} />
         <Route path="/ledger" element={<LedgerView />} />
-        <Route path="/reports/master" element={<MasterReport />} />
+        <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
       </Routes>
     </div>
   )
-
-  return <PinGate>{Inner}</PinGate>
 }

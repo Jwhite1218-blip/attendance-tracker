@@ -4,6 +4,7 @@ import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
+import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
 const MONTHS = [
@@ -20,8 +21,9 @@ function formatDateKey(year, monthIdx, day) {
 }
 
 export default function LedgerView() {
+  const { role, locationId: myLocationId } = useAuth()
   const [search, setSearch] = useState('')
-  const [selectedLocation, setSelectedLocation] = useState('')
+  const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [selectedId, setSelectedId] = useState(null)
   const [startYear, setStartYear] = useState(new Date().getFullYear())
   const [attendanceByYear, setAttendanceByYear] = useState({})
@@ -126,16 +128,22 @@ export default function LedgerView() {
           {/* School dropdown */}
           <div>
             <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
-            <select
-              value={selectedLocation}
-              onChange={e => { setSelectedLocation(e.target.value); setSelectedId(null); }}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
-            >
-              <option value="">All Schools</option>
-              {schoolOptions.map(l => (
-                <option key={l.id} value={l.id}>{l.name} ({l.count})</option>
-              ))}
-            </select>
+            {role === 'school' ? (
+              <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-700 font-medium">
+                {LOCATION_MAP[myLocationId]?.name}
+              </div>
+            ) : (
+              <select
+                value={selectedLocation}
+                onChange={e => { setSelectedLocation(e.target.value); setSelectedId(null); }}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
+              >
+                <option value="">All Schools</option>
+                {schoolOptions.map(l => (
+                  <option key={l.id} value={l.id}>{l.name} ({l.count})</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* Employee dropdown */}
@@ -155,21 +163,23 @@ export default function LedgerView() {
           </div>
 
           {/* Transfer button */}
-          <div className="flex items-end">
-            <button
-              onClick={() => setShowTransfer(true)}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors whitespace-nowrap"
-            >
-              🔄 Transfer
-            </button>
-          </div>
+          {role === 'admin' && (
+            <div className="flex items-end">
+              <button
+                onClick={() => setShowTransfer(true)}
+                className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors whitespace-nowrap"
+              >
+                🔄 Transfer
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Search bar (optional, for finding across all schools) */}
+        {/* Search bar */}
         <div className="mt-3">
           <input
             type="text"
-            placeholder="Search by name or ID (works across all schools)..."
+            placeholder={role === 'school' ? 'Search by name or ID...' : 'Search by name or ID (works across all schools)...'}
             value={search}
             onChange={e => setSearch(e.target.value)}
             className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
@@ -296,7 +306,7 @@ export default function LedgerView() {
         </div>
       </div>
 
-      {showTransfer && employee && (
+      {role === 'admin' && showTransfer && employee && (
         <TransferModal
           employee={employee}
           onClose={() => setShowTransfer(false)}
