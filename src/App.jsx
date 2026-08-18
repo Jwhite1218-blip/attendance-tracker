@@ -1,14 +1,17 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
+import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import LocationView from './pages/LocationView.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import QuickMark from './pages/QuickMark.jsx'
+import PinGate, { logout } from './components/PinGate.jsx'
 import warrenLogo from './assets/warren-logo.png'
 import aramarkLogo from './assets/aramark-logo.png'
 
 export default function App() {
   const location = useLocation()
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navItems = [
     { path: '/', label: 'Dashboard' },
@@ -17,22 +20,27 @@ export default function App() {
     { path: '/reports/master', label: 'Master Report' },
   ]
 
-  return (
+  // Close mobile menu on route change
+  const handleNavClick = () => setMobileMenuOpen(false)
+
+  const Inner = (
     <div className="min-h-screen bg-charcoal-800">
       <nav className="bg-charcoal-900 border-b border-charcoal-600 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-charcoal-800 rounded-md flex items-center justify-center overflow-hidden border border-brand-600/40">
-                <img src={warrenLogo} alt="Warren Township" className="w-8 h-8 object-contain" />
+            {/* Logo - always visible */}
+            <Link to="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0" onClick={handleNavClick}>
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-charcoal-800 rounded-md flex items-center justify-center overflow-hidden border border-brand-600/40 flex-shrink-0">
+                <img src={warrenLogo} alt="Warren Township" className="w-7 h-7 sm:w-8 sm:h-8 object-contain" />
               </div>
-              <div>
-                <span className="text-base font-bold text-brand-200 block leading-none tracking-wide">WARREN TOWNSHIP</span>
-                <span className="text-[10px] text-charcoal-200">Food Service Attendance · {new Date().getFullYear()}</span>
+              <div className="hidden xs:block sm:block">
+                <span className="text-sm sm:text-base font-bold text-brand-200 block leading-none tracking-wide">WARREN TOWNSHIP</span>
+                <span className="text-[9px] sm:text-[10px] text-charcoal-200">Food Service Attendance · {new Date().getFullYear()}</span>
               </div>
             </Link>
 
-            <div className="flex items-center gap-1 flex-wrap">
+            {/* Desktop nav */}
+            <div className="hidden md:flex items-center gap-1">
               {navItems.map(item => (
                 <Link
                   key={item.path}
@@ -48,10 +56,72 @@ export default function App() {
               ))}
             </div>
 
-            <div className="flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
-              <img src={aramarkLogo} alt="Aramark Student Nutrition" className="hidden sm:block h-8 object-contain" />
+            {/* Right side - Aramark + logout (desktop) */}
+            <div className="hidden md:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
+              <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-8 object-contain" />
+              <button
+                onClick={logout}
+                className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
+                title="Lock & Log Out"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Mobile menu button */}
+            <div className="flex md:hidden items-center gap-2">
+              <button
+                onClick={logout}
+                className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
+                title="Lock & Log Out"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="text-charcoal-200 hover:text-white p-2 -mr-2"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
+
+          {/* Mobile dropdown menu */}
+          {mobileMenuOpen && (
+            <div className="md:hidden border-t border-charcoal-600 pb-3 pt-2 space-y-1">
+              {navItems.map(item => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  onClick={handleNavClick}
+                  className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+                    location.pathname === item.path
+                      ? 'bg-brand-500/15 text-brand-200'
+                      : 'text-charcoal-200 hover:bg-charcoal-600'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <div className="flex items-center gap-2 px-3 pt-3 mt-2 border-t border-charcoal-600">
+                <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-7 object-contain" />
+                <span className="text-xs text-charcoal-400">Aramark Student Nutrition</span>
+              </div>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -64,4 +134,6 @@ export default function App() {
       </Routes>
     </div>
   )
+
+  return <PinGate>{Inner}</PinGate>
 }
