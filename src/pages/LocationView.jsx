@@ -25,6 +25,13 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+function formatDateShort(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  const day = d.getDate()
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' })
+  return { weekday, day }
+}
+
 export default function LocationView() {
   const { id } = useParams()
   const location = LOCATION_MAP[id]
@@ -64,28 +71,35 @@ export default function LocationView() {
     )
   }
 
+  // ─── EMPLOYEE DETAIL VIEW ───
   if (selectedEmployee) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center gap-2 text-sm text-charcoal-200 mb-6">
-          <Link to="/" className="hover:text-brand-300">Dashboard</Link>
-          <span>/</span>
-          <Link to={`/location/${id}`} className="hover:text-brand-300" onClick={() => setSelectedEmployee(null)}>
-            {location.name}
-          </Link>
-          <span>/</span>
-          <span className="text-white font-medium">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>
-        </div>
-        <EmployeeDetail employee={selectedEmployee} />
-        <div className="mt-6">
-          <button onClick={() => setSelectedEmployee(null)} className="text-sm text-brand-300 hover:underline">
-            ← Back to {location.name} roster
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
+        {/* Sticky back bar - always visible, easy to reach on mobile */}
+        <div className="sticky top-16 z-40 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 mb-4 bg-charcoal-700/95 backdrop-blur-sm border-b border-charcoal-600 flex items-center justify-between gap-2">
+          <button
+            onClick={() => setSelectedEmployee(null)}
+            className="flex items-center gap-2 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors py-1.5 px-3 rounded-lg hover:bg-charcoal-600"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="hidden sm:inline">Back to {location.name}</span>
+            <span className="sm:hidden">Back</span>
           </button>
+          <div className="flex items-center gap-2 text-xs text-charcoal-200 truncate">
+            <Link to="/" className="hover:text-brand-300 hidden sm:inline">Dashboard</Link>
+            <span className="hidden sm:inline">/</span>
+            <span className="truncate">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>
+          </div>
         </div>
+
+        <EmployeeDetail employee={selectedEmployee} />
       </div>
     )
   }
 
+  // ─── LOCATION ROSTER VIEW ───
   const handleToggle = (empId, date) => {
     const key = `${empId}-${date}`
     if (paintMode) {
@@ -130,29 +144,32 @@ export default function LocationView() {
   const transferredHere = roster.filter(e => e.isTransferred)
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" onMouseLeave={() => setIsPainting(false)}>
-      <div className="flex items-center gap-2 text-sm text-charcoal-200 mb-4">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8" onMouseLeave={() => setIsPainting(false)}>
+      {/* Breadcrumb */}
+      <div className="flex items-center gap-2 text-xs sm:text-sm text-charcoal-200 mb-3 sm:mb-4">
         <Link to="/" className="hover:text-brand-300">Dashboard</Link>
         <span>/</span>
-        <span className="text-white font-medium">{location.name}</span>
+        <span className="text-white font-medium truncate">{location.name}</span>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">{location.name}</h1>
-          <p className="text-sm text-charcoal-200 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-white">{location.name}</h1>
+          <p className="text-xs sm:text-sm text-charcoal-200 mt-1">
             {location.type} · {roster.length} staff · {location.id}
             {transferredHere.length > 0 && (
               <span className="text-amber-600 ml-2">· {transferredHere.length} covering from other schools</span>
             )}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setWeekOffset(w => w - 1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+        {/* Week navigation */}
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button onClick={() => setWeekOffset(w => w - 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <span className="text-sm font-medium text-gray-700 px-3 py-2">Week of {formatDate(dates[0])}</span>
-          <button onClick={() => setWeekOffset(w => w + 1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600">
+          <span className="text-xs sm:text-sm font-medium text-charcoal-100 px-2 sm:px-3 py-2 whitespace-nowrap">Week of {formatDate(dates[0])}</span>
+          <button onClick={() => setWeekOffset(w => w + 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>
         </div>
@@ -188,7 +205,7 @@ export default function LocationView() {
       </div>
 
       {/* Paint Mode Bar */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 bg-white border border-gray-200 rounded-xl p-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 bg-white border border-gray-200 rounded-xl p-3">
         <button onClick={() => setPaintMode(!paintMode)}
           className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
           {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
@@ -204,11 +221,67 @@ export default function LocationView() {
             ))}
           </div>
         )}
-        <span className="text-xs text-gray-400 ml-auto">{paintMode ? 'Click or drag to mark' : 'Click cells to cycle codes · Click name for full history'}</span>
+        <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{paintMode ? 'Click or drag to mark' : 'Click cells to cycle · Click name for full history'}</span>
       </div>
 
-      {/* Attendance Grid */}
-      <div className="overflow-x-auto">
+      {/* ─── MOBILE: Card-based layout ─── */}
+      <div className="md:hidden space-y-3">
+        {roster.map((emp, idx) => {
+          const empAtt = dates.map(d => {
+            const key = `${emp.kronos_id || emp.id}-${d}`
+            return { date: d, code: attendance[key]?.code || '' }
+          })
+
+          return (
+            <div key={emp.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              {/* Employee header - tap to open detail */}
+              <button
+                onClick={() => setSelectedEmployee(emp)}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
+                    {emp.first_name} {emp.last_name}
+                    {emp.isTransferred && <span className="text-amber-500 text-[10px]">⚠</span>}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{emp.position}</p>
+                </div>
+                <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Day cells - horizontal row */}
+              <div className="grid grid-cols-5 gap-px bg-gray-100 border-t border-gray-100">
+                {empAtt.map(({ date, code }) => {
+                  const { weekday, day } = formatDateShort(date)
+                  return (
+                    <button
+                      key={date}
+                      onClick={() => handleToggle(emp.kronos_id || emp.id, date)}
+                      className="bg-white p-2 flex flex-col items-center gap-1 active:bg-gray-50 transition-colors"
+                    >
+                      <span className="text-[10px] text-gray-400 uppercase">{weekday[0]}</span>
+                      <span className="text-[10px] text-gray-500 font-medium">{day}</span>
+                      {code ? (
+                        <StatusBadge code={code} size="small" />
+                      ) : (
+                        <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 w-[28px] h-[22px]">·</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ─── DESKTOP: Table layout ─── */}
+      <div className="hidden md:block overflow-x-auto">
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full">
             <thead>
@@ -245,7 +318,6 @@ export default function LocationView() {
                   {dates.map(d => {
                     const key = `${emp.kronos_id || emp.id}-${d}`
                     const code = attendance[key]?.code || ''
-                    const info = CODE_MAP[code]
                     return (
                       <td key={d} className="text-center px-2 py-3">
                         <button
@@ -269,8 +341,9 @@ export default function LocationView() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <p className="text-xs text-charcoal-300">Click a cell to cycle through codes. Click an employee name to see their full year calendar & history.</p>
+      {/* Footer actions */}
+      <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <p className="text-xs text-charcoal-300">Click a cell to cycle codes. Tap a name for full year calendar.</p>
         <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
           🔄 Transfer an employee to another school
         </button>
