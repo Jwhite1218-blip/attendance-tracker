@@ -1,12 +1,15 @@
-import { useState, useEffect } from 'react'
-
-// ┌─────────────────────────────────────────────┐
-// │  Change this PIN to whatever you want       │
-// └─────────────────────────────────────────────┘
-const ACCESS_PIN = '4421'
+import { useState, useEffect, createContext, useContext } from 'react'
+import { ACCESS_CODES } from '../data/accessCodes.js'
 
 const STORAGE_KEY = 'att-auth-session'
 const SESSION_DURATION = 8 * 60 * 60 * 1000 // 8 hours
+
+const AuthContext = createContext({ role: 'admin', locationId: null })
+
+// Who's logged in: { role: 'admin' } or { role: 'school', locationId }
+export function useAuth() {
+  return useContext(AuthContext)
+}
 
 export function getAuthState() {
   try {
@@ -41,8 +44,9 @@ export default function PinGate({ children }) {
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (pin === ACCESS_PIN) {
-      const session = { timestamp: Date.now() }
+    const access = ACCESS_CODES[pin]
+    if (access) {
+      const session = { timestamp: Date.now(), role: access.role, locationId: access.locationId || null }
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
       setAuthed(session)
       setPin('')
@@ -54,8 +58,14 @@ export default function PinGate({ children }) {
 
   // Still checking session — show brief loading
   if (authed === 'checking') return <div className="min-h-screen bg-charcoal-800" />
-  // Authenticated — render the app
-  if (authed) return children
+  // Authenticated — render the app, scoped to this session's role
+  if (authed) {
+    return (
+      <AuthContext.Provider value={{ role: authed.role, locationId: authed.locationId }}>
+        {children}
+      </AuthContext.Provider>
+    )
+  }
 
   // Not authenticated — show PIN gate
   return (

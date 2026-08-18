@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, Navigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
 import { StatusBadge, StatusBadgeLarge } from '../components/StatusBadge.jsx'
+import { useAuth } from '../components/PinGate.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
@@ -34,7 +35,10 @@ function formatDateShort(dateStr) {
 }
 
 export default function LocationView() {
-  const { id } = useParams()
+  const { id: urlId } = useParams()
+  const { role, locationId: myLocationId } = useAuth()
+  // School-role sessions are always locked to their own school, regardless of URL
+  const id = role === 'school' ? myLocationId : urlId
   const location = LOCATION_MAP[id]
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
@@ -75,6 +79,11 @@ export default function LocationView() {
     })
     return stats
   }, [attendance, roster, dates])
+
+  // Normalize the URL if a school-role session typed/followed a link to another school
+  if (role === 'school' && urlId !== myLocationId) {
+    return <Navigate to={`/location/${myLocationId}`} replace />
+  }
 
   if (!location) {
     return (
@@ -342,12 +351,14 @@ export default function LocationView() {
       {/* Footer actions */}
       <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <p className="text-xs text-charcoal-300">Tap a day to mark attendance. Tap a name for full year calendar.</p>
-        <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
-          🔄 Transfer an employee to another school
-        </button>
+        {role === 'admin' && (
+          <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
+            🔄 Transfer an employee to another school
+          </button>
+        )}
       </div>
 
-      {showTransfer && roster[0] && (
+      {role === 'admin' && showTransfer && roster[0] && (
         <TransferModal
           employee={roster[0]}
           onClose={() => setShowTransfer(false)}

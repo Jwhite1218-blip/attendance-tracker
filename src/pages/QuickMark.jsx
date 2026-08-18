@@ -4,10 +4,12 @@ import { getRosterForLocation, getEmployeesWithEffectiveLocations } from '../dat
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
+import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
 export default function QuickMark() {
-  const [selectedLocation, setSelectedLocation] = useState('')
+  const { role, locationId: myLocationId } = useAuth()
+  const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [roster, setRoster] = useState([])
   const [currentIdx, setCurrentIdx] = useState(0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -132,22 +134,28 @@ export default function QuickMark() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Select School</label>
-            <select
-              value={selectedLocation}
-              onChange={e => setSelectedLocation(e.target.value)}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
-            >
-              <option value="">— Choose a school —</option>
-              {LOCATIONS
-                .filter(l => locCounts[l.id])
-                .sort((a, b) => a.sort - b.sort)
-                .map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name} ({locCounts[l.id]} staff)
-                  </option>
-                ))}
-            </select>
+            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
+            {role === 'school' ? (
+              <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-700 font-medium">
+                {LOCATION_MAP[myLocationId]?.name}
+              </div>
+            ) : (
+              <select
+                value={selectedLocation}
+                onChange={e => setSelectedLocation(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
+              >
+                <option value="">— Choose a school —</option>
+                {LOCATIONS
+                  .filter(l => locCounts[l.id])
+                  .sort((a, b) => a.sort - b.sort)
+                  .map(l => (
+                    <option key={l.id} value={l.id}>
+                      {l.name} ({locCounts[l.id]} staff)
+                    </option>
+                  ))}
+              </select>
+            )}
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Date</label>
@@ -279,12 +287,14 @@ export default function QuickMark() {
                 >
                   ← Previous
                 </button>
-                <button
-                  onClick={() => setShowTransfer(true)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 hover:bg-amber-50 transition-colors"
-                >
-                  🔄 Transfer
-                </button>
+                {role === 'admin' && (
+                  <button
+                    onClick={() => setShowTransfer(true)}
+                    className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 hover:bg-amber-50 transition-colors"
+                  >
+                    🔄 Transfer
+                  </button>
+                )}
                 <button
                   onClick={handleNext}
                   disabled={currentIdx === roster.length - 1}
@@ -369,7 +379,7 @@ export default function QuickMark() {
         </div>
       )}
 
-      {showTransfer && currentEmployee && (
+      {role === 'admin' && showTransfer && currentEmployee && (
         <TransferModal
           employee={currentEmployee}
           onClose={() => setShowTransfer(false)}
