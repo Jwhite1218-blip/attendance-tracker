@@ -201,12 +201,6 @@ export default function QuickMark() {
                         <span>ID: {currentEmployee.kronos_id}</span>
                         <span>·</span>
                         <span>{currentEmployee.position}</span>
-                        {currentEmployee.isTransferred && (
-                          <>
-                            <span>·</span>
-                            <span className="text-amber-600 font-medium">⚠ Covering from {LOCATION_MAP[currentEmployee.originalLocation]?.name}</span>
-                          </>
-                        )}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { LOCATIONS } from '../data/locations.js'
-import { getEmployeesWithEffectiveLocations, transferEmployee, revertTransfer } from '../data/employeeLocations.js'
+import { getEmployeesWithEffectiveLocations, transferEmployee } from '../data/employeeLocations.js'
 
 export default function TransferModal({ employee, onClose, onTransferred }) {
   const [selectedLocation, setSelectedLocation] = useState('')
@@ -13,12 +13,6 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
   const handleTransfer = () => {
     if (!selectedLocation) return
     transferEmployee(empKey, selectedLocation)
-    onTransferred?.()
-    onClose()
-  }
-
-  const handleRevert = () => {
-    revertTransfer(empKey)
     onTransferred?.()
     onClose()
   }
@@ -42,6 +36,7 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
               <p className="text-sm text-gray-500 mt-0.5">
                 {employee.first_name} {employee.last_name} · ID: {employee.kronos_id}
               </p>
+              <p className="text-xs text-amber-600 font-medium mt-1">This permanently changes their home school.</p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -54,9 +49,6 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
             <p className="text-xs text-gray-400 uppercase tracking-wide">Currently Assigned</p>
             <p className="text-sm font-semibold text-gray-900 mt-0.5">
               {currentLocInfo?.name || currentLoc || 'Unassigned'}
-              {employee.isTransferred && (
-                <span className="ml-2 text-xs text-amber-600 font-medium">(Transferred from {employee.originalLocation})</span>
-              )}
             </p>
           </div>
 
@@ -93,17 +85,8 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
             </button>
           </div>
 
-          {employee.isTransferred && (
-            <button
-              onClick={handleRevert}
-              className="w-full mt-2 text-xs text-gray-400 hover:text-red-500"
-            >
-              ↩ Revert to original location ({LOCATIONS.find(l => l.id === employee.originalLocation)?.name || employee.originalLocation})
-            </button>
-          )}
-
           <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100">
-            Transfers are temporary coverage moves — the employee keeps their original home location in the system. Use this when a building is short-staffed and needs coverage.
+            This is a permanent change to the employee's assigned school, not temporary coverage. It should be rare — use it only when someone is actually moving schools.
           </p>
         </div>
       </div>
