@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
-import { StatusBadge } from '../components/StatusBadge.jsx'
+import { StatusBadge, StatusBadgeLarge } from '../components/StatusBadge.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
@@ -43,6 +43,7 @@ export default function LocationView() {
   const [isPainting, setIsPainting] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [picker, setPicker] = useState(null)
 
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey])
@@ -116,6 +117,15 @@ export default function LocationView() {
     }
   }
 
+  const handleSetCode = (empId, date, code) => {
+    const key = `${empId}-${date}`
+    if (code === '') {
+      setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
+    } else {
+      setAttendance(prev => ({ ...prev, [key]: { code, date, empId } }))
+    }
+  }
+
   const handleSetAll = (date, code) => {
     setAttendance(prev => {
       const updated = { ...prev }
@@ -141,8 +151,6 @@ export default function LocationView() {
     return stats
   }, [attendance, roster, dates])
 
-  const transferredHere = roster.filter(e => e.isTransferred)
-
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8" onMouseLeave={() => setIsPainting(false)}>
       {/* Breadcrumb */}
@@ -158,9 +166,6 @@ export default function LocationView() {
           <h1 className="text-xl sm:text-2xl font-bold text-white">{location.name}</h1>
           <p className="text-xs sm:text-sm text-charcoal-200 mt-1">
             {location.type} · {roster.length} staff · {location.id}
-            {transferredHere.length > 0 && (
-              <span className="text-amber-600 ml-2">· {transferredHere.length} covering from other schools</span>
-            )}
           </p>
         </div>
         {/* Week navigation */}
@@ -174,20 +179,6 @@ export default function LocationView() {
           </button>
         </div>
       </div>
-
-      {/* Transferred employees banner */}
-      {transferredHere.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4">
-          <p className="text-sm text-amber-700 font-medium">⚠ Staff covering from other schools:</p>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {transferredHere.map(e => (
-              <span key={e.id} className="text-xs bg-white border border-amber-200 rounded px-2 py-1">
-                {e.first_name} {e.last_name} ← {LOCATION_MAP[e.originalLocation]?.name || e.originalLocation}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Quick Stats */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -245,7 +236,6 @@ export default function LocationView() {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-gray-900 flex items-center gap-1">
                     {emp.first_name} {emp.last_name}
-                    {emp.isTransferred && <span className="text-amber-500 text-[10px]">⚠</span>}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{emp.position}</p>
                 </div>
@@ -261,7 +251,13 @@ export default function LocationView() {
                   return (
                     <button
                       key={date}
-                      onClick={() => handleToggle(emp.kronos_id || emp.id, date)}
+                      onClick={() => {
+                        if (paintMode) {
+                          handleToggle(emp.kronos_id || emp.id, date)
+                        } else {
+                          setPicker({ empId: emp.kronos_id || emp.id, date, empName: `${emp.first_name} ${emp.last_name}` })
+                        }
+                      }}
                       className="bg-white p-2 flex flex-col items-center gap-1 active:bg-gray-50 transition-colors"
                     >
                       <span className="text-[10px] text-gray-400 uppercase">{weekday[0]}</span>
@@ -306,7 +302,6 @@ export default function LocationView() {
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-gray-900 group-hover:text-brand-700 transition-colors truncate flex items-center gap-1">
                           {emp.first_name} {emp.last_name}
-                          {emp.isTransferred && <span className="text-amber-500 text-[10px]" title={`Covering from ${LOCATION_MAP[emp.originalLocation]?.name}`}>⚠</span>}
                         </p>
                         <p className="text-xs text-gray-500 truncate">{emp.position}</p>
                       </div>
@@ -343,7 +338,7 @@ export default function LocationView() {
 
       {/* Footer actions */}
       <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <p className="text-xs text-charcoal-300">Click a cell to cycle codes. Tap a name for full year calendar.</p>
+        <p className="text-xs text-charcoal-300">Tap a day to mark attendance. Tap a name for full year calendar.</p>
         <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
           🔄 Transfer an employee to another school
         </button>
@@ -355,6 +350,36 @@ export default function LocationView() {
           onClose={() => setShowTransfer(false)}
           onTransferred={() => setRefreshKey(k => k + 1)}
         />
+      )}
+
+      {picker && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setPicker(null)} />
+          <div className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[75vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+              <div>
+                <p className="text-sm font-bold text-gray-900">{picker.empName}</p>
+                <p className="text-xs text-gray-500">{formatDate(picker.date)}</p>
+              </div>
+              <button onClick={() => setPicker(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-2">
+              {ATTENDANCE_CODES.map(c => (
+                <button
+                  key={c.code || 'present'}
+                  onClick={() => { handleSetCode(picker.empId, picker.date, c.code); setPicker(null) }}
+                  className="w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 text-left transition-colors"
+                >
+                  <StatusBadgeLarge code={c.code} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -32,22 +32,13 @@ export function getEmployeesWithEffectiveLocations() {
   return employees.map(e => ({
     ...e,
     location: overrides[e.kronos_id || e.id] || e.location,
-    originalLocation: e.location,
-    isTransferred: !!(overrides[e.kronos_id || e.id] && overrides[e.kronos_id || e.id] !== e.location),
   }))
 }
 
-// Transfer an employee to a new location
+// Permanently transfer an employee to a new home location
 export function transferEmployee(empKey, newLocationId) {
   const overrides = getLocationOverrides()
   overrides[empKey] = newLocationId
-  saveLocationOverrides(overrides)
-}
-
-// Revert an employee back to their original location
-export function revertTransfer(empKey) {
-  const overrides = getLocationOverrides()
-  delete overrides[empKey]
   saveLocationOverrides(overrides)
 }
 

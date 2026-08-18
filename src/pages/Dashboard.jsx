@@ -30,9 +30,6 @@ export default function Dashboard() {
     }
   })
 
-  // Count transferred employees
-  const transferredCount = employees.filter(e => e.isTransferred).length
-
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
@@ -40,12 +37,11 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-white">Dashboard</h1>
         <p className="text-sm text-charcoal-200 mt-1">
           {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
-          {transferredCount > 0 && <span className="text-amber-600"> · {transferredCount} on transfer</span>}
         </p>
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(locationCounts).length}</p>
@@ -57,10 +53,6 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Days Tracked ({year})</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalMarked}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Active Transfers</p>
-          <p className="text-3xl font-bold text-amber-600 mt-1">{transferredCount}</p>
         </div>
       </div>
 
@@ -88,8 +80,6 @@ export default function Dashboard() {
           .filter(loc => locationCounts[loc.id])
           .map(loc => {
             const count = locationCounts[loc.id] || 0
-            // Check if any transferred employees are here
-            const transferredHere = employees.filter(e => e.location === loc.id && e.isTransferred).length
             return (
               <Link
                 key={loc.id}
@@ -109,9 +99,6 @@ export default function Dashboard() {
                       <span className="text-sm font-semibold text-brand-600">{count}</span>
                     </div>
                     <span className="text-sm text-gray-500">staff</span>
-                    {transferredHere > 0 && (
-                      <span className="text-xs text-amber-600 font-medium ml-2">+{transferredHere} covering</span>
-                    )}
                   </div>
                   <svg className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

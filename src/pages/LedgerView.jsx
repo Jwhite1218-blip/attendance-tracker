@@ -158,7 +158,6 @@ export default function LedgerView() {
               {filteredEmployees.map(e => (
                 <option key={e.id} value={e.id}>
                   {e.last_name}, {e.first_name} — {LOCATION_MAP[e.location]?.shortName || e.location || 'Unassigned'}
-                  {e.isTransferred ? ' ⚠' : ''}
                 </option>
               ))}
             </select>
@@ -209,11 +208,6 @@ export default function LedgerView() {
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide">Assigned To</p>
                 <p className="text-sm font-semibold text-gray-900 mt-0.5">
                   {LOCATION_MAP[employee.location]?.name || employee.location || 'Unassigned'}
-                  {employee.isTransferred && (
-                    <span className="block text-[10px] text-amber-600 font-medium">
-                      Originally: {LOCATION_MAP[employee.originalLocation]?.name || employee.originalLocation}
-                    </span>
-                  )}
                 </p>
               </div>
               <div className="p-3">
