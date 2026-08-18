@@ -119,6 +119,7 @@ export default function EmployeeDetail({ employee }) {
 
   const serviceDate = employee?.service_date
   const hireDate = employee?.hire_date
+  const birthdate = employee?.birthdate
   const yearsOfService = serviceDate
     ? Math.floor((new Date() - new Date(serviceDate)) / (1000 * 60 * 60 * 24 * 365))
     : null
@@ -176,34 +177,24 @@ export default function EmployeeDetail({ employee }) {
           </div>
         </div>
 
-        {(hireDate || employee?.weekly_hours || employee?.pay_amount) && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
-            {hireDate && (
-              <div>
-                <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Hire Date</p>
-                <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{hireDate}</p>
-              </div>
-            )}
-            {serviceDate && (
-              <div>
-                <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Service Date</p>
-                <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{serviceDate}</p>
-              </div>
-            )}
-            {employee?.weekly_hours && (
-              <div>
-                <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Weekly Hours</p>
-                <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{employee.weekly_hours} hrs</p>
-              </div>
-            )}
-            {employee?.pay_amount && (
-              <div>
-                <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Pay Rate</p>
-                <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">${employee.pay_amount}/hr</p>
-              </div>
-            )}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
+          {hireDate && (
+            <div>
+              <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Hire Date</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{hireDate}</p>
+            </div>
+          )}
+          {serviceDate && (
+            <div>
+              <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Service Date</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{serviceDate}</p>
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Birthdate</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{birthdate || '—'}</p>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Toolbar: Paint mode + Code legend */}
