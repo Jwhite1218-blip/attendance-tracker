@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 
@@ -14,16 +15,11 @@ export default function MasterReport() {
   useEffect(() => {
     const data = {}
     employees.forEach(emp => {
-      const key = `att-emp-${emp.kronos_id || emp.id}-${year}`
-      const saved = localStorage.getItem(key)
-      if (saved) {
-        try {
-          const records = JSON.parse(saved)
-          Object.entries(records).forEach(([dateKey, record]) => {
-            data[`${emp.kronos_id || emp.id}-${dateKey}`] = record
-          })
-        } catch {}
-      }
+      const empId = emp.kronos_id || emp.id
+      const records = getEmployeeYearAttendance(empId, year)
+      Object.entries(records).forEach(([dateKey, record]) => {
+        data[`${empId}-${dateKey}`] = record
+      })
     })
     setAllAttendance(data)
   }, [year, employees])
