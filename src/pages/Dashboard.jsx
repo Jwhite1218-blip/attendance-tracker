@@ -1,18 +1,26 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { getLocationCounts, getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { getAllFlaggedEmployees } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
+import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 
 export default function Dashboard() {
+  const [, setDirectoryVersion] = useState(0)
+  const [showAddEmployee, setShowAddEmployee] = useState(false)
   const employees = getEmployeesWithEffectiveLocations()
+  const allEmployees = getEmployeesWithEffectiveLocations({ includeInactive: true })
+  const inactiveEmployees = allEmployees.filter(employee => !employee.active)
   const totalEmployees = employees.length
   const locationCounts = getLocationCounts()
 
   const flaggedEmployees = getAllFlaggedEmployees()
-    .map(flag => ({ ...flag, employee: employees.find(e => (e.kronos_id || e.id) === flag.empId) }))
+    .map(flag => ({ ...flag, employee: allEmployees.find(e => String(e.kronos_id || e.id) === String(flag.empId)) }))
     .filter(f => f.employee)
+
+  const refreshDirectory = () => setDirectoryVersion(version => version + 1)
 
   // Load all attendance from localStorage for current year
   const year = new Date().getFullYear()
@@ -41,17 +49,21 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(locationCounts).length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Total Staff</p>
+          <p className="text-sm font-medium text-gray-500">Active Staff</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalEmployees}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Days Tracked ({year})</p>
+          <p className="text-sm font-medium text-gray-500">Inactive Staff</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{inactiveEmployees.length}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <p className="text-sm font-medium text-gray-500">Exceptions ({year})</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalMarked}</p>
         </div>
       </div>
@@ -59,17 +71,20 @@ export default function Dashboard() {
       {/* HR Attendance Flags */}
       {flaggedEmployees.length > 0 && (
         <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
-          <h2 className="text-sm font-semibold text-red-700 mb-1">🚩 HR Attendance Flags</h2>
+          <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
           <p className="text-xs text-gray-400 mb-3">
-            Automatically flagged after 3 unexcused absences or lates in a school year. Flags are permanent — this is a documented record, not a live status.
+            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and a consecutive call out resets union seniority.
           </p>
           <div className="divide-y divide-gray-100">
             {flaggedEmployees.map(f => (
-              <div key={f.empId} className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+              <div key={`${f.empId}-${f.schoolYearStart}`} className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-red-600">{f.employee.first_name} {f.employee.last_name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">
                     {LOCATION_MAP[f.employee.location]?.name || f.employee.location} · {f.employee.position}
+                  </p>
+                  <p className={`text-xs font-semibold mt-1.5 ${f.seniorityReset ? 'text-red-700' : 'text-amber-700'}`}>
+                    {getAttendanceStageLabel(f)} · {f.occurrenceCount} occurrence{f.occurrenceCount === 1 ? '' : 's'} · {f.schoolYearStart}–{f.schoolYearStart + 1}
                   </p>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {f.triggers.map((t, i) => (
@@ -80,7 +95,7 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 whitespace-nowrap sm:text-right">
-                  Flagged {new Date(f.flaggedAt).toLocaleDateString()}
+                  Updated {new Date(f.updatedAt).toLocaleDateString()}
                 </p>
               </div>
             ))}
@@ -104,6 +119,59 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Employee Management */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-700">Employee Management</h2>
+            <p className="text-xs text-gray-400 mt-1">
+              Add employees or restore inactive records. Existing attendance history stays attached to the employee.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddEmployee(true)}
+            className="self-start px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
+          >
+            + Add employee
+          </button>
+        </div>
+
+        {inactiveEmployees.length > 0 ? (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Inactive employees</p>
+            <div className="divide-y divide-gray-100">
+              {inactiveEmployees.map(employee => {
+                const empKey = employee.kronos_id || employee.id
+                return (
+                  <div key={empKey} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{employee.first_name} {employee.last_name}</p>
+                      <p className="text-xs text-gray-400">
+                        ID: {employee.kronos_id} · {LOCATION_MAP[employee.location]?.name || employee.location}
+                        {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmployeeActive(empKey, true)
+                        refreshDirectory()
+                      }}
+                      className="self-start sm:self-auto px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
+                    >
+                      Reactivate
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">No inactive employee records.</p>
+        )}
+      </div>
 
       {/* Location Grid */}
       <h2 className="text-lg font-semibold text-white mb-4">Locations</h2>
@@ -147,7 +215,7 @@ export default function Dashboard() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Attendance Code Reference</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {ATTENDANCE_CODES.map(c => (
-            <div key={c.code || 'present'} className="flex items-center gap-2">
+            <div key={c.code} className="flex items-center gap-2">
               <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[32px]"
                 style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
               <div>
@@ -158,6 +226,15 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
+
+      <AddEmployeeModal
+        open={showAddEmployee}
+        onClose={() => setShowAddEmployee(false)}
+        onAdded={() => {
+          setShowAddEmployee(false)
+          refreshDirectory()
+        }}
+      />
     </div>
   )
 }
