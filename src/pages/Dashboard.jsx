@@ -6,6 +6,7 @@ import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
+import BlackoutDatesManager from '../components/BlackoutDatesManager.jsx'
 
 export default function Dashboard() {
   const [, setDirectoryVersion] = useState(0)
@@ -119,6 +120,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <BlackoutDatesManager />
 
       {/* Employee Management */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
