@@ -6,6 +6,7 @@ import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
+import BlackoutDatesManager from '../components/BlackoutDatesManager.jsx'
 
 export default function Dashboard() {
   const [, setDirectoryVersion] = useState(0)
@@ -41,11 +42,28 @@ export default function Dashboard() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-charcoal-200 mt-1">
-          {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
-        </p>
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm text-charcoal-200 mt-1">
+            {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
+          </p>
+        </div>
+        <a
+          href="https://allstartracker.netlify.app/"
+          target="_blank"
+          rel="noreferrer"
+          className="self-start sm:self-auto inline-flex items-center gap-3 rounded-xl border border-brand-500/50 bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-500 transition-colors"
+        >
+          <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg" aria-hidden="true">★</span>
+          <span>
+            <span className="block text-sm font-bold">All Star Performance Tracker</span>
+            <span className="block text-[11px] text-brand-100 mt-0.5">Open manager feedback</span>
+          </span>
+          <svg className="w-4 h-4 text-brand-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M5 5h5M5 5v14h14v-5" />
+          </svg>
+        </a>
       </div>
 
       {/* Stats Row */}
@@ -73,7 +91,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
           <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
           <p className="text-xs text-gray-400 mb-3">
-            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and a consecutive call out resets union seniority.
+            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and two consecutive UNEX workdays reset union seniority.
           </p>
           <div className="divide-y divide-gray-100">
             {flaggedEmployees.map(f => (
@@ -119,6 +137,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <BlackoutDatesManager />
 
       {/* Employee Management */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">

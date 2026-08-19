@@ -4,6 +4,7 @@ import { getRosterForLocation, getEmployeesWithEffectiveLocations } from '../dat
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
 import { getAttendanceRecord, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
+import { getDateAvailability } from '../data/blackoutDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
@@ -45,13 +46,14 @@ export default function QuickMark() {
   const empKey = currentEmployee?.kronos_id || currentEmployee?.id
   const attKey = `${empKey}-${date}`
   const currentCode = attendance[attKey]?.code || ''
+  const dateAvailability = getDateAvailability(date)
 
   useEffect(() => {
     setNoteDraft(attendance[attKey]?.note || '')
   }, [attKey, attendance[attKey]?.note])
 
   const handleMark = (code) => {
-    if (!currentEmployee) return
+    if (!currentEmployee || dateAvailability.unavailable) return
     if (code === 'O' && !noteDraft.trim()) return
     setAttendanceCode(empKey, date, code, code ? noteDraft : '')
     if (code === '') {
@@ -184,6 +186,15 @@ export default function QuickMark() {
             <span className="font-semibold text-brand-700">{markedCount} exception{markedCount === 1 ? '' : 's'} recorded</span>
           </div>
         )}
+        {dateAvailability.unavailable && (
+          <div className={`mt-3 rounded-lg px-3 py-2 text-sm font-semibold ${
+            dateAvailability.type === 'blackout'
+              ? 'bg-charcoal-800 text-white'
+              : 'bg-gray-100 text-gray-500 border border-gray-200'
+          }`}>
+            {dateAvailability.type === 'blackout' ? `Admin blackout: ${dateAvailability.label}.` : 'Weekend.'} Attendance cannot be marked for this date.
+          </div>
+        )}
       </div>
 
       {selectedLocation && roster.length > 0 && currentEmployee ? (
@@ -230,7 +241,8 @@ export default function QuickMark() {
                   {currentCode && (
                     <button
                       onClick={() => handleMark('')}
-                      className="text-xs text-gray-400 hover:text-red-500"
+                      disabled={dateAvailability.unavailable}
+                      className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Clear
                     </button>
@@ -244,7 +256,8 @@ export default function QuickMark() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => handleMark('')}
-                    className="px-2 py-2.5 rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-500 text-xs font-bold transition-all hover:border-red-200 hover:text-red-500"
+                    disabled={dateAvailability.unavailable}
+                    className="px-2 py-2.5 rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-500 text-xs font-bold transition-all hover:border-red-200 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <div className="text-base">×</div>
                     Clear entry
@@ -253,8 +266,8 @@ export default function QuickMark() {
                     <button
                       key={c.code}
                       onClick={() => handleMark(c.code)}
-                      disabled={c.code === 'O' && !noteDraft.trim()}
-                      title={c.code === 'O' && !noteDraft.trim() ? 'Add a comment before choosing Other' : c.label}
+                      disabled={dateAvailability.unavailable || (c.code === 'O' && !noteDraft.trim())}
+                      title={dateAvailability.unavailable ? dateAvailability.label : c.code === 'O' && !noteDraft.trim() ? 'Add a comment before choosing Other' : c.label}
                       className={`px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all relative ${
                         currentCode === c.code ? 'ring-2 ring-offset-1 scale-105' : 'hover:scale-105'
                       } disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed`}
@@ -280,15 +293,16 @@ export default function QuickMark() {
                     id="quick-mark-note"
                     value={noteDraft}
                     onChange={event => setNoteDraft(event.target.value)}
+                    disabled={dateAvailability.unavailable}
                     rows={2}
                     placeholder="Add context for this attendance exception…"
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
                   />
                   {currentCode && (
                     <button
                       type="button"
                       onClick={() => handleMark(currentCode)}
-                      disabled={currentCode === 'O' && !noteDraft.trim()}
+                      disabled={dateAvailability.unavailable || (currentCode === 'O' && !noteDraft.trim())}
                       className="mt-2 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-40"
                     >
                       Save comment

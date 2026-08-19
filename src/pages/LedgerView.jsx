@@ -4,6 +4,7 @@ import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
+import { getDateAvailability } from '../data/blackoutDates.js'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
@@ -88,6 +89,7 @@ export default function LedgerView() {
 
   const handleCellClick = (year, monthIdx, day) => {
     const dateKey = formatDateKey(year, monthIdx, day)
+    if (getDateAvailability(dateKey).unavailable) return
     const record = attendanceByYear[year]?.[dateKey]
     setPicker({
       empId: empKey,
@@ -262,16 +264,35 @@ export default function LedgerView() {
                             const dateKey = formatDateKey(year, monthIdx, day)
                             const code = attendanceByYear[year]?.[dateKey]?.code || ''
                             const info = CODE_MAP[code]
+                            const availability = getDateAvailability(dateKey)
                             return (
-                              <td key={i} className="border-b border-l border-gray-100 p-0">
+                              <td
+                                key={i}
+                                className={`border-b border-l p-0 ${
+                                  availability.type === 'blackout'
+                                    ? 'bg-charcoal-800 border-charcoal-700'
+                                    : availability.type === 'weekend'
+                                      ? 'bg-gray-100 border-gray-200'
+                                      : 'border-gray-100'
+                                }`}
+                              >
                                 <button
                                   onClick={() => handleCellClick(year, monthIdx, day)}
-                                  className="relative w-full h-7 flex items-center justify-center text-[9px] font-bold hover:ring-1 hover:ring-inset hover:ring-brand-300 transition-all"
-                                  style={code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
-                                  title={`${monthName} ${day}, ${year} — ${info?.label || 'No attendance exception'}${attendanceByYear[year]?.[dateKey]?.note ? ` — ${attendanceByYear[year][dateKey].note}` : ''}`}
+                                  disabled={availability.unavailable}
+                                  className={`relative w-full h-7 flex items-center justify-center text-[9px] font-bold transition-all ${
+                                    availability.type === 'blackout'
+                                      ? 'text-white cursor-not-allowed'
+                                      : availability.type === 'weekend'
+                                        ? 'text-gray-300 cursor-not-allowed'
+                                        : 'hover:ring-1 hover:ring-inset hover:ring-brand-300'
+                                  }`}
+                                  style={!availability.unavailable && code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
+                                  title={availability.unavailable
+                                    ? `${monthName} ${day}, ${year} — ${availability.label}`
+                                    : `${monthName} ${day}, ${year} — ${info?.label || 'No attendance exception'}${attendanceByYear[year]?.[dateKey]?.note ? ` — ${attendanceByYear[year][dateKey].note}` : ''}`}
                                 >
-                                  {code || ''}
-                                  {attendanceByYear[year]?.[dateKey]?.note && (
+                                  {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? '—' : code || ''}
+                                  {!availability.unavailable && attendanceByYear[year]?.[dateKey]?.note && (
                                     <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/90" aria-label="Comment added" />
                                   )}
                                 </button>
@@ -302,6 +323,14 @@ export default function LedgerView() {
                   <span className="text-xs text-gray-600">{c.label}</span>
                 </div>
               ))}
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-400 px-1.5 py-1 min-w-[40px]">—</span>
+                <span className="text-xs text-gray-600">Weekend</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border border-charcoal-700 bg-charcoal-800 text-white px-1.5 py-1 min-w-[40px]">×</span>
+                <span className="text-xs text-gray-600">Admin blackout</span>
+              </div>
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{startYear}–{startYear + 1} Totals</h4>

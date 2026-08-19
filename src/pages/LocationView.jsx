@@ -5,6 +5,7 @@ import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
 import { getAttendanceRecord, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
+import { getDateAvailability } from '../data/blackoutDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
@@ -13,13 +14,14 @@ import TransferModal from '../components/TransferModal.jsx'
 
 function getWeekDates(weekOffset = 0) {
   const today = new Date()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7)
+  const tuesday = new Date(today)
+  const daysSinceTuesday = (today.getDay() - 2 + 7) % 7
+  tuesday.setDate(today.getDate() - daysSinceTuesday + weekOffset * 7)
   const dates = []
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
-    dates.push(d.toISOString().split('T')[0])
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(tuesday)
+    d.setDate(tuesday.getDate() + i)
+    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
   }
   return dates
 }
@@ -45,7 +47,7 @@ export default function LocationView() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
   const [selectedEmployee, setSelectedEmployee] = useState(null)
-  const [selectedCode, setSelectedCode] = useState('CO')
+  const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
@@ -121,6 +123,10 @@ export default function LocationView() {
 
         <EmployeeDetail
           employee={selectedEmployee}
+          onEmployeeUpdate={updatedEmployee => {
+            setSelectedEmployee(updatedEmployee)
+            setRefreshKey(key => key + 1)
+          }}
           onStatusChange={() => {
             setSelectedEmployee(null)
             setRefreshKey(key => key + 1)
@@ -132,13 +138,14 @@ export default function LocationView() {
 
   // ─── LOCATION ROSTER VIEW ───
   const handleToggle = (empId, date) => {
-    if (!paintMode) return
+    if (!paintMode || getDateAvailability(date).unavailable) return
     const key = `${empId}-${date}`
     setAttendanceCode(empId, date, selectedCode)
     setAttendance(prev => ({ ...prev, [key]: { code: selectedCode, date, empId } }))
   }
 
   const handleSetCode = (empId, date, code, note = '') => {
+    if (getDateAvailability(date).unavailable) return
     const key = `${empId}-${date}`
     setAttendanceCode(empId, date, code, note)
     if (code === '') {
@@ -149,6 +156,7 @@ export default function LocationView() {
   }
 
   const handleSetAll = (date, code) => {
+    if (getDateAvailability(date).unavailable) return
     roster.forEach(emp => setAttendanceCode(emp.kronos_id || emp.id, date, code))
     setAttendance(prev => {
       const updated = { ...prev }
@@ -182,7 +190,9 @@ export default function LocationView() {
           <button onClick={() => setWeekOffset(w => w - 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <span className="text-xs sm:text-sm font-medium text-charcoal-100 px-2 sm:px-3 py-2 whitespace-nowrap">Week of {formatDate(dates[0])}</span>
+          <span className="text-xs sm:text-sm font-medium text-charcoal-100 px-2 sm:px-3 py-2 whitespace-nowrap">
+            {formatDate(dates[0])} – {formatDate(dates[6])}
+          </span>
           <button onClick={() => setWeekOffset(w => w + 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>
@@ -254,13 +264,15 @@ export default function LocationView() {
               </button>
 
               {/* Day cells - horizontal row */}
-              <div className="grid grid-cols-5 gap-px bg-gray-100 border-t border-gray-100">
+              <div className="grid grid-cols-7 gap-px bg-gray-100 border-t border-gray-100">
                 {empAtt.map(({ date, code }) => {
                   const { weekday, day } = formatDateShort(date)
+                  const availability = getDateAvailability(date)
                   return (
                     <button
                       key={date}
                       onClick={() => {
+                        if (availability.unavailable) return
                         if (paintMode) {
                           handleToggle(emp.kronos_id || emp.id, date)
                         } else {
@@ -275,11 +287,23 @@ export default function LocationView() {
                           })
                         }
                       }}
-                      className="bg-white p-2 flex flex-col items-center gap-1 active:bg-gray-50 transition-colors"
+                      disabled={availability.unavailable}
+                      title={availability.unavailable ? availability.label : formatDate(date)}
+                      className={`p-2 flex flex-col items-center gap-1 transition-colors ${
+                        availability.type === 'blackout'
+                          ? 'bg-charcoal-800 text-white cursor-not-allowed'
+                          : availability.type === 'weekend'
+                            ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                            : 'bg-white active:bg-gray-50'
+                      }`}
                     >
-                      <span className="text-[10px] text-gray-400 uppercase">{weekday[0]}</span>
-                      <span className="text-[10px] text-gray-500 font-medium">{day}</span>
-                      {code ? (
+                      <span className={`text-[10px] uppercase ${availability.unavailable ? 'text-current opacity-70' : 'text-gray-400'}`}>{weekday[0]}</span>
+                      <span className={`text-[10px] font-medium ${availability.unavailable ? 'text-current' : 'text-gray-500'}`}>{day}</span>
+                      {availability.type === 'blackout' ? (
+                        <span className="inline-flex items-center justify-center text-sm font-bold w-[28px] h-[22px]">×</span>
+                      ) : availability.type === 'weekend' ? (
+                        <span className="inline-flex items-center justify-center text-xs w-[28px] h-[22px]">—</span>
+                      ) : code ? (
                         <span className="relative">
                           <StatusBadge code={code} size="small" />
                           {attendance[`${emp.kronos_id || emp.id}-${date}`]?.note && (
@@ -305,12 +329,26 @@ export default function LocationView() {
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="sticky left-0 bg-gray-50 z-10 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>Employee</th>
-                {dates.map(d => (
-                  <th key={d} className="text-center px-2 py-3" style={{ minWidth: '90px' }}>
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wide">{formatDate(d)}</div>
-                    <button onClick={() => handleSetAll(d, '')} className="mt-1 text-[10px] text-gray-400 hover:text-brand-500">Clear All</button>
-                  </th>
-                ))}
+                {dates.map(d => {
+                  const availability = getDateAvailability(d)
+                  return (
+                    <th
+                      key={d}
+                      className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white' : availability.type === 'weekend' ? 'bg-gray-100' : ''}`}
+                      style={{ minWidth: '90px' }}
+                      title={availability.unavailable ? availability.label : undefined}
+                    >
+                      <div className={`text-xs font-medium uppercase tracking-wide ${availability.unavailable ? 'text-current' : 'text-gray-500'}`}>{formatDate(d)}</div>
+                      <button
+                        onClick={() => handleSetAll(d, '')}
+                        disabled={availability.unavailable}
+                        className={`mt-1 text-[10px] ${availability.unavailable ? 'text-current opacity-60 cursor-not-allowed' : 'text-gray-400 hover:text-brand-500'}`}
+                      >
+                        {availability.type === 'blackout' ? availability.label : 'Clear All'}
+                      </button>
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -335,10 +373,12 @@ export default function LocationView() {
                   {dates.map(d => {
                     const key = `${emp.kronos_id || emp.id}-${d}`
                     const code = attendance[key]?.code || ''
+                    const availability = getDateAvailability(d)
                     return (
-                      <td key={d} className="text-center px-2 py-3">
+                      <td key={d} className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800' : availability.type === 'weekend' ? 'bg-gray-100' : ''}`}>
                         <button
                           onClick={() => {
+                            if (availability.unavailable) return
                             if (paintMode) {
                               handleToggle(emp.kronos_id || emp.id, d)
                             } else {
@@ -352,12 +392,18 @@ export default function LocationView() {
                               })
                             }
                           }}
-                          onMouseDown={() => paintMode && setIsPainting(true)}
+                          onMouseDown={() => paintMode && !availability.unavailable && setIsPainting(true)}
                           onMouseUp={() => setIsPainting(false)}
                           onMouseEnter={() => { if (paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
-                          className="w-full flex justify-center"
+                          disabled={availability.unavailable}
+                          title={availability.unavailable ? availability.label : formatDate(d)}
+                          className={`w-full flex justify-center ${availability.unavailable ? 'cursor-not-allowed' : ''}`}
                         >
-                          {code ? (
+                          {availability.type === 'blackout' ? (
+                            <span className="inline-flex items-center justify-center text-sm font-bold text-white w-[28px] h-[22px]">×</span>
+                          ) : availability.type === 'weekend' ? (
+                            <span className="inline-flex items-center justify-center text-xs text-gray-300 w-[28px] h-[22px]">—</span>
+                          ) : code ? (
                             <span className="relative">
                               <StatusBadge code={code} size="small" />
                               {attendance[key]?.note && (
@@ -380,7 +426,13 @@ export default function LocationView() {
 
       {/* Footer actions */}
       <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <p className="text-xs text-charcoal-300">Select a day to mark an exception or add a comment. Select a name for full-year history.</p>
+        <div>
+          <p className="text-xs text-charcoal-300">Select a day to mark an exception or add a comment. Select a name for full-year history.</p>
+          <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
+            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
+          </div>
+        </div>
         {role === 'admin' && (
           <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
             🔄 Transfer an employee to another school

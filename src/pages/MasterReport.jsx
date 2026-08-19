@@ -68,7 +68,7 @@ export default function MasterReport() {
         if (key.startsWith(`${empId}-`) && record.code) {
           marked++
           const info = CODE_MAP[record.code]
-          if (info && ['CO', 'CC', 'NCNS', 'LE'].includes(info.code)) unexcused++
+          if (info && ['UNEX', 'LI', 'EO', 'NCNS', 'CC', 'LE', 'L/EQ'].includes(info.code)) unexcused++
         }
       })
       return { employee: emp, marked, unexcused }
@@ -175,7 +175,7 @@ export default function MasterReport() {
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700">Highest Attendance Occurrences — {year}</h2>
-            <p className="text-xs text-gray-400 mt-1">Call outs, consecutive call outs, no-call/no-shows, and late/left-early records</p>
+            <p className="text-xs text-gray-400 mt-1">UNEX, no-call/no-show, late-in, and early-out records</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">

@@ -1,7 +1,7 @@
 // Attendance accountability follows a July–June school year.
 // The third qualifying occurrence starts formal tracking, the fourth triggers
-// a verbal-warning stage, and a manager-marked consecutive call out resets
-// union seniority status.
+// a verbal-warning stage, and two consecutive UNEX workdays reset union
+// seniority status.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
 
@@ -9,7 +9,7 @@ const FLAGS_KEY = 'hr-attendance-progress-v2'
 const LEGACY_FLAGS_KEY = 'hr-flags'
 const TRACKING_THRESHOLD = 3
 const VERBAL_WARNING_THRESHOLD = 4
-const QUALIFYING_CODES = new Set(['CO', 'CC', 'LE', 'NCNS'])
+const QUALIFYING_CODES = new Set(['UNEX', 'LI', 'EO', 'NCNS', 'CC', 'LE', 'L/EQ'])
 
 export function isQualifyingCode(code) {
   return QUALIFYING_CODES.has(normalizeAttendanceCode(code))
@@ -23,6 +23,25 @@ function stageForCount(count) {
   if (count >= VERBAL_WARNING_THRESHOLD) return 'verbal_warning'
   if (count >= TRACKING_THRESHOLD) return 'formal_tracking'
   return 'documented'
+}
+
+function nextWorkday(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00`)
+  do {
+    date.setDate(date.getDate() + 1)
+  } while (date.getDay() === 0 || date.getDay() === 6)
+  return date.toISOString().slice(0, 10)
+}
+
+function findSeniorityResetDate(triggers) {
+  const callIns = triggers.filter(trigger => trigger.code === 'UNEX' || trigger.code === 'CC')
+  for (let index = 0; index < callIns.length; index++) {
+    if (callIns[index].code === 'CC') return callIns[index].date
+    if (index > 0 && nextWorkday(callIns[index - 1].date) === callIns[index].date) {
+      return callIns[index].date
+    }
+  }
+  return null
 }
 
 function migrateLegacyFlags() {
@@ -42,8 +61,8 @@ function migrateLegacyFlags() {
           stage: stageForCount(triggers.length),
           updatedAt: flag.flaggedAt || new Date().toISOString(),
           triggers,
-          seniorityReset: triggers.some(trigger => trigger.code === 'CC'),
-          seniorityResetAt: [...triggers].reverse().find(trigger => trigger.code === 'CC')?.date || null,
+          seniorityReset: Boolean(flag.seniorityReset || findSeniorityResetDate(triggers)),
+          seniorityResetAt: flag.seniorityResetAt || findSeniorityResetDate(triggers),
         }]
       })
     )
@@ -76,8 +95,7 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     .map(record => ({ date: record.date, code: normalizeAttendanceCode(record.code) }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  const consecutiveCallOuts = triggers.filter(trigger => trigger.code === 'CC')
-  if (!triggers.length && !consecutiveCallOuts.length) {
+  if (!triggers.length) {
     delete statuses[key]
     saveAllStatuses(statuses)
     return
@@ -90,8 +108,8 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     stage: stageForCount(triggers.length),
     updatedAt: new Date().toISOString(),
     triggers,
-    seniorityReset: consecutiveCallOuts.length > 0,
-    seniorityResetAt: consecutiveCallOuts.at(-1)?.date || null,
+    seniorityReset: Boolean(findSeniorityResetDate(triggers)),
+    seniorityResetAt: findSeniorityResetDate(triggers),
   }
   saveAllStatuses(statuses)
 }

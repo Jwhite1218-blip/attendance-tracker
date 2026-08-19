@@ -1,21 +1,10 @@
-import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-
-const CODE_CLASSES = Object.fromEntries(
-  ATTENDANCE_CODES.map(c => [
-    c.code,
-    {
-      bg: c.hex.bg,
-      text: c.hex.text,
-      border: c.hex.border,
-    }
-  ])
-)
+import { CODE_MAP } from '../data/attendanceCodes.js'
 
 export function StatusBadge({ code, size = 'normal' }) {
   const info = CODE_MAP[code]
   if (!info) return null
 
-  const cls = CODE_CLASSES[info.code]
+  const cls = info.hex
   const label = info.shortLabel
 
   const sizeClasses = size === 'small'
@@ -43,7 +32,7 @@ export function StatusBadgeLarge({ code }) {
   const info = CODE_MAP[code]
   if (!info) return null
 
-  const cls = CODE_CLASSES[info.code]
+  const cls = info.hex
 
   return (
     <span
