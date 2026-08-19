@@ -13,11 +13,10 @@ const CODE_CLASSES = Object.fromEntries(
 
 export function StatusBadge({ code, size = 'normal' }) {
   const info = CODE_MAP[code]
-  if (!info && code !== '') return null
+  if (!info) return null
 
-  const cls = CODE_CLASSES[code] || CODE_CLASSES['']
-  const label = info?.shortLabel || 'P'
-  const isPresent = code === '' || !code
+  const cls = CODE_CLASSES[info.code]
+  const label = info.shortLabel
 
   const sizeClasses = size === 'small'
     ? 'text-[10px] px-1 py-0.5 min-w-[24px]'
@@ -33,7 +32,7 @@ export function StatusBadge({ code, size = 'normal' }) {
         color: cls.text,
         borderColor: cls.border,
       }}
-      title={info?.label || 'Present'}
+      title={info.label}
     >
       {label}
     </span>
@@ -42,9 +41,9 @@ export function StatusBadge({ code, size = 'normal' }) {
 
 export function StatusBadgeLarge({ code }) {
   const info = CODE_MAP[code]
-  if (!info && code !== '') return null
+  if (!info) return null
 
-  const cls = CODE_CLASSES[code] || CODE_CLASSES['']
+  const cls = CODE_CLASSES[info.code]
 
   return (
     <span
@@ -55,8 +54,8 @@ export function StatusBadgeLarge({ code }) {
         borderColor: cls.border,
       }}
     >
-      <span className="font-bold">{info?.shortLabel || 'P'}</span>
-      <span>{info?.label || 'Present'}</span>
+      <span className="font-bold">{info.shortLabel}</span>
+      <span>{info.label}</span>
     </span>
   )
 }

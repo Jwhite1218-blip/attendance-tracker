@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
-import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
+import { getAttendanceRecord, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import { useAuth } from '../components/PinGate.jsx'
@@ -15,7 +15,7 @@ export default function QuickMark() {
   const [currentIdx, setCurrentIdx] = useState(0)
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [attendance, setAttendance] = useState({})
-  const [paintCode, setPaintCode] = useState('U')
+  const [noteDraft, setNoteDraft] = useState('')
   const [showTransfer, setShowTransfer] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
@@ -35,8 +35,8 @@ export default function QuickMark() {
     const next = {}
     roster.forEach(emp => {
       const key = emp.kronos_id || emp.id
-      const code = getAttendanceCode(key, date)
-      if (code) next[`${key}-${date}`] = { code, date, empId: key }
+      const record = getAttendanceRecord(key, date)
+      if (record) next[`${key}-${date}`] = { ...record, empId: key }
     })
     setAttendance(next)
   }, [roster, date])
@@ -46,10 +46,16 @@ export default function QuickMark() {
   const attKey = `${empKey}-${date}`
   const currentCode = attendance[attKey]?.code || ''
 
+  useEffect(() => {
+    setNoteDraft(attendance[attKey]?.note || '')
+  }, [attKey, attendance[attKey]?.note])
+
   const handleMark = (code) => {
     if (!currentEmployee) return
-    setAttendanceCode(empKey, date, code)
+    if (code === 'O' && !noteDraft.trim()) return
+    setAttendanceCode(empKey, date, code, code ? noteDraft : '')
     if (code === '') {
+      setNoteDraft('')
       setAttendance(prev => {
         const next = { ...prev }
         delete next[attKey]
@@ -58,14 +64,15 @@ export default function QuickMark() {
     } else {
       setAttendance(prev => ({
         ...prev,
-        [attKey]: { code, date, empId: empKey }
+        [attKey]: { code, date, empId: empKey, ...(noteDraft.trim() ? { note: noteDraft.trim() } : {}) }
       }))
     }
   }
 
   const handleCycle = () => {
-    const currentIdx = CODE_CYCLE.indexOf(currentCode)
-    const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
+    const choices = noteDraft.trim() ? CODE_CYCLE : CODE_CYCLE.filter(code => code !== 'O')
+    const currentIdx = choices.indexOf(currentCode)
+    const nextCode = choices[(currentIdx + 1) % choices.length]
     handleMark(nextCode)
   }
 
@@ -107,9 +114,9 @@ export default function QuickMark() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [currentEmployee, currentIdx, attendance, date])
+  }, [currentEmployee, currentIdx, attendance, date, noteDraft])
 
-  // Progress
+  // Exception count for the selected date
   const markedCount = useMemo(() => {
     return roster.filter(emp => {
       const k = `${emp.kronos_id || emp.id}-${date}`
@@ -128,20 +135,21 @@ export default function QuickMark() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-white mb-1">Quick Mark</h1>
       <p className="text-sm text-charcoal-200 mb-6">
-        Pick a school, mark each employee, auto-advance to the next. Keyboard: 1-9 for codes, → or Enter for next, ← for back, Space to cycle.
+        Record attendance exceptions only. Unmarked employees are left alone. Keyboard: 1-9 for codes, → or Enter for next, ← for back, Space to cycle.
       </p>
 
       {/* School dropdown */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
+            <label htmlFor="quick-mark-school" className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
             {role === 'school' ? (
               <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-700 font-medium">
                 {LOCATION_MAP[myLocationId]?.name}
               </div>
             ) : (
               <select
+                id="quick-mark-school"
                 value={selectedLocation}
                 onChange={e => setSelectedLocation(e.target.value)}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
@@ -159,8 +167,9 @@ export default function QuickMark() {
             )}
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Date</label>
+            <label htmlFor="quick-mark-date" className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Date</label>
             <input
+              id="quick-mark-date"
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
@@ -170,22 +179,9 @@ export default function QuickMark() {
         </div>
 
         {selectedLocation && roster.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            {/* Progress bar */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1">
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                  <span>Progress: {markedCount} of {roster.length} marked</span>
-                  <span>{Math.round((markedCount / roster.length) * 100)}%</span>
-                </div>
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-brand-500 rounded-full transition-all"
-                    style={{ width: `${(markedCount / roster.length) * 100}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3 text-xs text-gray-500">
+            <span>{roster.length} active employees</span>
+            <span className="font-semibold text-brand-700">{markedCount} exception{markedCount === 1 ? '' : 's'} recorded</span>
           </div>
         )}
       </div>
@@ -229,7 +225,7 @@ export default function QuickMark() {
                   {currentCode ? (
                     <StatusBadge code={currentCode} size="large" />
                   ) : (
-                    <span className="text-sm text-gray-400 italic">Not yet marked</span>
+                    <span className="text-sm text-gray-400 italic">No attendance exception marked</span>
                   )}
                   {currentCode && (
                     <button
@@ -248,22 +244,20 @@ export default function QuickMark() {
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => handleMark('')}
-                    className="px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all"
-                    style={currentCode === ''
-                      ? { backgroundColor: CODE_MAP[''].hex.bg, color: CODE_MAP[''].hex.text, borderColor: CODE_MAP[''].hex.border, boxShadow: `0 0 0 2px ${CODE_MAP[''].hex.border}` }
-                      : { backgroundColor: '#f9fafb', color: '#6b7280', borderColor: '#e5e7eb' }
-                    }
+                    className="px-2 py-2.5 rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-500 text-xs font-bold transition-all hover:border-red-200 hover:text-red-500"
                   >
-                    <div className="text-base">✓</div>
-                    Present
+                    <div className="text-base">×</div>
+                    Clear entry
                   </button>
                   {ATTENDANCE_CODES.filter(c => c.code !== '').map((c, idx) => (
                     <button
                       key={c.code}
                       onClick={() => handleMark(c.code)}
+                      disabled={c.code === 'O' && !noteDraft.trim()}
+                      title={c.code === 'O' && !noteDraft.trim() ? 'Add a comment before choosing Other' : c.label}
                       className={`px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all relative ${
                         currentCode === c.code ? 'ring-2 ring-offset-1 scale-105' : 'hover:scale-105'
-                      }`}
+                      } disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed`}
                       style={{
                         backgroundColor: c.hex.bg,
                         color: c.hex.text,
@@ -276,6 +270,30 @@ export default function QuickMark() {
                       {idx < 9 && <span className="absolute top-0.5 right-0.5 text-[8px] text-gray-400">{idx + 1}</span>}
                     </button>
                   ))}
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <label htmlFor="quick-mark-note" className="text-xs text-gray-400 uppercase tracking-wide block mb-2">
+                    Comment <span className="normal-case">{currentCode === 'O' ? '(required for Other)' : '(optional)'}</span>
+                  </label>
+                  <textarea
+                    id="quick-mark-note"
+                    value={noteDraft}
+                    onChange={event => setNoteDraft(event.target.value)}
+                    rows={2}
+                    placeholder="Add context for this attendance exception…"
+                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                  {currentCode && (
+                    <button
+                      type="button"
+                      onClick={() => handleMark(currentCode)}
+                      disabled={currentCode === 'O' && !noteDraft.trim()}
+                      className="mt-2 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-40"
+                    >
+                      Save comment
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -345,11 +363,6 @@ export default function QuickMark() {
             <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-20">
               <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">Code Reference</h3>
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-1 min-w-[32px]"
-                    style={{ backgroundColor: CODE_MAP[''].hex.bg, color: CODE_MAP[''].hex.text, borderColor: CODE_MAP[''].hex.border }}>✓</span>
-                  <span className="text-xs text-gray-600">Present</span>
-                </div>
                 {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
                   <div key={c.code} className="flex items-center gap-2">
                     <span

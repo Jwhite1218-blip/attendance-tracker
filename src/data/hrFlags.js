@@ -1,64 +1,126 @@
-// Automatic HR accountability flags.
-// Any employee who racks up 3 qualifying occurrences (unexcused absence or
-// late/early quit) in the same attendance year gets permanently flagged —
-// their name tag turns red everywhere in the app, and the occurrence is
-// logged here for HR's reference list on the admin Dashboard.
-//
-// Approved/protected absences (RTO, RTOP, bereavement/jury duty, medical/
-// FMLA) never count toward this — only codes that represent a no-show or
-// lateness problem.
-//
-// Flags are permanent once triggered: there's no auto-clear, and no
-// dismiss action. This is intentional — it's a documented record, not a
-// live status.
+// Attendance accountability follows a July–June school year.
+// The third qualifying occurrence starts formal tracking, the fourth triggers
+// a verbal-warning stage, and a manager-marked consecutive call out resets
+// union seniority status.
 
-const FLAGS_KEY = 'hr-flags' // { [empId]: { empId, year, flaggedAt, triggers: [{date, code}] } }
-const STRIKE_THRESHOLD = 3
+import { normalizeAttendanceCode } from './attendanceCodes.js'
 
-const QUALIFYING_CODES = new Set(['U', 'UP', 'U.5', 'UP.5', 'NCNS', 'CC', 'L/EQ'])
+const FLAGS_KEY = 'hr-attendance-progress-v2'
+const LEGACY_FLAGS_KEY = 'hr-flags'
+const TRACKING_THRESHOLD = 3
+const VERBAL_WARNING_THRESHOLD = 4
+const QUALIFYING_CODES = new Set(['CO', 'CC', 'LE', 'NCNS'])
 
 export function isQualifyingCode(code) {
-  return QUALIFYING_CODES.has(code)
+  return QUALIFYING_CODES.has(normalizeAttendanceCode(code))
 }
 
-function getAllFlags() {
+function statusKey(empId, schoolYearStart) {
+  return `${empId}-${schoolYearStart}`
+}
+
+function stageForCount(count) {
+  if (count >= VERBAL_WARNING_THRESHOLD) return 'verbal_warning'
+  if (count >= TRACKING_THRESHOLD) return 'formal_tracking'
+  return 'documented'
+}
+
+function migrateLegacyFlags() {
   try {
-    return JSON.parse(localStorage.getItem(FLAGS_KEY) || '{}')
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_FLAGS_KEY) || '{}')
+    return Object.fromEntries(
+      Object.values(legacy).map(flag => {
+        const triggers = (flag.triggers || []).map(trigger => ({
+          ...trigger,
+          code: normalizeAttendanceCode(trigger.code),
+        }))
+        const year = Number(flag.year) || new Date(flag.flaggedAt || Date.now()).getFullYear()
+        return [statusKey(flag.empId, year), {
+          empId: flag.empId,
+          schoolYearStart: year,
+          occurrenceCount: triggers.length,
+          stage: stageForCount(triggers.length),
+          updatedAt: flag.flaggedAt || new Date().toISOString(),
+          triggers,
+          seniorityReset: triggers.some(trigger => trigger.code === 'CC'),
+          seniorityResetAt: [...triggers].reverse().find(trigger => trigger.code === 'CC')?.date || null,
+        }]
+      })
+    )
   } catch {
     return {}
   }
 }
 
-function saveAllFlags(flags) {
-  localStorage.setItem(FLAGS_KEY, JSON.stringify(flags))
-}
-
-// Call right after writing an attendance record. yearData is that
-// employee's full { [dateKey]: {code, date} } bucket for the year the
-// write just landed in. If they've now hit the threshold and aren't
-// already flagged, permanently record the flag.
-export function checkAndFlag(empId, year, yearData) {
-  const flags = getAllFlags()
-  if (flags[empId]) return // already flagged — permanent, nothing to do
-
-  const triggers = Object.values(yearData)
-    .filter(r => isQualifyingCode(r.code))
-    .map(r => ({ date: r.date, code: r.code }))
-    .sort((a, b) => a.date.localeCompare(b.date))
-
-  if (triggers.length >= STRIKE_THRESHOLD) {
-    flags[empId] = { empId, year, flaggedAt: new Date().toISOString(), triggers }
-    saveAllFlags(flags)
+function getAllStatuses() {
+  try {
+    const saved = localStorage.getItem(FLAGS_KEY)
+    if (saved) return JSON.parse(saved)
+    const migrated = migrateLegacyFlags()
+    if (Object.keys(migrated).length) saveAllStatuses(migrated)
+    return migrated
+  } catch {
+    return {}
   }
 }
 
-export function isFlagged(empId) {
-  return !!getAllFlags()[empId]
+function saveAllStatuses(statuses) {
+  localStorage.setItem(FLAGS_KEY, JSON.stringify(statuses))
 }
 
-// Most recently flagged first — for the admin reference list.
+export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
+  const statuses = getAllStatuses()
+  const key = statusKey(empId, schoolYearStart)
+  const triggers = Object.values(schoolYearData)
+    .filter(record => isQualifyingCode(record.code))
+    .map(record => ({ date: record.date, code: normalizeAttendanceCode(record.code) }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const consecutiveCallOuts = triggers.filter(trigger => trigger.code === 'CC')
+  if (!triggers.length && !consecutiveCallOuts.length) {
+    delete statuses[key]
+    saveAllStatuses(statuses)
+    return
+  }
+
+  statuses[key] = {
+    empId,
+    schoolYearStart,
+    occurrenceCount: triggers.length,
+    stage: stageForCount(triggers.length),
+    updatedAt: new Date().toISOString(),
+    triggers,
+    seniorityReset: consecutiveCallOuts.length > 0,
+    seniorityResetAt: consecutiveCallOuts.at(-1)?.date || null,
+  }
+  saveAllStatuses(statuses)
+}
+
+export function getEmployeeAttendanceStatus(empId) {
+  return Object.values(getAllStatuses())
+    .filter(status => String(status.empId) === String(empId))
+    .sort((a, b) => b.schoolYearStart - a.schoolYearStart)[0] || null
+}
+
+export function isFlagged(empId) {
+  const status = getEmployeeAttendanceStatus(empId)
+  return !!status && (status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset)
+}
+
 export function getAllFlaggedEmployees() {
-  return Object.values(getAllFlags()).sort(
-    (a, b) => new Date(b.flaggedAt) - new Date(a.flaggedAt)
-  )
+  return Object.values(getAllStatuses())
+    .filter(status => status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset)
+    .sort((a, b) => {
+      if (a.seniorityReset !== b.seniorityReset) return a.seniorityReset ? -1 : 1
+      return new Date(b.updatedAt) - new Date(a.updatedAt)
+    })
+}
+
+export function getAttendanceStageLabel(status) {
+  if (!status) return 'No active attendance action'
+  if (status.seniorityReset && status.stage === 'verbal_warning') return 'Union seniority reset · Verbal warning required'
+  if (status.seniorityReset) return 'Union seniority reset'
+  if (status.stage === 'verbal_warning') return 'Verbal warning required'
+  if (status.stage === 'formal_tracking') return 'Formal attendance tracking'
+  return `${status.occurrenceCount} documented occurrence${status.occurrenceCount === 1 ? '' : 's'}`
 }
