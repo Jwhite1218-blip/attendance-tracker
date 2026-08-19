@@ -2,10 +2,11 @@ import { useState, useMemo, useEffect } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
-import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
-import { getAttendanceCode, setAttendanceCode } from '../data/attendanceStore.js'
+import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
+import { getAttendanceRecord, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
-import { StatusBadge, StatusBadgeLarge } from '../components/StatusBadge.jsx'
+import { StatusBadge } from '../components/StatusBadge.jsx'
+import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import EmployeeDetail from './EmployeeDetail.jsx'
 import TransferModal from '../components/TransferModal.jsx'
@@ -44,7 +45,7 @@ export default function LocationView() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
   const [selectedEmployee, setSelectedEmployee] = useState(null)
-  const [selectedCode, setSelectedCode] = useState('U')
+  const [selectedCode, setSelectedCode] = useState('CO')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
@@ -60,8 +61,8 @@ export default function LocationView() {
     roster.forEach(emp => {
       const empId = emp.kronos_id || emp.id
       dates.forEach(d => {
-        const code = getAttendanceCode(empId, d)
-        if (code) next[`${empId}-${d}`] = { code, date: d, empId }
+        const record = getAttendanceRecord(empId, d)
+        if (record) next[`${empId}-${d}`] = { ...record, empId }
       })
     })
     setAttendance(next)
@@ -118,37 +119,32 @@ export default function LocationView() {
           </div>
         </div>
 
-        <EmployeeDetail employee={selectedEmployee} />
+        <EmployeeDetail
+          employee={selectedEmployee}
+          onStatusChange={() => {
+            setSelectedEmployee(null)
+            setRefreshKey(key => key + 1)
+          }}
+        />
       </div>
     )
   }
 
   // ─── LOCATION ROSTER VIEW ───
   const handleToggle = (empId, date) => {
+    if (!paintMode) return
     const key = `${empId}-${date}`
-    if (paintMode) {
-      setAttendanceCode(empId, date, selectedCode)
-      setAttendance(prev => ({ ...prev, [key]: { code: selectedCode, date, empId } }))
-      return
-    }
-    const current = attendance[key]?.code ?? ''
-    const currentIdx = CODE_CYCLE.indexOf(current)
-    const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
-    setAttendanceCode(empId, date, nextCode)
-    if (nextCode === '') {
-      setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
-    } else {
-      setAttendance(prev => ({ ...prev, [key]: { code: nextCode, date, empId } }))
-    }
+    setAttendanceCode(empId, date, selectedCode)
+    setAttendance(prev => ({ ...prev, [key]: { code: selectedCode, date, empId } }))
   }
 
-  const handleSetCode = (empId, date, code) => {
+  const handleSetCode = (empId, date, code, note = '') => {
     const key = `${empId}-${date}`
-    setAttendanceCode(empId, date, code)
+    setAttendanceCode(empId, date, code, note)
     if (code === '') {
       setAttendance(prev => { const next = { ...prev }; delete next[key]; return next })
     } else {
-      setAttendance(prev => ({ ...prev, [key]: { code, date, empId } }))
+      setAttendance(prev => ({ ...prev, [key]: { code, date, empId, ...(note ? { note } : {}) } }))
     }
   }
 
@@ -196,8 +192,8 @@ export default function LocationView() {
       {/* Quick Stats */}
       <div className="flex flex-wrap gap-2 mb-4">
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
-          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Marked</span>
-          <span className="text-sm font-semibold text-gray-700">{weekStats.marked}/{weekStats.total}</span>
+          <span className="text-xs font-medium text-gray-400 uppercase tracking-wide">Exceptions</span>
+          <span className="text-sm font-semibold text-gray-700">{weekStats.marked}</span>
         </div>
         {ATTENDANCE_CODES.filter(c => c.code && weekStats[c.code] > 0).map(c => (
           <div key={c.code} className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
@@ -225,7 +221,7 @@ export default function LocationView() {
             ))}
           </div>
         )}
-        <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{paintMode ? 'Click or drag to mark' : 'Click cells to cycle · Click name for full history'}</span>
+        <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{paintMode ? 'Click or drag to mark' : 'Select a day to choose a status and add a comment'}</span>
       </div>
 
       {/* ─── MOBILE: Card-based layout ─── */}
@@ -268,7 +264,15 @@ export default function LocationView() {
                         if (paintMode) {
                           handleToggle(emp.kronos_id || emp.id, date)
                         } else {
-                          setPicker({ empId: emp.kronos_id || emp.id, date, empName: `${emp.first_name} ${emp.last_name}` })
+                          const key = `${emp.kronos_id || emp.id}-${date}`
+                          setPicker({
+                            empId: emp.kronos_id || emp.id,
+                            date,
+                            formattedDate: formatDate(date),
+                            empName: `${emp.first_name} ${emp.last_name}`,
+                            code: attendance[key]?.code || '',
+                            note: attendance[key]?.note || '',
+                          })
                         }
                       }}
                       className="bg-white p-2 flex flex-col items-center gap-1 active:bg-gray-50 transition-colors"
@@ -276,7 +280,12 @@ export default function LocationView() {
                       <span className="text-[10px] text-gray-400 uppercase">{weekday[0]}</span>
                       <span className="text-[10px] text-gray-500 font-medium">{day}</span>
                       {code ? (
-                        <StatusBadge code={code} size="small" />
+                        <span className="relative">
+                          <StatusBadge code={code} size="small" />
+                          {attendance[`${emp.kronos_id || emp.id}-${date}`]?.note && (
+                            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-brand-600 ring-1 ring-white" title="Comment added" />
+                          )}
+                        </span>
                       ) : (
                         <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 w-[28px] h-[22px]">·</span>
                       )}
@@ -336,7 +345,10 @@ export default function LocationView() {
                               setPicker({
                                 empId: emp.kronos_id || emp.id,
                                 date: d,
+                                formattedDate: formatDate(d),
                                 empName: `${emp.first_name} ${emp.last_name}`,
+                                code: attendance[key]?.code || '',
+                                note: attendance[key]?.note || '',
                               })
                             }
                           }}
@@ -345,7 +357,14 @@ export default function LocationView() {
                           onMouseEnter={() => { if (paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
                           className="w-full flex justify-center"
                         >
-                          {code ? <StatusBadge code={code} size="small" /> : (
+                          {code ? (
+                            <span className="relative">
+                              <StatusBadge code={code} size="small" />
+                              {attendance[key]?.note && (
+                                <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-brand-600 ring-1 ring-white" title="Comment added" />
+                              )}
+                            </span>
+                          ) : (
                             <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-brand-300 hover:text-brand-400 transition-colors w-[28px] h-[22px]">·</span>
                           )}
                         </button>
@@ -361,7 +380,7 @@ export default function LocationView() {
 
       {/* Footer actions */}
       <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <p className="text-xs text-charcoal-300">Tap a day to mark attendance. Tap a name for full year calendar.</p>
+        <p className="text-xs text-charcoal-300">Select a day to mark an exception or add a comment. Select a name for full-year history.</p>
         {role === 'admin' && (
           <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
             🔄 Transfer an employee to another school
@@ -377,35 +396,14 @@ export default function LocationView() {
         />
       )}
 
-      {picker && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setPicker(null)} />
-          <div className="relative bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-sm max-h-[75vh] overflow-y-auto">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
-              <div>
-                <p className="text-sm font-bold text-gray-900">{picker.empName}</p>
-                <p className="text-xs text-gray-500">{formatDate(picker.date)}</p>
-              </div>
-              <button onClick={() => setPicker(null)} className="text-gray-400 hover:text-gray-600 p-1">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-2">
-              {ATTENDANCE_CODES.map(c => (
-                <button
-                  key={c.code || 'present'}
-                  onClick={() => { handleSetCode(picker.empId, picker.date, c.code); setPicker(null) }}
-                  className="w-full flex items-center px-2 py-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 text-left transition-colors"
-                >
-                  <StatusBadgeLarge code={c.code} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <AttendancePickerModal
+        picker={picker}
+        onClose={() => setPicker(null)}
+        onSave={(code, note) => {
+          handleSetCode(picker.empId, picker.date, code, note)
+          setPicker(null)
+        }}
+      />
     </div>
   )
 }

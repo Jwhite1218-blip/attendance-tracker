@@ -68,7 +68,7 @@ export default function MasterReport() {
         if (key.startsWith(`${empId}-`) && record.code) {
           marked++
           const info = CODE_MAP[record.code]
-          if (info && (info.code === 'U' || info.code === 'NCNS' || info.code === 'CC')) unexcused++
+          if (info && ['CO', 'CC', 'NCNS', 'LE'].includes(info.code)) unexcused++
         }
       })
       return { employee: emp, marked, unexcused }
@@ -111,7 +111,7 @@ export default function MasterReport() {
           <p className="text-2xl font-bold text-gray-900 mt-1">{totals.total}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-xs text-gray-400 uppercase tracking-wide">Records Marked</p>
+          <p className="text-xs text-gray-400 uppercase tracking-wide">Exceptions Recorded</p>
           <p className="text-2xl font-bold text-gray-900 mt-1">{totals.marked}</p>
         </div>
         {allCodes.slice(0, 4).map(c => (
@@ -132,7 +132,7 @@ export default function MasterReport() {
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3 sticky left-0 bg-gray-50">Location</th>
                 <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Staff</th>
-                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Marked</th>
+                <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Exceptions</th>
                 {allCodes.map(c => (
                   <th key={c.code} className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3" title={c.label}>{c.shortLabel}</th>
                 ))}
@@ -174,8 +174,8 @@ export default function MasterReport() {
       {topAbsentees.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-8">
           <div className="px-5 py-4 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-700">Top Unexcused Absences — {year}</h2>
-            <p className="text-xs text-gray-400 mt-1">Employees with the most U, NCNS, or CC codes this year</p>
+            <h2 className="text-sm font-semibold text-gray-700">Highest Attendance Occurrences — {year}</h2>
+            <p className="text-xs text-gray-400 mt-1">Call outs, consecutive call outs, no-call/no-shows, and late/left-early records</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -184,8 +184,8 @@ export default function MasterReport() {
                   <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-2">Employee</th>
                   <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Location</th>
                   <th className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Position</th>
-                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Unexcused</th>
-                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Total Marked</th>
+                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Occurrences</th>
+                  <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-2">Exceptions</th>
                 </tr>
               </thead>
               <tbody>
@@ -208,7 +208,7 @@ export default function MasterReport() {
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Code Reference</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {ATTENDANCE_CODES.map(c => (
-            <div key={c.code || 'present'} className="flex items-center gap-2">
+            <div key={c.code} className="flex items-center gap-2">
               <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[32px]"
                 style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
               <div>

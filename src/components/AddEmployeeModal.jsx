@@ -1,0 +1,108 @@
+import { useState } from 'react'
+import { LOCATIONS } from '../data/locations.js'
+import { addEmployee } from '../data/employeeLocations.js'
+
+const EMPTY_FORM = {
+  first_name: '',
+  last_name: '',
+  kronos_id: '',
+  position: '',
+  location: '',
+  hire_date: '',
+  service_date: '',
+  birthdate: '',
+}
+
+export default function AddEmployeeModal({ open, onClose, onAdded }) {
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [error, setError] = useState('')
+
+  if (!open) return null
+
+  const update = (field, value) => {
+    setForm(current => ({ ...current, [field]: value }))
+    setError('')
+  }
+
+  const handleSubmit = event => {
+    event.preventDefault()
+    try {
+      const employee = addEmployee(form)
+      setForm(EMPTY_FORM)
+      setError('')
+      onAdded(employee)
+    } catch (submitError) {
+      setError(submitError.message || 'Unable to add employee.')
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+      <button type="button" className="absolute inset-0 bg-black/45" onClick={onClose} aria-label="Close add employee form" />
+      <form
+        onSubmit={handleSubmit}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-employee-title"
+        className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto"
+      >
+        <div className="p-5 border-b border-gray-100 flex items-start justify-between sticky top-0 bg-white z-10">
+          <div>
+            <h2 id="add-employee-title" className="text-lg font-bold text-gray-900">Add employee</h2>
+            <p className="text-xs text-gray-500 mt-1">Creates an active employee record in this browser.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="First name" value={form.first_name} onChange={value => update('first_name', value)} required />
+          <Field label="Last name" value={form.last_name} onChange={value => update('last_name', value)} required />
+          <Field label="Personnel ID" value={form.kronos_id} onChange={value => update('kronos_id', value)} required />
+          <Field label="Position" value={form.position} onChange={value => update('position', value)} />
+          <label className="block">
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</span>
+            <select
+              value={form.location}
+              onChange={event => update('location', event.target.value)}
+              required
+              className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+            >
+              <option value="">Choose a location</option>
+              {[...LOCATIONS].sort((a, b) => a.sort - b.sort).map(location => (
+                <option key={location.id} value={location.id}>{location.name}</option>
+              ))}
+            </select>
+          </label>
+          <Field label="Birthdate" type="date" value={form.birthdate} onChange={value => update('birthdate', value)} />
+          <Field label="Hire date" type="date" value={form.hire_date} onChange={value => update('hire_date', value)} />
+          <Field label="Service date" type="date" value={form.service_date} onChange={value => update('service_date', value)} />
+          {error && <p className="sm:col-span-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+        </div>
+
+        <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+          <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+          <button type="submit" className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700">Add employee</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function Field({ label, value, onChange, type = 'text', required = false }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
+      <input
+        type={type}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        required={required}
+        className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+      />
+    </label>
+  )
+}
