@@ -14,12 +14,13 @@ import TransferModal from '../components/TransferModal.jsx'
 
 function getWeekDates(weekOffset = 0) {
   const today = new Date()
-  const monday = new Date(today)
-  monday.setDate(today.getDate() - today.getDay() + 1 + weekOffset * 7)
+  const tuesday = new Date(today)
+  const daysSinceTuesday = (today.getDay() - 2 + 7) % 7
+  tuesday.setDate(today.getDate() - daysSinceTuesday + weekOffset * 7)
   const dates = []
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(monday)
-    d.setDate(monday.getDate() + i)
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(tuesday)
+    d.setDate(tuesday.getDate() + i)
     dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
   }
   return dates
@@ -189,7 +190,9 @@ export default function LocationView() {
           <button onClick={() => setWeekOffset(w => w - 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <span className="text-xs sm:text-sm font-medium text-charcoal-100 px-2 sm:px-3 py-2 whitespace-nowrap">Week of {formatDate(dates[0])}</span>
+          <span className="text-xs sm:text-sm font-medium text-charcoal-100 px-2 sm:px-3 py-2 whitespace-nowrap">
+            {formatDate(dates[0])} – {formatDate(dates[6])}
+          </span>
           <button onClick={() => setWeekOffset(w => w + 1)} className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
           </button>
@@ -261,7 +264,7 @@ export default function LocationView() {
               </button>
 
               {/* Day cells - horizontal row */}
-              <div className="grid grid-cols-5 gap-px bg-gray-100 border-t border-gray-100">
+              <div className="grid grid-cols-7 gap-px bg-gray-100 border-t border-gray-100">
                 {empAtt.map(({ date, code }) => {
                   const { weekday, day } = formatDateShort(date)
                   const availability = getDateAvailability(date)
