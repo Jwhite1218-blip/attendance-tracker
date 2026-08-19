@@ -73,7 +73,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
           <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
           <p className="text-xs text-gray-400 mb-3">
-            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and a consecutive call out resets union seniority.
+            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and two consecutive UNEX workdays reset union seniority.
           </p>
           <div className="divide-y divide-gray-100">
             {flaggedEmployees.map(f => (

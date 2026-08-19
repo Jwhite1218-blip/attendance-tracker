@@ -45,7 +45,7 @@ export default function LocationView() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
   const [selectedEmployee, setSelectedEmployee] = useState(null)
-  const [selectedCode, setSelectedCode] = useState('CO')
+  const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)

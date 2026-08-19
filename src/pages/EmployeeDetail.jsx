@@ -41,7 +41,7 @@ export default function EmployeeDetail({ employee, onStatusChange }) {
   const { role } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [attendance, setAttendance] = useState({})
-  const [selectedCode, setSelectedCode] = useState('CO')
+  const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
   const [picker, setPicker] = useState(null)
