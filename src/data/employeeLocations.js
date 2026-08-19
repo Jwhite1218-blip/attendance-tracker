@@ -1,59 +1,158 @@
-// Employee location overrides stored in localStorage
-// Allows transferring employees between schools without modifying the JSON file
+// Browser-local employee directory overlays. The imported JSON remains the
+// source roster, while transfers, notes, status, and newly added employees are
+// stored as reversible local overrides for this first phase.
 
 import employees from './employees.json'
-import { LOCATION_MAP } from './locations.js'
 
-const STORAGE_KEY = 'employee-location-overrides'
+const LOCATION_STORAGE_KEY = 'employee-location-overrides'
+const RECORD_STORAGE_KEY = 'employee-record-overrides'
+const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
 
-export function getLocationOverrides() {
+function readStorage(key, fallback) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback))
   } catch {
-    return {}
+    return fallback
   }
 }
 
+function writeStorage(key, value) {
+  localStorage.setItem(key, JSON.stringify(value))
+}
+
+function employeeKey(employee) {
+  return String(employee.kronos_id || employee.id)
+}
+
+export function getLocationOverrides() {
+  return readStorage(LOCATION_STORAGE_KEY, {})
+}
+
 export function saveLocationOverrides(overrides) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides))
+  writeStorage(LOCATION_STORAGE_KEY, overrides)
 }
 
-// Get effective location for an employee (override > JSON default)
+export function getEmployeeRecordOverrides() {
+  return readStorage(RECORD_STORAGE_KEY, {})
+}
+
+function saveEmployeeRecordOverrides(overrides) {
+  writeStorage(RECORD_STORAGE_KEY, overrides)
+}
+
+export function getCustomEmployees() {
+  return readStorage(CUSTOM_EMPLOYEES_KEY, [])
+}
+
+function saveCustomEmployees(customEmployees) {
+  writeStorage(CUSTOM_EMPLOYEES_KEY, customEmployees)
+}
+
+function getSourceEmployees() {
+  return [...employees, ...getCustomEmployees()]
+}
+
+function buildEmployee(employee, locationOverrides, recordOverrides) {
+  const key = employeeKey(employee)
+  const override = recordOverrides[key] || {}
+  return {
+    ...employee,
+    ...override,
+    location: locationOverrides[key] || override.location || employee.location,
+    active: override.active !== false,
+    notes: override.notes || '',
+    inactive_reason: override.inactive_reason || '',
+    inactive_at: override.inactive_at || null,
+  }
+}
+
+export function getEmployeesWithEffectiveLocations({ includeInactive = false } = {}) {
+  const locationOverrides = getLocationOverrides()
+  const recordOverrides = getEmployeeRecordOverrides()
+  const allEmployees = getSourceEmployees().map(employee =>
+    buildEmployee(employee, locationOverrides, recordOverrides)
+  )
+  return includeInactive ? allEmployees : allEmployees.filter(employee => employee.active)
+}
+
+export function getEmployeeByKey(empId, { includeInactive = true } = {}) {
+  return getEmployeesWithEffectiveLocations({ includeInactive })
+    .find(employee => employeeKey(employee) === String(empId)) || null
+}
+
 export function getEffectiveLocation(empId) {
-  const overrides = getLocationOverrides()
-  const emp = employees.find(e => e.id === empId || e.kronos_id === empId)
-  if (!emp) return null
-  return overrides[emp.kronos_id || emp.id] || emp.location
+  return getEmployeeByKey(empId)?.location || null
 }
 
-// Get all employees with their effective (possibly overridden) location
-export function getEmployeesWithEffectiveLocations() {
-  const overrides = getLocationOverrides()
-  return employees.map(e => ({
-    ...e,
-    location: overrides[e.kronos_id || e.id] || e.location,
-  }))
-}
-
-// Permanently transfer an employee to a new home location
 export function transferEmployee(empKey, newLocationId) {
   const overrides = getLocationOverrides()
-  overrides[empKey] = newLocationId
+  overrides[String(empKey)] = newLocationId
   saveLocationOverrides(overrides)
 }
 
-// Get employees for a specific location (using effective locations)
 export function getRosterForLocation(locationId) {
-  return getEmployeesWithEffectiveLocations().filter(e => e.location === locationId)
+  return getEmployeesWithEffectiveLocations().filter(employee => employee.location === locationId)
 }
 
-// Get location counts using effective locations
 export function getLocationCounts() {
-  const allEmps = getEmployeesWithEffectiveLocations()
   const counts = {}
-  allEmps.forEach(e => {
-    const loc = e.location || 'Unknown'
-    counts[loc] = (counts[loc] || 0) + 1
+  getEmployeesWithEffectiveLocations().forEach(employee => {
+    const location = employee.location || 'Unknown'
+    counts[location] = (counts[location] || 0) + 1
   })
   return counts
+}
+
+export function updateEmployeeRecord(empId, updates) {
+  const key = String(empId)
+  const overrides = getEmployeeRecordOverrides()
+  overrides[key] = { ...(overrides[key] || {}), ...updates }
+  saveEmployeeRecordOverrides(overrides)
+  return getEmployeeByKey(key)
+}
+
+export function saveEmployeeNotes(empId, notes) {
+  return updateEmployeeRecord(empId, { notes: String(notes || '').trim() })
+}
+
+export function setEmployeeActive(empId, active, reason = '') {
+  return updateEmployeeRecord(empId, {
+    active: Boolean(active),
+    inactive_reason: active ? '' : String(reason || '').trim(),
+    inactive_at: active ? null : new Date().toISOString(),
+  })
+}
+
+export function addEmployee(input) {
+  const sourceEmployees = getSourceEmployees()
+  const personnelId = String(input.kronos_id || '').trim()
+  if (!personnelId) throw new Error('Personnel ID is required.')
+  if (sourceEmployees.some(employee => String(employee.kronos_id || '').toLowerCase() === personnelId.toLowerCase())) {
+    throw new Error('That Personnel ID already exists.')
+  }
+
+  const maxId = sourceEmployees.reduce((max, employee) => {
+    const id = Number(employee.id)
+    return Number.isFinite(id) ? Math.max(max, id) : max
+  }, 0)
+
+  const employee = {
+    id: maxId + 1,
+    kronos_id: personnelId,
+    first_name: String(input.first_name || '').trim(),
+    last_name: String(input.last_name || '').trim(),
+    position: String(input.position || '').trim(),
+    location: String(input.location || '').trim(),
+    hire_date: String(input.hire_date || '').trim(),
+    service_date: String(input.service_date || '').trim(),
+    birthdate: String(input.birthdate || '').trim(),
+    source: 'custom',
+  }
+
+  if (!employee.first_name || !employee.last_name || !employee.location) {
+    throw new Error('First name, last name, and location are required.')
+  }
+
+  saveCustomEmployees([...getCustomEmployees(), employee])
+  return employee
 }

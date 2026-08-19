@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
-import employees from '../data/employees.json'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import { ATTENDANCE_CODES, CODE_MAP, CODE_CYCLE } from '../data/attendanceCodes.js'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import { isFlagged } from '../data/hrFlags.js'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
+import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'April', 'May', 'June',
@@ -30,6 +30,7 @@ export default function LedgerView() {
   const [attendanceByYear, setAttendanceByYear] = useState({})
   const [showTransfer, setShowTransfer] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [picker, setPicker] = useState(null)
 
   // Get employees with effective locations (including transfers)
   const allEmployees = useMemo(() => getEmployeesWithEffectiveLocations(), [refreshKey])
@@ -87,12 +88,22 @@ export default function LedgerView() {
 
   const handleCellClick = (year, monthIdx, day) => {
     const dateKey = formatDateKey(year, monthIdx, day)
-    const current = attendanceByYear[year]?.[dateKey]?.code ?? ''
-    const currentIdx = CODE_CYCLE.indexOf(current)
-    const nextCode = CODE_CYCLE[(currentIdx + 1) % CODE_CYCLE.length]
+    const record = attendanceByYear[year]?.[dateKey]
+    setPicker({
+      empId: empKey,
+      date: dateKey,
+      formattedDate: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+      empName: `${employee.first_name} ${employee.last_name}`,
+      code: record?.code || '',
+      note: record?.note || '',
+    })
+  }
 
-    const yearData = setAttendanceCode(empKey, dateKey, nextCode)
-    setAttendanceByYear(prev => ({ ...prev, [year]: yearData }))
+  const handleSaveAttendance = (code, note) => {
+    const recordYear = Number(picker.date.slice(0, 4))
+    const yearData = setAttendanceCode(picker.empId, picker.date, code, note)
+    setAttendanceByYear(prev => ({ ...prev, [recordYear]: yearData }))
+    setPicker(null)
   }
 
   const summary = useMemo(() => {
@@ -193,7 +204,7 @@ export default function LedgerView() {
         <div>
           {/* Employee info header */}
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-gray-100">
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100">
               <div className="p-3">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wide">Name</p>
                 <p className={`text-sm font-semibold mt-0.5 ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>{employee.first_name} {employee.last_name}</p>
@@ -211,10 +222,6 @@ export default function LedgerView() {
                 <p className="text-sm font-semibold text-gray-900 mt-0.5">
                   {LOCATION_MAP[employee.location]?.name || employee.location || 'Unassigned'}
                 </p>
-              </div>
-              <div className="p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Weekly Hours</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{employee.weekly_hours ? `${employee.weekly_hours} hrs` : '—'}</p>
               </div>
             </div>
             <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
@@ -259,10 +266,15 @@ export default function LedgerView() {
                               <td key={i} className="border-b border-l border-gray-100 p-0">
                                 <button
                                   onClick={() => handleCellClick(year, monthIdx, day)}
-                                  className="w-full h-7 flex items-center justify-center text-[9px] font-bold hover:ring-1 hover:ring-inset hover:ring-brand-300 transition-all"
+                                  className="relative w-full h-7 flex items-center justify-center text-[9px] font-bold hover:ring-1 hover:ring-inset hover:ring-brand-300 transition-all"
                                   style={code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
-                                  title={`${monthName} ${day}, ${year} — ${info?.label || 'Present'}`}
-                                >{code || ''}</button>
+                                  title={`${monthName} ${day}, ${year} — ${info?.label || 'No attendance exception'}${attendanceByYear[year]?.[dateKey]?.note ? ` — ${attendanceByYear[year][dateKey].note}` : ''}`}
+                                >
+                                  {code || ''}
+                                  {attendanceByYear[year]?.[dateKey]?.note && (
+                                    <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/90" aria-label="Comment added" />
+                                  )}
+                                </button>
                               </td>
                             )
                           })}
@@ -275,7 +287,7 @@ export default function LedgerView() {
             </div>
           ))}
 
-          <p className="text-xs text-charcoal-300">Click any day cell to cycle through codes. Data is shared with the Year Calendar view.</p>
+          <p className="text-xs text-charcoal-300">Select any day to choose an attendance exception or add a comment. Data is shared with the Year Calendar view.</p>
         </div>
 
         {/* Key sidebar */}
@@ -300,7 +312,7 @@ export default function LedgerView() {
                     <span className="font-semibold text-gray-800">{summary[c.code]}</span>
                   </div>
                 ))}
-                {Object.values(summary).every(v => v === 0) && <p className="text-xs text-gray-400">No records marked yet.</p>}
+                {Object.values(summary).every(v => v === 0) && <p className="text-xs text-gray-400">No attendance exceptions recorded yet.</p>}
               </div>
             </div>
           </div>
@@ -314,6 +326,12 @@ export default function LedgerView() {
           onTransferred={() => setRefreshKey(k => k + 1)}
         />
       )}
+
+      <AttendancePickerModal
+        picker={picker}
+        onClose={() => setPicker(null)}
+        onSave={handleSaveAttendance}
+      />
     </div>
   )
 }
