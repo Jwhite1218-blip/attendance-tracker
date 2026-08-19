@@ -3,16 +3,8 @@
 
 export const ATTENDANCE_CODES = [
   {
-    code: 'CO',
-    label: 'Call Out',
-    shortLabel: 'CO',
-    description: 'Employee called out for the scheduled day',
-    color: 'absent',
-    hex: { bg: '#E56E6A', text: '#FFFFFF', border: '#C65350' },
-  },
-  {
     code: 'RTO',
-    label: 'Requested Time Off — Full Day',
+    label: 'REQUESTED TIME OFF, APPROVED',
     shortLabel: 'RTO',
     description: 'Approved requested time off for a full day',
     color: 'excused',
@@ -20,59 +12,67 @@ export const ATTENDANCE_CODES = [
   },
   {
     code: 'RTO.5',
-    label: 'Requested Time Off — Half Day',
-    shortLabel: 'RTO½',
+    label: 'REQUESTED TIME OFF, HALF DAY',
+    shortLabel: 'RTO.5',
     description: 'Approved requested time off for a half day',
     color: 'excused',
     hex: { bg: '#47A9C3', text: '#FFFFFF', border: '#357E93' },
   },
   {
-    code: 'CC',
-    label: 'Consecutive Call Out — Seniority Reset',
-    shortLabel: 'CC',
-    description: 'Second consecutive call-out day; union seniority resets',
+    code: 'NCNS',
+    label: 'NO CALL, NO SHOW',
+    shortLabel: 'NCNS',
+    description: 'Employee missed the shift without calling',
     color: 'critical',
     hex: { bg: '#B74743', text: '#FFFFFF', border: '#8E302D' },
   },
   {
-    code: 'LE',
-    label: 'Late / Left Early',
-    shortLabel: 'L/E',
-    description: 'Late arrival or employee left before the shift ended',
+    code: 'LI',
+    label: 'LATE IN, UNAPPROVED',
+    shortLabel: 'LI',
+    description: 'Unapproved late arrival',
     color: 'late',
     hex: { bg: '#EC9126', text: '#FFFFFF', border: '#C97815' },
   },
   {
-    code: 'NCNS',
-    label: 'No Call / No Show',
-    shortLabel: 'NCNS',
-    description: 'Employee missed the shift without calling',
-    color: 'critical',
-    hex: { bg: '#E46463', text: '#FFFFFF', border: '#A93D3C' },
+    code: 'EO',
+    label: 'EARLY OUT, UNAPPROVED',
+    shortLabel: 'EO',
+    description: 'Unapproved early departure',
+    color: 'late',
+    hex: { bg: '#E8A32B', text: '#3F2B0A', border: '#C5851C' },
   },
   {
-    code: 'B/J',
-    label: 'Bereavement / Jury Duty',
-    shortLabel: 'B/J',
-    description: 'Bereavement or jury-duty leave',
-    color: 'leave',
-    hex: { bg: '#AB3F94', text: '#FFFFFF', border: '#843072' },
+    code: 'UNEX',
+    label: 'UNEXCUSED ABSENCE, CALL IN',
+    shortLabel: 'UNEX',
+    description: 'Employee called in for an unexcused absence',
+    color: 'absent',
+    hex: { bg: '#E56E6A', text: '#FFFFFF', border: '#C65350' },
   },
   {
     code: 'M',
-    label: 'Medical / FMLA / Leave of Absence',
-    shortLabel: 'MED',
-    description: 'Protected medical or approved leave of absence',
+    label: 'MEDICAL (FMLA/LOA)',
+    shortLabel: 'M',
+    description: 'Protected medical, FMLA, or leave-of-absence record',
     color: 'leave',
     hex: { bg: '#7D2F69', text: '#FFFFFF', border: '#5F214F' },
   },
   {
-    code: 'O',
-    label: 'Other Attendance Exception',
-    shortLabel: 'OTHER',
-    description: 'Another attendance exception; add a comment for context',
-    color: 'other',
-    hex: { bg: '#64748B', text: '#FFFFFF', border: '#475569' },
+    code: 'BER',
+    label: 'BEREAVEMENT',
+    shortLabel: 'BER',
+    description: 'Bereavement leave',
+    color: 'leave',
+    hex: { bg: '#AB3F94', text: '#FFFFFF', border: '#843072' },
+  },
+  {
+    code: 'JUR',
+    label: 'JURY DUTY',
+    shortLabel: 'JUR',
+    description: 'Jury-duty leave',
+    color: 'leave',
+    hex: { bg: '#8B5AA5', text: '#FFFFFF', border: '#68417D' },
   },
 ]
 
@@ -84,23 +84,56 @@ export const CLEAR_ATTENDANCE = {
   hex: { bg: '#F8FAFC', text: '#64748B', border: '#CBD5E1' },
 }
 
-// Saved records from the first prototype are normalized at read time so the
-// new language does not erase anyone's existing attendance history.
+// Safe one-to-one migrations from earlier tracker versions. Ambiguous combined
+// codes remain available as legacy display records instead of being guessed.
 export const LEGACY_CODE_ALIASES = {
-  U: 'CO',
-  UP: 'CO',
+  U: 'UNEX',
+  UP: 'UNEX',
+  CO: 'UNEX',
   'U.5': 'RTO.5',
   'UP.5': 'RTO.5',
   RTOP: 'RTO',
-  'L/EQ': 'LE',
 }
+
+const LEGACY_DISPLAY_CODES = [
+  {
+    code: 'CC',
+    label: 'LEGACY CONSECUTIVE CALL OUT',
+    shortLabel: 'CC',
+    hex: { bg: '#B74743', text: '#FFFFFF', border: '#8E302D' },
+  },
+  {
+    code: 'LE',
+    label: 'LEGACY LATE / EARLY RECORD',
+    shortLabel: 'L/E',
+    hex: { bg: '#EC9126', text: '#FFFFFF', border: '#C97815' },
+  },
+  {
+    code: 'L/EQ',
+    label: 'LEGACY LATE / EARLY RECORD',
+    shortLabel: 'L/E',
+    hex: { bg: '#EC9126', text: '#FFFFFF', border: '#C97815' },
+  },
+  {
+    code: 'B/J',
+    label: 'LEGACY BEREAVEMENT / JURY DUTY',
+    shortLabel: 'B/J',
+    hex: { bg: '#AB3F94', text: '#FFFFFF', border: '#843072' },
+  },
+  {
+    code: 'O',
+    label: 'LEGACY OTHER ATTENDANCE EXCEPTION',
+    shortLabel: 'OTHER',
+    hex: { bg: '#64748B', text: '#FFFFFF', border: '#475569' },
+  },
+]
 
 export function normalizeAttendanceCode(code = '') {
   return LEGACY_CODE_ALIASES[code] || code
 }
 
 export const CODE_MAP = Object.fromEntries(
-  ATTENDANCE_CODES.map(code => [code.code, code])
+  [...ATTENDANCE_CODES, ...LEGACY_DISPLAY_CODES].map(code => [code.code, code])
 )
 
 Object.entries(LEGACY_CODE_ALIASES).forEach(([legacyCode, currentCode]) => {
@@ -110,10 +143,11 @@ Object.entries(LEGACY_CODE_ALIASES).forEach(([legacyCode, currentCode]) => {
 export const CODE_CYCLE = ['', ...ATTENDANCE_CODES.map(code => code.code)]
 
 export const CODE_CATEGORIES = {
-  call_out: ['CO', 'CC'],
   requested_time_off: ['RTO', 'RTO.5'],
-  late_early: ['LE'],
   no_call_no_show: ['NCNS'],
-  protected_leave: ['B/J', 'M'],
-  other: ['O'],
+  late_in: ['LI'],
+  early_out: ['EO'],
+  unexcused_call_in: ['UNEX', 'CC'],
+  protected_leave: ['M', 'BER', 'JUR'],
+  legacy: ['LE', 'L/EQ', 'B/J', 'O'],
 }
