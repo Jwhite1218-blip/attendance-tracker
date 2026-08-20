@@ -41,7 +41,7 @@ function getMonthStats(attendance, year, monthIdx) {
 }
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
-  const { role } = useAuth()
+  const { role, canManageRoster } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [attendance, setAttendance] = useState({})
   const [selectedCode, setSelectedCode] = useState('UNEX')
@@ -176,7 +176,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            {role === 'admin' && (
+            {role === 'admin' && canManageRoster && (
               <button
                 type="button"
                 onClick={() => setShowEditEmployee(value => !value)}
@@ -229,7 +229,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         </div>
       </div>
 
-      {role === 'admin' && showEditEmployee && (
+      {role === 'admin' && canManageRoster && showEditEmployee && (
         <EmployeeEditForm
           employee={employee}
           onCancel={() => setShowEditEmployee(false)}
@@ -240,7 +240,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         />
       )}
 
-      {role === 'admin' && (
+      {role === 'admin' && canManageRoster && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row gap-5">
             <div className="flex-1">

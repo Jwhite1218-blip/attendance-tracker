@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
+import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import QuickMark from './pages/QuickMark.jsx'
@@ -21,7 +22,7 @@ export default function App() {
 
 function AppShell() {
   const location = useLocation()
-  const { role, locationId } = useAuth()
+  const { role, locationId, displayName, canManageRoster } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const navItems = [
@@ -29,6 +30,7 @@ function AppShell() {
     { path: '/quickmark', label: 'Quick Mark' },
     { path: '/calendar', label: 'Calendar View' },
     { path: '/ledger', label: 'Ledger View' },
+    ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
 
@@ -75,6 +77,14 @@ function AppShell() {
 
             {/* Right side - Aramark + logout (desktop) */}
             <div className="hidden md:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
+              {displayName && (
+                <div className="hidden xl:block text-right leading-tight">
+                  <span className="block text-xs font-semibold text-brand-100">{displayName}</span>
+                  <span className="block text-[10px] text-charcoal-300">
+                    {canManageRoster ? 'Administrator' : 'Administrator · Roster read-only'}
+                  </span>
+                </div>
+              )}
               <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-8 object-contain" />
               <button
                 onClick={logout}
@@ -89,6 +99,14 @@ function AppShell() {
 
             {/* Mobile menu button */}
             <div className="flex md:hidden items-center gap-2">
+              {displayName && (
+                <span
+                  className="max-w-20 truncate text-[10px] font-semibold text-brand-100"
+                  title={`${displayName} · ${canManageRoster ? 'Administrator' : 'Administrator · Roster read-only'}`}
+                >
+                  {displayName}
+                </span>
+              )}
               <button
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
@@ -148,6 +166,7 @@ function AppShell() {
         <Route path="/quickmark" element={<QuickMark />} />
         <Route path="/calendar" element={<CalendarView />} />
         <Route path="/ledger" element={<LedgerView />} />
+        <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
         <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
       </Routes>
     </div>
