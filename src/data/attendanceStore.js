@@ -4,6 +4,7 @@
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
 import { checkAndFlag } from './hrFlags.js'
+import { writeSharedStorage } from './sharedStore.js'
 
 function storageKey(empId, year) {
   return `att-emp-${empId}-${year}`
@@ -84,7 +85,7 @@ function getSchoolYearAttendance(empId, startYear) {
 }
 
 function saveYearData(empId, year, yearData, changedDateKey) {
-  localStorage.setItem(storageKey(empId, year), JSON.stringify(yearData))
+  writeSharedStorage(storageKey(empId, year), yearData)
   const schoolYearStart = schoolYearStartOf(changedDateKey)
   checkAndFlag(empId, schoolYearStart, getSchoolYearAttendance(empId, schoolYearStart))
 }
