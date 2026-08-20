@@ -11,6 +11,7 @@ const ATTENDANCE_KEY_PATTERN = /^att-emp-.+-\d{4}$/
 const PENDING_STORAGE_KEY = 'attendance-pending-sync-v1'
 
 let saveQueue = Promise.resolve()
+let clientAccess = null
 
 function announceSyncStatus(status) {
   window.dispatchEvent(new CustomEvent('attendance-sync-status', { detail: status }))
@@ -18,6 +19,22 @@ function announceSyncStatus(status) {
 
 export function isManagedStorageKey(key) {
   return FIXED_STORAGE_KEYS.has(key) || ATTENDANCE_KEY_PATTERN.test(key)
+}
+
+export function configureClientAccess(access) {
+  clientAccess = access || null
+}
+
+function canWriteManagedKey(key) {
+  if (!clientAccess) return false
+  if (ATTENDANCE_KEY_PATTERN.test(key) || key === 'hr-attendance-progress-v2' || key === 'hr-flags') {
+    return clientAccess.canEditAttendance !== false
+  }
+  if (key === 'attendance-blackout-dates') return clientAccess.canManageBlackouts === true
+  if (key === 'employee-location-overrides' || key === 'employee-record-overrides' || key === 'employee-custom-records') {
+    return clientAccess.canManageRoster === true
+  }
+  return false
 }
 
 export function getLocalManagedEntries() {
@@ -119,6 +136,7 @@ export async function loadSharedState(access, { mergeLocal = true } = {}) {
 
 export function writeSharedStorage(key, value) {
   if (!isManagedStorageKey(key)) throw new Error(`Unsupported shared storage key: ${key}`)
+  if (!canWriteManagedKey(key)) throw new Error('This session is read-only for that information.')
   localStorage.setItem(key, JSON.stringify(value))
 
   const pending = readPendingWrites()

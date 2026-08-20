@@ -77,7 +77,13 @@ function getAllStatuses() {
     const saved = localStorage.getItem(FLAGS_KEY)
     if (saved) return JSON.parse(saved)
     const migrated = migrateLegacyFlags()
-    if (Object.keys(migrated).length) saveAllStatuses(migrated)
+    if (Object.keys(migrated).length) {
+      try {
+        saveAllStatuses(migrated)
+      } catch {
+        // Read-only sessions may display legacy status data without migrating it.
+      }
+    }
     return migrated
   } catch {
     return {}
