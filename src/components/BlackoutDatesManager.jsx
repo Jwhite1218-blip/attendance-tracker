@@ -1,17 +1,7 @@
 import { useState } from 'react'
-import { getBlackoutDates, removeBlackoutDate, saveBlackoutDate } from '../data/blackoutDates.js'
+import { saveBlackoutDate } from '../data/blackoutDates.js'
 
-function formatDate(dateKey) {
-  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-}
-
-export default function BlackoutDatesManager() {
-  const [dates, setDates] = useState(() => getBlackoutDates())
+export default function BlackoutDatesManager({ onChange }) {
   const [label, setLabel] = useState('')
   const [error, setError] = useState('')
 
@@ -19,7 +9,8 @@ export default function BlackoutDatesManager() {
     event.preventDefault()
     try {
       const form = new FormData(event.currentTarget)
-      setDates(saveBlackoutDate(form.get('date'), label))
+      const dates = saveBlackoutDate(form.get('date'), label)
+      onChange?.(dates)
       event.currentTarget.reset()
       setLabel('')
       setError('')
@@ -33,8 +24,8 @@ export default function BlackoutDatesManager() {
       <div className="flex items-start gap-3">
         <span className="w-9 h-9 rounded-lg bg-charcoal-800 text-white flex items-center justify-center text-sm font-bold">×</span>
         <div>
-          <h2 className="text-sm font-semibold text-gray-700">Calendar Blackout Dates</h2>
-          <p className="text-xs text-gray-400 mt-1">Admin only. Blacked-out dates cannot be marked for attendance.</p>
+          <h2 className="text-sm font-semibold text-gray-700">Manage Blackout Dates</h2>
+          <p className="text-xs text-gray-400 mt-1">Admin only. Add a closure here; review and remove it from the calendar below.</p>
         </div>
       </div>
 
@@ -66,31 +57,6 @@ export default function BlackoutDatesManager() {
       </form>
 
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-
-      {dates.length > 0 ? (
-        <div className="mt-4 pt-4 border-t border-gray-100 divide-y divide-gray-100">
-          {dates.map(item => (
-            <div key={item.date} className="py-2.5 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="w-5 h-5 rounded bg-charcoal-800 flex-shrink-0" aria-hidden="true" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-800 truncate">{item.label}</p>
-                  <p className="text-xs text-gray-400">{formatDate(item.date)}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDates(removeBlackoutDate(item.date))}
-                className="text-xs font-semibold text-red-600 hover:text-red-700 px-2 py-1"
-              >
-                Remove
-              </button>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">No blackout dates scheduled.</p>
-      )}
     </div>
   )
 }

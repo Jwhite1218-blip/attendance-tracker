@@ -3,6 +3,7 @@
 // stored as reversible local overrides for this first phase.
 
 import employees from './employees.json'
+import { normalizeBirthday } from './employeeFields.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
 const RECORD_STORAGE_KEY = 'employee-record-overrides'
@@ -145,7 +146,8 @@ export function addEmployee(input) {
     location: String(input.location || '').trim(),
     hire_date: String(input.hire_date || '').trim(),
     service_date: String(input.service_date || '').trim(),
-    birthdate: String(input.birthdate || '').trim(),
+    birthdate: normalizeBirthday(input.birthdate),
+    t_shirt_size: String(input.t_shirt_size || '').trim(),
     source: 'custom',
   }
 

@@ -44,6 +44,24 @@ export function getEmployeeYearAttendance(empId, year) {
   }
 }
 
+export function getEmployeeAttendanceYears(empId) {
+  const prefix = `att-emp-${empId}-`
+  const years = new Set()
+
+  try {
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index)
+      if (!key?.startsWith(prefix)) continue
+      const year = Number(key.slice(prefix.length))
+      if (Number.isInteger(year)) years.add(year)
+    }
+  } catch {
+    return []
+  }
+
+  return [...years].sort((a, b) => a - b)
+}
+
 export function getAttendanceRecord(empId, dateKey) {
   const yearData = getEmployeeYearAttendance(empId, calendarYearOf(dateKey))
   return yearData[dateKey] || null

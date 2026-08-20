@@ -1,18 +1,7 @@
 import { useState } from 'react'
 import { LOCATIONS } from '../data/locations.js'
 import { transferEmployee, updateEmployeeRecord } from '../data/employeeLocations.js'
-
-function normalizeBirthday(value) {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) return ''
-  const match = trimmed.match(/^(\d{1,2})[-/](\d{1,2})$/)
-  if (!match) throw new Error('Birthday must use MM-DD, without the birth year.')
-  const month = Number(match[1])
-  const day = Number(match[2])
-  const date = new Date(2000, month - 1, day)
-  if (date.getMonth() !== month - 1 || date.getDate() !== day) throw new Error('Enter a valid birthday.')
-  return `${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-}
+import { normalizeBirthday, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
 
 export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
   const [form, setForm] = useState({
@@ -23,6 +12,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
     birthdate: employee.birthdate || '',
     hire_date: employee.hire_date || '',
     service_date: employee.service_date || '',
+    t_shirt_size: employee.t_shirt_size || '',
   })
   const [error, setError] = useState('')
 
@@ -47,6 +37,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
         birthdate: normalizeBirthday(form.birthdate),
         hire_date: form.hire_date,
         service_date: form.service_date,
+        t_shirt_size: form.t_shirt_size.trim(),
       })
       onSaved(saved)
     } catch (submitError) {
@@ -84,6 +75,10 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
         <Field label="Birthday (MM-DD)" value={form.birthdate} onChange={value => update('birthdate', value)} placeholder="11-06" />
         <Field label="Hire date" type="date" value={form.hire_date} onChange={value => update('hire_date', value)} />
         <Field label="Service date" type="date" value={form.service_date} onChange={value => update('service_date', value)} />
+        <Field label="T-shirt size" value={form.t_shirt_size} onChange={value => update('t_shirt_size', value)} placeholder="Example: XL" list="edit-t-shirt-sizes" />
+        <datalist id="edit-t-shirt-sizes">
+          {T_SHIRT_SIZE_SUGGESTIONS.map(size => <option key={size} value={size} />)}
+        </datalist>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
@@ -96,7 +91,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
   )
 }
 
-function Field({ label, value, onChange, type = 'text', required = false, placeholder = '' }) {
+function Field({ label, value, onChange, type = 'text', required = false, placeholder = '', list }) {
   return (
     <label className="block">
       <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</span>
@@ -106,6 +101,7 @@ function Field({ label, value, onChange, type = 'text', required = false, placeh
         onChange={event => onChange(event.target.value)}
         required={required}
         placeholder={placeholder}
+        list={list}
         className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
       />
     </label>
