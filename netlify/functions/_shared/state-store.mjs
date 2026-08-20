@@ -145,7 +145,18 @@ export function createSupabaseStateStore({ baseUrl, secretKey, districtSlug, fet
 }
 
 function createBlobsStateStore() {
-  return getStore({ name: BLOBS_STORE_NAME, consistency: 'strong' })
+  const store = getStore({ name: BLOBS_STORE_NAME, consistency: 'strong' })
+
+  // @netlify/blobs' Store.setJSON(key, value, options) treats its third argument
+  // as a SetOptions object (onlyIfMatch/onlyIfNew/metadata), not an actor string.
+  // The Supabase-backed store accepts (key, value, actor) for audit tracking, so
+  // this adapter matches that shape and drops the actor rather than forwarding a
+  // bare string into the real SDK, which throws inside Store.getConditions().
+  return {
+    list: (...args) => store.list(...args),
+    get: (...args) => store.get(...args),
+    setJSON: (key, value) => store.setJSON(key, value),
+  }
 }
 
 export function getStateStore() {
