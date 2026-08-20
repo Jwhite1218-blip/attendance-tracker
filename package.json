@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test netlify/functions/_shared/permissions.test.mjs src/data/dashboardInsights.test.js src/data/customReports.test.js"
+    "test": "node --test netlify/functions/_shared/permissions.test.mjs netlify/functions/_shared/state-store.test.mjs src/data/dashboardInsights.test.js src/data/customReports.test.js"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.13",
