@@ -11,6 +11,7 @@ import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import aramarkLogo from './assets/aramark-logo.png'
+import localisLogo from './assets/localis-logo.png'
 
 export default function App() {
   return (
@@ -22,12 +23,14 @@ export default function App() {
 
 function AppShell() {
   const location = useLocation()
-  const { role, locationId, displayName, canManageRoster, canManageBlackouts, syncStatus } = useAuth()
+  const { role, locationId, displayName, canEditAttendance, canManageRoster, canManageBlackouts, watermark, syncStatus } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const accessLabel = canManageRoster && canManageBlackouts
-    ? 'Administrator'
-    : 'Administrator · Limited editing'
+  const accessLabel = !canEditAttendance
+    ? 'Read-only review'
+    : canManageRoster && canManageBlackouts
+      ? 'Administrator'
+      : 'Administrator · Limited editing'
 
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
@@ -46,6 +49,11 @@ function AppShell() {
 
   return (
     <div className="min-h-screen bg-charcoal-800">
+      {watermark === 'localis' && (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center overflow-hidden" aria-hidden="true">
+          <img src={localisLogo} alt="" className="w-[min(76vw,760px)] max-h-[78vh] object-contain opacity-[0.08]" />
+        </div>
+      )}
       <nav className="bg-charcoal-900 border-b border-charcoal-600 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -178,6 +186,12 @@ function AppShell() {
           )}
         </div>
       </nav>
+
+      {!canEditAttendance && (
+        <div className="sticky top-16 z-40 border-b border-cyan-200 bg-cyan-50/95 px-4 py-2 text-center text-xs font-semibold text-cyan-900 backdrop-blur">
+          Read-only access · Navigation is enabled · All changes are disabled
+        </div>
+      )}
 
       <Routes>
         <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />

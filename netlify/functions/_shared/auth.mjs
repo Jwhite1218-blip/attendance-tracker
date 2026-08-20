@@ -58,8 +58,10 @@ export function accessForPin(pin) {
     locationId: access.locationId || null,
     displayName: access.displayName || null,
     employeeId: access.employeeId || null,
+    canEditAttendance: (access.role === 'admin' || access.role === 'school') && access.canEditAttendance !== false,
     canManageRoster: access.role === 'admin' && access.canManageRoster !== false,
     canManageBlackouts: access.role === 'admin' && access.canManageBlackouts !== false,
+    watermark: access.watermark === 'localis' ? 'localis' : null,
   }
 }
 
