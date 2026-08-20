@@ -7,8 +7,10 @@ import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
+import { useAuth } from '../components/PinGate.jsx'
 
 export default function Dashboard() {
+  const { canManageRoster } = useAuth()
   const [, setDirectoryVersion] = useState(0)
   const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
@@ -84,21 +86,37 @@ export default function Dashboard() {
             {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
           </p>
         </div>
-        <a
-          href="https://allstartracker.netlify.app/"
-          target="_blank"
-          rel="noreferrer"
-          className="self-start sm:self-auto inline-flex items-center gap-3 rounded-xl border border-brand-500/50 bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-500 transition-colors"
-        >
-          <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg" aria-hidden="true">★</span>
-          <span>
-            <span className="block text-sm font-bold">All Star Performance Tracker</span>
-            <span className="block text-[11px] text-brand-100 mt-0.5">Open manager feedback</span>
-          </span>
-          <svg className="w-4 h-4 text-brand-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M5 5h5M5 5v14h14v-5" />
-          </svg>
-        </a>
+        <div className="self-start sm:self-auto flex flex-wrap items-stretch gap-3">
+          <Link
+            to="/reports/custom"
+            className="inline-flex items-center gap-3 rounded-xl border border-charcoal-500 bg-charcoal-700 px-4 py-3 text-white shadow-sm hover:bg-charcoal-600 transition-colors"
+          >
+            <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center" aria-hidden="true">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v10a2 2 0 01-2 2z" />
+              </svg>
+            </span>
+            <span>
+              <span className="block text-sm font-bold">Custom Employee Report</span>
+              <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
+            </span>
+          </Link>
+          <a
+            href="https://allstartracker.netlify.app/"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-3 rounded-xl border border-brand-500/50 bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-500 transition-colors"
+          >
+            <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg" aria-hidden="true">★</span>
+            <span>
+              <span className="block text-sm font-bold">All Star Performance Tracker</span>
+              <span className="block text-[11px] text-brand-100 mt-0.5">Open manager feedback</span>
+            </span>
+            <svg className="w-4 h-4 text-brand-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M5 5h5M5 5v14h14v-5" />
+            </svg>
+          </a>
+        </div>
       </div>
 
       {/* Dashboard drill-downs */}
@@ -222,13 +240,19 @@ export default function Dashboard() {
               Add employees or restore inactive records. Existing attendance history stays attached to the employee.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAddEmployee(true)}
-            className="self-start px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
-          >
-            + Add employee
-          </button>
+          {canManageRoster ? (
+            <button
+              type="button"
+              onClick={() => setShowAddEmployee(true)}
+              className="self-start px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
+            >
+              + Add employee
+            </button>
+          ) : (
+            <span className="self-start rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
+              Roster read-only
+            </span>
+          )}
         </div>
 
         {inactiveEmployees.length > 0 ? (
@@ -246,16 +270,18 @@ export default function Dashboard() {
                         {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmployeeActive(empKey, true)
-                        refreshDirectory()
-                      }}
-                      className="self-start sm:self-auto px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
-                    >
-                      Reactivate
-                    </button>
+                    {canManageRoster && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEmployeeActive(empKey, true)
+                          refreshDirectory()
+                        }}
+                        className="self-start sm:self-auto px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
+                      >
+                        Reactivate
+                      </button>
+                    )}
                   </div>
                 )
               })}
@@ -271,6 +297,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {LOCATIONS
           .filter(loc => locationCounts[loc.id])
+          .sort((a, b) => a.name.localeCompare(b.name))
           .map(loc => {
             const count = locationCounts[loc.id] || 0
             return (
@@ -320,14 +347,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <AddEmployeeModal
-        open={showAddEmployee}
-        onClose={() => setShowAddEmployee(false)}
-        onAdded={() => {
-          setShowAddEmployee(false)
-          refreshDirectory()
-        }}
-      />
+      {canManageRoster && (
+        <AddEmployeeModal
+          open={showAddEmployee}
+          onClose={() => setShowAddEmployee(false)}
+          onAdded={() => {
+            setShowAddEmployee(false)
+            refreshDirectory()
+          }}
+        />
+      )}
     </div>
   )
 }

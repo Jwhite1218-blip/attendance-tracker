@@ -23,7 +23,7 @@ function formatDate(value) {
 }
 
 export default function CalendarView() {
-  const { role } = useAuth()
+  const { canManageBlackouts } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [blackoutDates, setBlackoutDates] = useState(() => getBlackoutDates())
   const [selectedDate, setSelectedDate] = useState(null)
@@ -74,7 +74,7 @@ export default function CalendarView() {
         </div>
       </div>
 
-      {role === 'admin' && <BlackoutDatesManager onChange={refreshBlackouts} />}
+      {canManageBlackouts && <BlackoutDatesManager onChange={refreshBlackouts} />}
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -92,7 +92,7 @@ export default function CalendarView() {
             <p className="text-sm font-semibold text-gray-900">{selectedBlackout.label}</p>
             <p className="text-xs text-gray-500 mt-0.5">{formatDate(selectedBlackout.date)}</p>
           </div>
-          {role === 'admin' && (
+          {canManageBlackouts && (
             <button
               type="button"
               onClick={() => refreshBlackouts(removeBlackoutDate(selectedBlackout.date))}

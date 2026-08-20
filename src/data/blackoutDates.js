@@ -1,3 +1,5 @@
+import { writeSharedStorage } from './sharedStore.js'
+
 const STORAGE_KEY = 'attendance-blackout-dates'
 
 function readBlackoutDates() {
@@ -10,7 +12,7 @@ function readBlackoutDates() {
 }
 
 function saveBlackoutDates(dates) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(dates))
+  writeSharedStorage(STORAGE_KEY, dates)
 }
 
 export function getBlackoutDates() {

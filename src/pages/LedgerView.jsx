@@ -23,7 +23,7 @@ function formatDateKey(year, monthIdx, day) {
 }
 
 export default function LedgerView() {
-  const { role, locationId: myLocationId } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster } = useAuth()
   const [search, setSearch] = useState('')
   const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [selectedId, setSelectedId] = useState(null)
@@ -177,7 +177,7 @@ export default function LedgerView() {
           </div>
 
           {/* Transfer button */}
-          {role === 'admin' && (
+          {role === 'admin' && canManageRoster && (
             <div className="flex items-end">
               <button
                 onClick={() => setShowTransfer(true)}
@@ -348,7 +348,7 @@ export default function LedgerView() {
         </div>
       </div>
 
-      {role === 'admin' && showTransfer && employee && (
+      {role === 'admin' && canManageRoster && showTransfer && employee && (
         <TransferModal
           employee={employee}
           onClose={() => setShowTransfer(false)}
