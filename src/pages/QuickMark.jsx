@@ -10,7 +10,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
 export default function QuickMark() {
-  const { role, locationId: myLocationId } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster } = useAuth()
   const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [roster, setRoster] = useState([])
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -320,7 +320,7 @@ export default function QuickMark() {
                 >
                   ← Previous
                 </button>
-                {role === 'admin' && (
+                {role === 'admin' && canManageRoster && (
                   <button
                     onClick={() => setShowTransfer(true)}
                     className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 hover:bg-amber-50 transition-colors"
@@ -408,7 +408,7 @@ export default function QuickMark() {
         </div>
       )}
 
-      {role === 'admin' && showTransfer && currentEmployee && (
+      {role === 'admin' && canManageRoster && showTransfer && currentEmployee && (
         <TransferModal
           employee={currentEmployee}
           onClose={() => setShowTransfer(false)}

@@ -4,6 +4,7 @@
 
 import employees from './employees.json'
 import { normalizeBirthday } from './employeeFields.js'
+import { writeSharedStorage } from './sharedStore.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
 const RECORD_STORAGE_KEY = 'employee-record-overrides'
@@ -18,7 +19,7 @@ function readStorage(key, fallback) {
 }
 
 function writeStorage(key, value) {
-  localStorage.setItem(key, JSON.stringify(value))
+  writeSharedStorage(key, value)
 }
 
 function employeeKey(employee) {

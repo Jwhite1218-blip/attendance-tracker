@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { useParams, Link, Navigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
-import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
-import { getAttendanceRecord, setAttendanceCode } from '../data/attendanceStore.js'
+import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
+import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
+import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { isFlagged } from '../data/hrFlags.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
@@ -40,7 +41,7 @@ function formatDateShort(dateStr) {
 
 export default function LocationView() {
   const { id: urlId } = useParams()
-  const { role, locationId: myLocationId } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster } = useAuth()
   // School-role sessions are always locked to their own school, regardless of URL
   const id = role === 'school' ? myLocationId : urlId
   const location = LOCATION_MAP[id]
@@ -53,6 +54,7 @@ export default function LocationView() {
   const [showTransfer, setShowTransfer] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [picker, setPicker] = useState(null)
+  const [activeInsight, setActiveInsight] = useState(null)
 
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey])
@@ -83,6 +85,28 @@ export default function LocationView() {
     })
     return stats
   }, [attendance, roster, dates])
+
+  const schoolInsights = useMemo(() => {
+    const referenceDate = new Date()
+    const currentYear = referenceDate.getFullYear()
+    const birthdays = getCurrentMonthBirthdays(roster, referenceDate)
+    const anniversaries = getCurrentMonthAnniversaries(roster, referenceDate)
+    const requestedTimeOff = getUpcomingRequestedTimeOff(roster, employee => {
+      const empKey = employee.kronos_id || employee.id
+      const attendanceYears = new Set([
+        currentYear,
+        ...getEmployeeAttendanceYears(empKey).filter(year => year >= currentYear),
+      ])
+      return Object.assign({}, ...[...attendanceYears].map(year => getEmployeeYearAttendance(empKey, year)))
+    }, referenceDate)
+
+    return {
+      monthName: referenceDate.toLocaleDateString('en-US', { month: 'long' }),
+      birthdays,
+      anniversaries,
+      requestedTimeOff,
+    }
+  }, [attendance, roster])
 
   // Normalize the URL if a school-role session typed/followed a link to another school
   if (role === 'school' && urlId !== myLocationId) {
@@ -198,6 +222,13 @@ export default function LocationView() {
           </button>
         </div>
       </div>
+
+      <SchoolDashboardInsights
+        activeInsight={activeInsight}
+        onInsightChange={setActiveInsight}
+        onEmployeeSelect={setSelectedEmployee}
+        {...schoolInsights}
+      />
 
       {/* Quick Stats */}
       <div className="flex flex-wrap gap-2 mb-4">
@@ -433,14 +464,14 @@ export default function LocationView() {
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
           </div>
         </div>
-        {role === 'admin' && (
+        {role === 'admin' && canManageRoster && (
           <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
             🔄 Transfer an employee to another school
           </button>
         )}
       </div>
 
-      {role === 'admin' && showTransfer && roster[0] && (
+      {role === 'admin' && canManageRoster && showTransfer && roster[0] && (
         <TransferModal
           employee={roster[0]}
           onClose={() => setShowTransfer(false)}
@@ -457,5 +488,135 @@ export default function LocationView() {
         }}
       />
     </div>
+  )
+}
+
+function SchoolDashboardInsights({
+  activeInsight,
+  anniversaries,
+  birthdays,
+  monthName,
+  onEmployeeSelect,
+  onInsightChange,
+  requestedTimeOff,
+}) {
+  const cards = [
+    {
+      id: 'birthdays',
+      label: `${monthName} Birthdays`,
+      count: birthdays.length,
+      description: 'Current-month birthdays for this school',
+    },
+    {
+      id: 'anniversaries',
+      label: `${monthName} Anniversaries`,
+      count: anniversaries.length,
+      description: 'Completed service anniversaries this month',
+    },
+    {
+      id: 'time-off',
+      label: 'Upcoming RTOs',
+      count: requestedTimeOff.length,
+      description: 'Full and half requested-time-off days from today forward',
+    },
+  ]
+
+  const activeItems = activeInsight === 'birthdays'
+    ? birthdays
+    : activeInsight === 'anniversaries'
+      ? anniversaries
+      : requestedTimeOff
+
+  const activeTitle = activeInsight === 'birthdays'
+    ? `${monthName} Birthdays`
+    : activeInsight === 'anniversaries'
+      ? `${monthName} Work Anniversaries`
+      : 'Upcoming Requested Time Off'
+
+  return (
+    <section className="mb-6" aria-labelledby="school-overview-heading">
+      <div className="mb-3">
+        <h2 id="school-overview-heading" className="text-base font-semibold text-white">School Overview</h2>
+        <p className="text-xs text-charcoal-200 mt-1">Current milestones and upcoming requested time off for this school.</p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {cards.map(card => (
+          <button
+            key={card.id}
+            type="button"
+            onClick={() => onInsightChange(activeInsight === card.id ? null : card.id)}
+            aria-expanded={activeInsight === card.id}
+            aria-controls="school-insight-details"
+            className={`rounded-xl border bg-white p-4 text-left transition-all hover:border-brand-300 hover:shadow-md ${
+              activeInsight === card.id ? 'border-brand-400 ring-2 ring-brand-100' : 'border-gray-200'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{card.label}</p>
+                <p className="text-xs text-gray-400 mt-1">{card.description}</p>
+              </div>
+              <span className="inline-flex min-w-9 h-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700 text-lg font-bold">
+                {card.count}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-brand-600 mt-3">
+              {activeInsight === card.id ? 'Hide details' : 'View details'}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {activeInsight && (
+        <div id="school-insight-details" className="mt-3 rounded-xl border border-brand-200 bg-white p-4" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h3 className="text-sm font-semibold text-gray-800">{activeTitle}</h3>
+            <span className="text-xs font-medium text-gray-400">{activeItems.length} record{activeItems.length === 1 ? '' : 's'}</span>
+          </div>
+
+          {activeItems.length === 0 ? (
+            <p className="text-sm text-gray-400 py-3">No matching employee records for this school.</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {activeItems.map(item => {
+                const employee = item.employee
+                const employeeKey = employee.kronos_id || employee.id
+                return (
+                  <div key={`${employeeKey}-${item.dateKey || item.day}`} className="py-3 flex items-center justify-between gap-4">
+                    <button
+                      type="button"
+                      onClick={() => onEmployeeSelect(employee)}
+                      className="min-w-0 text-left group"
+                    >
+                      <p className="text-sm font-semibold text-gray-800 group-hover:text-brand-700">{employee.first_name} {employee.last_name}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{employee.position || 'Position not listed'} · Open employee calendar</p>
+                      {activeInsight === 'time-off' && item.record.note && (
+                        <p className="text-xs text-gray-500 mt-1">{item.record.note}</p>
+                      )}
+                    </button>
+                    <div className="text-right flex-shrink-0">
+                      {activeInsight === 'birthdays' && <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>}
+                      {activeInsight === 'anniversaries' && (
+                        <>
+                          <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>
+                          <p className="text-xs text-gray-400">{item.years} year{item.years === 1 ? '' : 's'}</p>
+                        </>
+                      )}
+                      {activeInsight === 'time-off' && (
+                        <>
+                          <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
+                          <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
   )
 }
