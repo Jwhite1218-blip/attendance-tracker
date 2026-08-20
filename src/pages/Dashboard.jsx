@@ -2,15 +2,16 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
-import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
+import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
+import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
-import BlackoutDatesManager from '../components/BlackoutDatesManager.jsx'
 
 export default function Dashboard() {
   const [, setDirectoryVersion] = useState(0)
   const [showAddEmployee, setShowAddEmployee] = useState(false)
+  const [activeDrilldown, setActiveDrilldown] = useState(null)
   const employees = getEmployeesWithEffectiveLocations()
   const allEmployees = getEmployeesWithEffectiveLocations({ includeInactive: true })
   const inactiveEmployees = allEmployees.filter(employee => !employee.active)
@@ -24,7 +25,9 @@ export default function Dashboard() {
   const refreshDirectory = () => setDirectoryVersion(version => version + 1)
 
   // Load all attendance from localStorage for current year
-  const year = new Date().getFullYear()
+  const today = new Date()
+  const year = today.getFullYear()
+  const monthName = today.toLocaleDateString('en-US', { month: 'long' })
   let totalMarked = 0
   let totalByCode = {}
   ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
@@ -38,6 +41,38 @@ export default function Dashboard() {
       }
     })
   })
+
+  const birthdays = getCurrentMonthBirthdays(employees, today)
+  const anniversaries = getCurrentMonthAnniversaries(employees, today)
+  const requestedTimeOff = getUpcomingRequestedTimeOff(employees, employee => {
+    const empKey = employee.kronos_id || employee.id
+    const attendanceYears = new Set([
+      year,
+      ...getEmployeeAttendanceYears(empKey).filter(attendanceYear => attendanceYear >= year),
+    ])
+    return Object.assign({}, ...[...attendanceYears].map(attendanceYear => getEmployeeYearAttendance(empKey, attendanceYear)))
+  }, today)
+
+  const drilldowns = [
+    {
+      id: 'birthdays',
+      label: `${monthName} Birthdays`,
+      count: birthdays.length,
+      description: 'All active staff celebrating this month',
+    },
+    {
+      id: 'anniversaries',
+      label: `${monthName} Anniversaries`,
+      count: anniversaries.length,
+      description: 'Completed work anniversaries this month',
+    },
+    {
+      id: 'time-off',
+      label: 'Upcoming Requested Time Off',
+      count: requestedTimeOff.length,
+      description: 'Approved full and half days from today forward',
+    },
+  ]
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -65,6 +100,46 @@ export default function Dashboard() {
           </svg>
         </a>
       </div>
+
+      {/* Dashboard drill-downs */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        {drilldowns.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setActiveDrilldown(current => current === item.id ? null : item.id)}
+            aria-expanded={activeDrilldown === item.id}
+            aria-controls="dashboard-drilldown"
+            className={`bg-white rounded-xl border p-5 text-left transition-all hover:border-brand-300 hover:shadow-md ${
+              activeDrilldown === item.id ? 'border-brand-400 ring-2 ring-brand-100' : 'border-gray-200'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{item.label}</p>
+                <p className="text-xs text-gray-400 mt-1">{item.description}</p>
+              </div>
+              <span className="inline-flex min-w-9 h-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700 text-lg font-bold">
+                {item.count}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-brand-600 mt-4">
+              {activeDrilldown === item.id ? 'Hide details' : 'View details'}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {activeDrilldown && (
+        <DashboardDrilldown
+          id="dashboard-drilldown"
+          type={activeDrilldown}
+          monthName={monthName}
+          birthdays={birthdays}
+          anniversaries={anniversaries}
+          requestedTimeOff={requestedTimeOff}
+        />
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
@@ -137,8 +212,6 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-
-      <BlackoutDatesManager />
 
       {/* Employee Management */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
@@ -257,4 +330,71 @@ export default function Dashboard() {
       />
     </div>
   )
+}
+
+function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff }) {
+  const title = type === 'birthdays'
+    ? `${monthName} Birthdays`
+    : type === 'anniversaries'
+      ? `${monthName} Work Anniversaries`
+      : 'Upcoming Requested Time Off'
+
+  const items = type === 'birthdays' ? birthdays : type === 'anniversaries' ? anniversaries : requestedTimeOff
+
+  return (
+    <section id={id} className="bg-white rounded-xl border border-brand-200 p-5 mb-8" aria-live="polite">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
+        <span className="text-xs font-medium text-gray-400">{items.length} record{items.length === 1 ? '' : 's'}</span>
+      </div>
+
+      {items.length === 0 ? (
+        <p className="text-sm text-gray-400 py-3">No matching employee records.</p>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {items.map(item => {
+            const employee = item.employee
+            const employeeKey = employee.kronos_id || employee.id
+            const locationName = LOCATION_MAP[employee.location]?.name || employee.location || 'No location assigned'
+
+            return (
+              <div key={`${employeeKey}-${item.dateKey || item.day}`} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-800">{employee.first_name} {employee.last_name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{locationName} · {employee.position || 'Position not listed'}</p>
+                  {type === 'time-off' && item.record.note && (
+                    <p className="text-xs text-gray-500 mt-1">{item.record.note}</p>
+                  )}
+                </div>
+                <div className="sm:text-right flex-shrink-0">
+                  {type === 'birthdays' && <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>}
+                  {type === 'anniversaries' && (
+                    <>
+                      <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>
+                      <p className="text-xs text-gray-400">{item.years} year{item.years === 1 ? '' : 's'}</p>
+                    </>
+                  )}
+                  {type === 'time-off' && (
+                    <>
+                      <p className="text-sm font-semibold text-brand-700">{formatDateKey(item.dateKey)}</p>
+                      <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function formatDateKey(dateKey) {
+  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
