@@ -4,9 +4,15 @@ import { ACCESS_CODES } from '../data/accessCodes.js'
 const STORAGE_KEY = 'att-auth-session'
 const SESSION_DURATION = 8 * 60 * 60 * 1000 // 8 hours
 
-const AuthContext = createContext({ role: 'admin', locationId: null })
+const AuthContext = createContext({
+  role: 'admin',
+  locationId: null,
+  displayName: null,
+  employeeId: null,
+  canManageRoster: true,
+})
 
-// Who's logged in: { role: 'admin' } or { role: 'school', locationId }
+// Who's logged in: a named admin or a school-scoped manager.
 export function useAuth() {
   return useContext(AuthContext)
 }
@@ -46,7 +52,14 @@ export default function PinGate({ children }) {
     e.preventDefault()
     const access = ACCESS_CODES[pin]
     if (access) {
-      const session = { timestamp: Date.now(), role: access.role, locationId: access.locationId || null }
+      const session = {
+        timestamp: Date.now(),
+        role: access.role,
+        locationId: access.locationId || null,
+        displayName: access.displayName || null,
+        employeeId: access.employeeId || null,
+        canManageRoster: access.role === 'admin' && access.canManageRoster !== false,
+      }
       sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
       setAuthed(session)
       setPin('')
@@ -61,7 +74,13 @@ export default function PinGate({ children }) {
   // Authenticated — render the app, scoped to this session's role
   if (authed) {
     return (
-      <AuthContext.Provider value={{ role: authed.role, locationId: authed.locationId }}>
+      <AuthContext.Provider value={{
+        role: authed.role,
+        locationId: authed.locationId,
+        displayName: authed.displayName || null,
+        employeeId: authed.employeeId || null,
+        canManageRoster: authed.role === 'admin' && authed.canManageRoster !== false,
+      }}>
         {children}
       </AuthContext.Provider>
     )

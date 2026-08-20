@@ -7,7 +7,24 @@
 // │  them out. Placeholders below are just sequential.       │
 // └─────────────────────────────────────────────────────────┘
 export const ACCESS_CODES = {
-  '4421': { role: 'admin' },
+  // Liz's named district-administrator account. Keeping this identity in the
+  // checked-in access map makes her admin role independent of employee edits.
+  '4421': {
+    role: 'admin',
+    displayName: 'Elizabeth Schmitt',
+    employeeId: 1,
+    canManageRoster: true,
+  },
+  '4422': {
+    role: 'admin',
+    displayName: 'Roster Read-Only Admin 1',
+    canManageRoster: false,
+  },
+  '4423': {
+    role: 'admin',
+    displayName: 'Roster Read-Only Admin 2',
+    canManageRoster: false,
+  },
 
   '1001': { role: 'school', locationId: 'WarrenCnHS' },  // Warren Central HS
   '1002': { role: 'school', locationId: 'StonyBrkMS' },  // Stony Brook MS
