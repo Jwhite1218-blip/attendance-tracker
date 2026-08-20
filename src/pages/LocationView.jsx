@@ -86,6 +86,18 @@ export default function LocationView() {
     return stats
   }, [attendance, roster, dates])
 
+  const weekExceptions = useMemo(() => {
+    const list = []
+    roster.forEach(emp => {
+      dates.forEach(d => {
+        const key = `${emp.kronos_id || emp.id}-${d}`
+        const record = attendance[key]
+        if (record?.code) list.push({ employee: emp, dateKey: d, code: record.code, note: record.note })
+      })
+    })
+    return list.sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+  }, [roster, dates, attendance])
+
   const schoolInsights = useMemo(() => {
     const referenceDate = new Date()
     const currentYear = referenceDate.getFullYear()
@@ -227,6 +239,8 @@ export default function LocationView() {
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
         onEmployeeSelect={setSelectedEmployee}
+        weekExceptions={weekExceptions}
+        weekLabel={`${formatDate(dates[0])} – ${formatDate(dates[6])}`}
         {...schoolInsights}
       />
 
@@ -506,6 +520,8 @@ function SchoolDashboardInsights({
   onEmployeeSelect,
   onInsightChange,
   requestedTimeOff,
+  weekExceptions,
+  weekLabel,
 }) {
   const cards = [
     {
@@ -526,19 +542,29 @@ function SchoolDashboardInsights({
       count: requestedTimeOff.length,
       description: 'Full and half requested-time-off days from today forward',
     },
+    {
+      id: 'exceptions',
+      label: 'This Week’s Exceptions',
+      count: weekExceptions.length,
+      description: `Every marked exception for ${weekLabel}`,
+    },
   ]
 
   const activeItems = activeInsight === 'birthdays'
     ? birthdays
     : activeInsight === 'anniversaries'
       ? anniversaries
-      : requestedTimeOff
+      : activeInsight === 'exceptions'
+        ? weekExceptions
+        : requestedTimeOff
 
   const activeTitle = activeInsight === 'birthdays'
     ? `${monthName} Birthdays`
     : activeInsight === 'anniversaries'
       ? `${monthName} Work Anniversaries`
-      : 'Upcoming Requested Time Off'
+      : activeInsight === 'exceptions'
+        ? 'This Week’s Exceptions'
+        : 'Upcoming Requested Time Off'
 
   return (
     <section className="mb-6" aria-labelledby="school-overview-heading">
@@ -590,7 +616,7 @@ function SchoolDashboardInsights({
                 const employee = item.employee
                 const employeeKey = employee.kronos_id || employee.id
                 return (
-                  <div key={`${employeeKey}-${item.dateKey || item.day}`} className="py-3 flex items-center justify-between gap-4">
+                  <div key={`${employeeKey}-${item.dateKey || item.day}-${item.code || ''}`} className="py-3 flex items-center justify-between gap-4">
                     <button
                       type="button"
                       onClick={() => onEmployeeSelect(employee)}
@@ -600,6 +626,9 @@ function SchoolDashboardInsights({
                       <p className="text-xs text-gray-400 mt-0.5">{employee.position || 'Position not listed'} · Open employee calendar</p>
                       {activeInsight === 'time-off' && item.record.note && (
                         <p className="text-xs text-gray-500 mt-1">{item.record.note}</p>
+                      )}
+                      {activeInsight === 'exceptions' && item.note && (
+                        <p className="text-xs text-gray-500 mt-1">{item.note}</p>
                       )}
                     </button>
                     <div className="text-right flex-shrink-0">
@@ -614,6 +643,12 @@ function SchoolDashboardInsights({
                         <>
                           <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
                           <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
+                        </>
+                      )}
+                      {activeInsight === 'exceptions' && (
+                        <>
+                          <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
+                          <p className="text-xs text-gray-400">{CODE_MAP[item.code]?.label || item.code}</p>
                         </>
                       )}
                     </div>

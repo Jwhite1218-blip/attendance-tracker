@@ -123,7 +123,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }, [attendance, year])
 
   const today = new Date()
-  const isCurrentYear = year === today.getFullYear()
 
   const serviceDate = employee?.service_date
   const hireDate = employee?.hire_date
@@ -459,7 +458,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   const code = record?.code || ''
                   const info = CODE_MAP[code]
                   const availability = getDateAvailability(dateKey)
-                  const isFuture = isCurrentYear && new Date(year, monthIdx, day) > today
                   const isUnavailable = availability.unavailable
 
                   return (
@@ -469,14 +467,14 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                       onMouseDown={() => canEditAttendance && paintMode && !isUnavailable && setIsPainting(true)}
                       onMouseUp={() => setIsPainting(false)}
                       onMouseEnter={() => handleDayMouseEnter(dateKey)}
-                      disabled={!canEditAttendance || isFuture || isUnavailable}
+                      disabled={!canEditAttendance || isUnavailable}
                       className={`
                         relative aspect-square rounded text-[10px] font-medium
                         flex items-center justify-center transition-all
                         ${isUnavailable ? 'border' : code ? 'border' : 'border border-gray-100'}
                         ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white border-charcoal-800' : ''}
                         ${availability.type === 'weekend' ? 'bg-gray-100 text-gray-300 border-gray-100' : ''}
-                        ${isFuture ? 'opacity-30 cursor-not-allowed' : isUnavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
+                        ${isUnavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
                       `}
                       style={!isUnavailable && code ? {
                         backgroundColor: info?.hex.bg,
