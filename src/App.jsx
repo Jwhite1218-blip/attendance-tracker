@@ -22,8 +22,12 @@ export default function App() {
 
 function AppShell() {
   const location = useLocation()
-  const { role, locationId, displayName, canManageRoster } = useAuth()
+  const { role, locationId, displayName, canManageRoster, canManageBlackouts, syncStatus } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const accessLabel = canManageRoster && canManageBlackouts
+    ? 'Administrator'
+    : 'Administrator · Limited editing'
 
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
@@ -77,12 +81,21 @@ function AppShell() {
 
             {/* Right side - Aramark + logout (desktop) */}
             <div className="hidden md:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
+              <span
+                className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
+                  syncStatus === 'pending' ? 'text-red-300' : syncStatus === 'saving' ? 'text-amber-200' : 'text-emerald-300'
+                }`}
+                title={syncStatus === 'pending' ? 'Changes are saved on this device and will retry automatically.' : 'Shared attendance data is connected.'}
+              >
+                <span className={`w-2 h-2 rounded-full ${
+                  syncStatus === 'pending' ? 'bg-red-400' : syncStatus === 'saving' ? 'bg-amber-300' : 'bg-emerald-400'
+                }`} />
+                {syncStatus === 'pending' ? 'Retrying' : syncStatus === 'saving' ? 'Saving' : 'Shared'}
+              </span>
               {displayName && (
                 <div className="hidden xl:block text-right leading-tight">
                   <span className="block text-xs font-semibold text-brand-100">{displayName}</span>
-                  <span className="block text-[10px] text-charcoal-300">
-                    {canManageRoster ? 'Administrator' : 'Administrator · Roster read-only'}
-                  </span>
+                  <span className="block text-[10px] text-charcoal-300">{accessLabel}</span>
                 </div>
               )}
               <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-8 object-contain" />
@@ -99,10 +112,16 @@ function AppShell() {
 
             {/* Mobile menu button */}
             <div className="flex md:hidden items-center gap-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  syncStatus === 'pending' ? 'bg-red-400' : syncStatus === 'saving' ? 'bg-amber-300' : 'bg-emerald-400'
+                }`}
+                title={syncStatus === 'pending' ? 'Shared-data sync will retry automatically.' : 'Shared attendance data is connected.'}
+              />
               {displayName && (
                 <span
                   className="max-w-20 truncate text-[10px] font-semibold text-brand-100"
-                  title={`${displayName} · ${canManageRoster ? 'Administrator' : 'Administrator · Roster read-only'}`}
+                  title={`${displayName} · ${accessLabel}`}
                 >
                   {displayName}
                 </span>

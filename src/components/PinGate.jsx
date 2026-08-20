@@ -1,8 +1,10 @@
 import { useState, useEffect, createContext, useContext } from 'react'
-import { ACCESS_CODES } from '../data/accessCodes.js'
-
-const STORAGE_KEY = 'att-auth-session'
-const SESSION_DURATION = 8 * 60 * 60 * 1000 // 8 hours
+import {
+  createServerSession,
+  endServerSession,
+  getServerSession,
+  loadSharedState,
+} from '../data/sharedStore.js'
 
 const AuthContext = createContext({
   role: 'admin',
@@ -10,6 +12,9 @@ const AuthContext = createContext({
   displayName: null,
   employeeId: null,
   canManageRoster: true,
+  canManageBlackouts: true,
+  dataVersion: 0,
+  syncStatus: 'saved',
 })
 
 // Who's logged in: a named admin or a school-scoped manager.
@@ -17,24 +22,8 @@ export function useAuth() {
   return useContext(AuthContext)
 }
 
-export function getAuthState() {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    const data = JSON.parse(raw)
-    if (Date.now() - data.timestamp > SESSION_DURATION) {
-      sessionStorage.removeItem(STORAGE_KEY)
-      return null
-    }
-    return data
-  } catch {
-    return null
-  }
-}
-
 export function logout() {
-  sessionStorage.removeItem(STORAGE_KEY)
-  window.location.reload()
+  endServerSession().finally(() => window.location.reload())
 }
 
 export default function PinGate({ children }) {
@@ -43,29 +32,80 @@ export default function PinGate({ children }) {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [showPin, setShowPin] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [dataVersion, setDataVersion] = useState(0)
+  const [syncStatus, setSyncStatus] = useState('saved')
 
   useEffect(() => {
-    setAuthed(getAuthState())
+    let cancelled = false
+
+    async function restoreSession() {
+      try {
+        const access = await getServerSession()
+        if (access) await loadSharedState(access)
+        if (!cancelled) setAuthed(access)
+      } catch (restoreError) {
+        await endServerSession()
+        if (!cancelled) {
+          setError(restoreError.message)
+          setAuthed(null)
+        }
+      }
+    }
+
+    restoreSession()
+    return () => { cancelled = true }
   }, [])
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    const access = ACCESS_CODES[pin]
-    if (access) {
-      const session = {
-        timestamp: Date.now(),
-        role: access.role,
-        locationId: access.locationId || null,
-        displayName: access.displayName || null,
-        employeeId: access.employeeId || null,
-        canManageRoster: access.role === 'admin' && access.canManageRoster !== false,
+  useEffect(() => {
+    const handleSyncStatus = event => setSyncStatus(event.detail)
+    window.addEventListener('attendance-sync-status', handleSyncStatus)
+    return () => window.removeEventListener('attendance-sync-status', handleSyncStatus)
+  }, [])
+
+  useEffect(() => {
+    if (!authed || authed === 'checking') return undefined
+
+    let refreshing = false
+    const refresh = async () => {
+      if (refreshing || document.visibilityState === 'hidden') return
+      refreshing = true
+      try {
+        await loadSharedState(authed, { mergeLocal: false })
+        setSyncStatus('saved')
+        setDataVersion(version => version + 1)
+      } catch {
+        // Keep the last confirmed cache available during a brief network issue.
+        setSyncStatus('pending')
+      } finally {
+        refreshing = false
       }
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-      setAuthed(session)
+    }
+
+    window.addEventListener('focus', refresh)
+    const intervalId = window.setInterval(refresh, 60 * 1000)
+    return () => {
+      window.removeEventListener('focus', refresh)
+      window.clearInterval(intervalId)
+    }
+  }, [authed])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setSubmitting(true)
+    setError('')
+
+    try {
+      const access = await createServerSession(pin)
+      await loadSharedState(access)
+      setAuthed(access)
       setPin('')
-    } else {
-      setError('Invalid PIN. Please try again.')
+    } catch (submitError) {
+      await endServerSession()
+      setError(submitError.message || 'Unable to sign in. Please try again.')
       setPin('')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -80,6 +120,9 @@ export default function PinGate({ children }) {
         displayName: authed.displayName || null,
         employeeId: authed.employeeId || null,
         canManageRoster: authed.role === 'admin' && authed.canManageRoster !== false,
+        canManageBlackouts: authed.role === 'admin' && authed.canManageBlackouts !== false,
+        dataVersion,
+        syncStatus,
       }}>
         {children}
       </AuthContext.Provider>
@@ -113,6 +156,7 @@ export default function PinGate({ children }) {
               maxLength={8}
               inputMode="numeric"
               pattern="[0-9]*"
+              disabled={submitting}
               placeholder="• • • •"
               className="w-full text-center text-2xl tracking-[0.5em] font-bold bg-charcoal-800 border border-charcoal-500 rounded-lg px-4 py-3 text-brand-100 placeholder-charcoal-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 transition-all"
             />
@@ -138,9 +182,10 @@ export default function PinGate({ children }) {
 
           <button
             type="submit"
-            className="w-full mt-4 py-3 rounded-lg bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 transition-colors"
+            disabled={submitting}
+            className="w-full mt-4 py-3 rounded-lg bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 disabled:opacity-60 disabled:cursor-wait transition-colors"
           >
-            Unlock
+            {submitting ? 'Connecting…' : 'Unlock'}
           </button>
         </form>
 

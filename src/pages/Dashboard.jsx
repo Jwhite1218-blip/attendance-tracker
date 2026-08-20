@@ -297,6 +297,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {LOCATIONS
           .filter(loc => locationCounts[loc.id])
+          .sort((a, b) => a.name.localeCompare(b.name))
           .map(loc => {
             const count = locationCounts[loc.id] || 0
             return (

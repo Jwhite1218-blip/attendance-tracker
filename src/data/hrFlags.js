@@ -4,6 +4,7 @@
 // seniority status.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
+import { writeSharedStorage } from './sharedStore.js'
 
 const FLAGS_KEY = 'hr-attendance-progress-v2'
 const LEGACY_FLAGS_KEY = 'hr-flags'
@@ -84,7 +85,7 @@ function getAllStatuses() {
 }
 
 function saveAllStatuses(statuses) {
-  localStorage.setItem(FLAGS_KEY, JSON.stringify(statuses))
+  writeSharedStorage(FLAGS_KEY, statuses)
 }
 
 export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
