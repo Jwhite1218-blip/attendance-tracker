@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import {
   createServerSession,
+  configureClientAccess,
   endServerSession,
   getServerSession,
   loadSharedState,
@@ -11,8 +12,10 @@ const AuthContext = createContext({
   locationId: null,
   displayName: null,
   employeeId: null,
+  canEditAttendance: true,
   canManageRoster: true,
   canManageBlackouts: true,
+  watermark: null,
   dataVersion: 0,
   syncStatus: 'saved',
 })
@@ -23,6 +26,7 @@ export function useAuth() {
 }
 
 export function logout() {
+  configureClientAccess(null)
   endServerSession().finally(() => window.location.reload())
 }
 
@@ -42,9 +46,11 @@ export default function PinGate({ children }) {
     async function restoreSession() {
       try {
         const access = await getServerSession()
+        configureClientAccess(access)
         if (access) await loadSharedState(access)
         if (!cancelled) setAuthed(access)
       } catch (restoreError) {
+        configureClientAccess(null)
         await endServerSession()
         if (!cancelled) {
           setError(restoreError.message)
@@ -97,10 +103,12 @@ export default function PinGate({ children }) {
 
     try {
       const access = await createServerSession(pin)
+      configureClientAccess(access)
       await loadSharedState(access)
       setAuthed(access)
       setPin('')
     } catch (submitError) {
+      configureClientAccess(null)
       await endServerSession()
       setError(submitError.message || 'Unable to sign in. Please try again.')
       setPin('')
@@ -119,8 +127,10 @@ export default function PinGate({ children }) {
         locationId: authed.locationId,
         displayName: authed.displayName || null,
         employeeId: authed.employeeId || null,
+        canEditAttendance: (authed.role === 'admin' || authed.role === 'school') && authed.canEditAttendance !== false,
         canManageRoster: authed.role === 'admin' && authed.canManageRoster !== false,
         canManageBlackouts: authed.role === 'admin' && authed.canManageBlackouts !== false,
+        watermark: authed.watermark === 'localis' ? 'localis' : null,
         dataVersion,
         syncStatus,
       }}>

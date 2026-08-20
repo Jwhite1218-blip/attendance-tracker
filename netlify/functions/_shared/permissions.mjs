@@ -26,6 +26,9 @@ export function isManagedStateKey(key) {
 
 export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   const attendanceId = attendanceEmployeeId(key)
+  const isAttendanceState = Boolean(attendanceId) || key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY
+
+  if (isAttendanceState && session.canEditAttendance === false) return false
 
   if (session.role === 'school') {
     if (attendanceId) return allowedEmployeeIds.has(String(attendanceId))
@@ -33,7 +36,7 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   }
 
   if (session.role !== 'admin') return false
-  if (attendanceId || key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY) return true
+  if (isAttendanceState) return true
   if (ROSTER_KEYS.has(key)) return session.canManageRoster === true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false

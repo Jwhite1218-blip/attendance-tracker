@@ -41,7 +41,7 @@ function getMonthStats(attendance, year, monthIdx) {
 }
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
-  const { role, canManageRoster } = useAuth()
+  const { role, canManageRoster, canEditAttendance } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [attendance, setAttendance] = useState({})
   const [selectedCode, setSelectedCode] = useState('UNEX')
@@ -78,7 +78,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }, [empKey, employee?.notes, employee?.inactive_reason])
 
   const handleDayClick = (dateKey) => {
-    if (getDateAvailability(dateKey).unavailable) return
+    if (!canEditAttendance || getDateAvailability(dateKey).unavailable) return
     if (paintMode) {
       setAttendance(setAttendanceCode(empKey, dateKey, selectedCode))
     } else {
@@ -95,7 +95,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }
 
   const handleDayMouseEnter = (dateKey) => {
-    if (paintMode && isPainting && !getDateAvailability(dateKey).unavailable) {
+    if (canEditAttendance && paintMode && isPainting && !getDateAvailability(dateKey).unavailable) {
       setAttendance(setAttendanceCode(empKey, dateKey, selectedCode))
     }
   }
@@ -326,7 +326,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-            <button
+            {canEditAttendance ? <button
               onClick={() => setPaintMode(!paintMode)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex-shrink-0 ${
                 paintMode
@@ -335,8 +335,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               }`}
             >
               {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
-            </button>
-            {paintMode && (
+            </button> : <span className="text-sm font-semibold text-gray-600">Read-only employee history</span>}
+            {canEditAttendance && paintMode && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
                   <button
@@ -359,7 +359,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             )}
           </div>
 
-          {!paintMode && (
+          {canEditAttendance && !paintMode && (
             <p className="text-xs text-gray-400">
               Select any day to choose an attendance exception and add a comment. Use Paint Mode to mark multiple days.
             </p>
@@ -466,24 +466,26 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                     <button
                       key={day}
                       onClick={() => handleDayClick(dateKey)}
-                      onMouseDown={() => paintMode && !isUnavailable && setIsPainting(true)}
+                      onMouseDown={() => canEditAttendance && paintMode && !isUnavailable && setIsPainting(true)}
                       onMouseUp={() => setIsPainting(false)}
                       onMouseEnter={() => handleDayMouseEnter(dateKey)}
-                      disabled={isFuture || isUnavailable}
+                      disabled={!canEditAttendance || isFuture || isUnavailable}
                       className={`
                         relative aspect-square rounded text-[10px] font-medium
                         flex items-center justify-center transition-all
                         ${isUnavailable ? 'border' : code ? 'border' : 'border border-gray-100'}
                         ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white border-charcoal-800' : ''}
                         ${availability.type === 'weekend' ? 'bg-gray-100 text-gray-300 border-gray-100' : ''}
-                        ${isFuture ? 'opacity-30 cursor-not-allowed' : isUnavailable ? 'cursor-not-allowed' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
+                        ${isFuture ? 'opacity-30 cursor-not-allowed' : isUnavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
                       `}
                       style={!isUnavailable && code ? {
                         backgroundColor: info?.hex.bg,
                         color: info?.hex.text,
                         borderColor: info?.hex.border,
                       } : {}}
-                      title={isUnavailable
+                      title={!canEditAttendance
+                        ? `${monthName} ${day}, ${year} — Read-only access`
+                        : isUnavailable
                         ? `${monthName} ${day}, ${year} — ${availability.label}`
                         : info
                           ? `${monthName} ${day}, ${year} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
@@ -503,10 +505,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
       </div>
 
       <p className="text-xs text-gray-400 text-center px-4">
-        {paintMode
+        {!canEditAttendance
+          ? 'Attendance history is read-only for this login.'
+          : paintMode
           ? '🎨 Paint Mode: Select a code above, then tap days to mark them.'
           : 'Select any day to choose a status or edit its comment. Toggle Paint Mode to mark multiple days with one code.'
-        }{' '}Data saves automatically to your browser.
+        }{canEditAttendance && ' Data saves automatically.'}
       </p>
       <div className="flex items-center justify-center gap-4 text-xs text-gray-400">
         <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
@@ -517,6 +521,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         picker={picker}
         onClose={() => setPicker(null)}
         onSave={(code, note) => {
+          if (!canEditAttendance) return
           setAttendance(setAttendanceCode(empKey, picker.date, code, note))
           setPicker(null)
         }}
