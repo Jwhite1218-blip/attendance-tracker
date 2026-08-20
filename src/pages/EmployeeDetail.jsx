@@ -7,6 +7,7 @@ import { getDateAvailability } from '../data/blackoutDates.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
+import { formatBirthday } from '../data/employeeFields.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -25,15 +26,6 @@ function getFirstWeekday(year, month) {
 
 function formatDateKey(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-}
-
-function formatBirthday(value) {
-  const match = String(value || '').match(/^(\d{2})-(\d{2})$/)
-  if (!match) return value || '—'
-  return new Date(2000, Number(match[1]) - 1, Number(match[2])).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 function getMonthStats(attendance, year, monthIdx) {
@@ -136,6 +128,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const serviceDate = employee?.service_date
   const hireDate = employee?.hire_date
   const birthdate = employee?.birthdate
+  const tShirtSize = employee?.t_shirt_size
   const yearsOfService = serviceDate
     ? Math.floor((new Date() - new Date(serviceDate)) / (1000 * 60 * 60 * 24 * 365))
     : null
@@ -212,7 +205,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
           {hireDate && (
             <div>
               <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Hire Date</p>
@@ -228,6 +221,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           <div>
             <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Birthdate</p>
             <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{formatBirthday(birthdate)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">T-shirt Size</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{tShirtSize || '—'}</p>
           </div>
         </div>
       </div>

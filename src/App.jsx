@@ -1,6 +1,7 @@
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
+import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
@@ -26,6 +27,7 @@ function AppShell() {
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
     { path: '/quickmark', label: 'Quick Mark' },
+    { path: '/calendar', label: 'Calendar View' },
     { path: '/ledger', label: 'Ledger View' },
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
@@ -144,6 +146,7 @@ function AppShell() {
         <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
         <Route path="/location/:id" element={<LocationView />} />
         <Route path="/quickmark" element={<QuickMark />} />
+        <Route path="/calendar" element={<CalendarView />} />
         <Route path="/ledger" element={<LedgerView />} />
         <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
       </Routes>
