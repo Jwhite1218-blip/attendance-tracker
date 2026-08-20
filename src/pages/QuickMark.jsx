@@ -10,7 +10,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
 export default function QuickMark() {
-  const { role, locationId: myLocationId, canManageRoster } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster, canEditAttendance } = useAuth()
   const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [roster, setRoster] = useState([])
   const [currentIdx, setCurrentIdx] = useState(0)
@@ -53,7 +53,7 @@ export default function QuickMark() {
   }, [attKey, attendance[attKey]?.note])
 
   const handleMark = (code) => {
-    if (!currentEmployee || dateAvailability.unavailable) return
+    if (!canEditAttendance || !currentEmployee || dateAvailability.unavailable) return
     if (code === 'O' && !noteDraft.trim()) return
     setAttendanceCode(empKey, date, code, code ? noteDraft : '')
     if (code === '') {
@@ -102,21 +102,21 @@ export default function QuickMark() {
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault()
         handlePrev()
-      } else if (e.key === ' ') {
+      } else if (canEditAttendance && e.key === ' ') {
         e.preventDefault()
         handleCycle()
       } else {
         // Number keys map to codes
         const codes = ATTENDANCE_CODES.filter(c => c.code !== '')
         const num = parseInt(e.key)
-        if (num >= 1 && num <= codes.length) {
+        if (canEditAttendance && num >= 1 && num <= codes.length) {
           handleMark(codes[num - 1].code)
         }
       }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [currentEmployee, currentIdx, attendance, date, noteDraft])
+  }, [canEditAttendance, currentEmployee, currentIdx, attendance, date, noteDraft])
 
   // Exception count for the selected date
   const markedCount = useMemo(() => {
@@ -137,7 +137,9 @@ export default function QuickMark() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <h1 className="text-2xl font-bold text-white mb-1">Quick Mark</h1>
       <p className="text-sm text-charcoal-200 mb-6">
-        Record attendance exceptions only. Unmarked employees are left alone. Keyboard: 1-9 for codes, → or Enter for next, ← for back, Space to cycle.
+        {canEditAttendance
+          ? 'Record attendance exceptions only. Unmarked employees are left alone. Keyboard: 1-9 for codes, → or Enter for next, ← for back, Space to cycle.'
+          : 'Review attendance by school, date, and employee. This login cannot change records.'}
       </p>
 
       {/* School dropdown */}
@@ -241,7 +243,7 @@ export default function QuickMark() {
                   {currentCode && (
                     <button
                       onClick={() => handleMark('')}
-                      disabled={dateAvailability.unavailable}
+                      disabled={!canEditAttendance || dateAvailability.unavailable}
                       className="text-xs text-gray-400 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       Clear
@@ -252,11 +254,11 @@ export default function QuickMark() {
 
               {/* Code buttons */}
               <div className="p-5 border-t border-gray-100">
-                <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">Mark Attendance</p>
+                <p className="text-xs text-gray-400 uppercase tracking-wide mb-3">{canEditAttendance ? 'Mark Attendance' : 'Attendance Codes — Read Only'}</p>
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   <button
                     onClick={() => handleMark('')}
-                    disabled={dateAvailability.unavailable}
+                    disabled={!canEditAttendance || dateAvailability.unavailable}
                     className="px-2 py-2.5 rounded-lg border-2 border-gray-200 bg-gray-50 text-gray-500 text-xs font-bold transition-all hover:border-red-200 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <div className="text-base">×</div>
@@ -266,8 +268,8 @@ export default function QuickMark() {
                     <button
                       key={c.code}
                       onClick={() => handleMark(c.code)}
-                      disabled={dateAvailability.unavailable || (c.code === 'O' && !noteDraft.trim())}
-                      title={dateAvailability.unavailable ? dateAvailability.label : c.code === 'O' && !noteDraft.trim() ? 'Add a comment before choosing Other' : c.label}
+                      disabled={!canEditAttendance || dateAvailability.unavailable || (c.code === 'O' && !noteDraft.trim())}
+                      title={!canEditAttendance ? 'Read-only access' : dateAvailability.unavailable ? dateAvailability.label : c.code === 'O' && !noteDraft.trim() ? 'Add a comment before choosing Other' : c.label}
                       className={`px-2 py-2.5 rounded-lg border-2 text-xs font-bold transition-all relative ${
                         currentCode === c.code ? 'ring-2 ring-offset-1 scale-105' : 'hover:scale-105'
                       } disabled:opacity-40 disabled:hover:scale-100 disabled:cursor-not-allowed`}
@@ -293,7 +295,7 @@ export default function QuickMark() {
                     id="quick-mark-note"
                     value={noteDraft}
                     onChange={event => setNoteDraft(event.target.value)}
-                    disabled={dateAvailability.unavailable}
+                    disabled={!canEditAttendance || dateAvailability.unavailable}
                     rows={2}
                     placeholder="Add context for this attendance exception…"
                     className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -302,7 +304,7 @@ export default function QuickMark() {
                     <button
                       type="button"
                       onClick={() => handleMark(currentCode)}
-                      disabled={dateAvailability.unavailable || (currentCode === 'O' && !noteDraft.trim())}
+                      disabled={!canEditAttendance || dateAvailability.unavailable || (currentCode === 'O' && !noteDraft.trim())}
                       className="mt-2 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-40"
                     >
                       Save comment
@@ -390,10 +392,10 @@ export default function QuickMark() {
                 ))}
               </div>
               <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400 space-y-1">
-                <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">1-9</kbd> Quick mark codes</p>
+                {canEditAttendance && <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">1-9</kbd> Quick mark codes</p>}
                 <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">→</kbd> Next employee</p>
                 <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">←</kbd> Previous</p>
-                <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">Space</kbd> Cycle codes</p>
+                {canEditAttendance && <p><kbd className="px-1 bg-gray-100 rounded text-[10px]">Space</kbd> Cycle codes</p>}
               </div>
             </div>
           </div>
@@ -404,7 +406,7 @@ export default function QuickMark() {
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
-          <p className="text-gray-400">↑ Select a school to start marking attendance.</p>
+          <p className="text-gray-400">↑ Select a school to {canEditAttendance ? 'start marking attendance' : 'review attendance'}.</p>
         </div>
       )}
 

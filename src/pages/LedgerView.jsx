@@ -23,7 +23,7 @@ function formatDateKey(year, monthIdx, day) {
 }
 
 export default function LedgerView() {
-  const { role, locationId: myLocationId, canManageRoster } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster, canEditAttendance } = useAuth()
   const [search, setSearch] = useState('')
   const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
   const [selectedId, setSelectedId] = useState(null)
@@ -89,7 +89,7 @@ export default function LedgerView() {
 
   const handleCellClick = (year, monthIdx, day) => {
     const dateKey = formatDateKey(year, monthIdx, day)
-    if (getDateAvailability(dateKey).unavailable) return
+    if (!canEditAttendance || getDateAvailability(dateKey).unavailable) return
     const record = attendanceByYear[year]?.[dateKey]
     setPicker({
       empId: empKey,
@@ -102,6 +102,7 @@ export default function LedgerView() {
   }
 
   const handleSaveAttendance = (code, note) => {
+    if (!canEditAttendance || !picker) return
     const recordYear = Number(picker.date.slice(0, 4))
     const yearData = setAttendanceCode(picker.empId, picker.date, code, note)
     setAttendanceByYear(prev => ({ ...prev, [recordYear]: yearData }))
@@ -278,16 +279,18 @@ export default function LedgerView() {
                               >
                                 <button
                                   onClick={() => handleCellClick(year, monthIdx, day)}
-                                  disabled={availability.unavailable}
+                                  disabled={!canEditAttendance || availability.unavailable}
                                   className={`relative w-full h-7 flex items-center justify-center text-[9px] font-bold transition-all ${
                                     availability.type === 'blackout'
                                       ? 'text-white cursor-not-allowed'
                                       : availability.type === 'weekend'
                                         ? 'text-gray-300 cursor-not-allowed'
-                                        : 'hover:ring-1 hover:ring-inset hover:ring-brand-300'
+                                        : canEditAttendance ? 'hover:ring-1 hover:ring-inset hover:ring-brand-300' : 'cursor-default'
                                   }`}
                                   style={!availability.unavailable && code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
-                                  title={availability.unavailable
+                                  title={!canEditAttendance
+                                    ? `${monthName} ${day}, ${year} — Read-only access`
+                                    : availability.unavailable
                                     ? `${monthName} ${day}, ${year} — ${availability.label}`
                                     : `${monthName} ${day}, ${year} — ${info?.label || 'No attendance exception'}${attendanceByYear[year]?.[dateKey]?.note ? ` — ${attendanceByYear[year][dateKey].note}` : ''}`}
                                 >
@@ -308,7 +311,7 @@ export default function LedgerView() {
             </div>
           ))}
 
-          <p className="text-xs text-charcoal-300">Select any day to choose an attendance exception or add a comment. Data is shared with the Year Calendar view.</p>
+          <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select any day to choose an attendance exception or add a comment.' : 'Attendance is read-only.'} Data is shared with the Year Calendar view.</p>
         </div>
 
         {/* Key sidebar */}

@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { accessForPin } from './auth.mjs'
 import { canWriteStateKey } from './permissions.mjs'
 
 const liz = {
@@ -10,6 +11,13 @@ const liz = {
 
 const limitedDistrictAdmin = {
   role: 'admin',
+  canManageRoster: false,
+  canManageBlackouts: false,
+}
+
+const readOnlyDistrictViewer = {
+  role: 'admin',
+  canEditAttendance: false,
   canManageRoster: false,
   canManageBlackouts: false,
 }
@@ -25,6 +33,47 @@ test('limited district administrators can mark attendance but cannot change prot
   assert.equal(canWriteStateKey(limitedDistrictAdmin, 'employee-record-overrides'), false)
   assert.equal(canWriteStateKey(limitedDistrictAdmin, 'employee-custom-records'), false)
   assert.equal(canWriteStateKey(limitedDistrictAdmin, 'attendance-blackout-dates'), false)
+})
+
+test('read-only district viewers cannot change attendance or protected records', () => {
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'att-emp-123-2026'), false)
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'hr-attendance-progress-v2'), false)
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'employee-record-overrides'), false)
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'employee-custom-records'), false)
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'attendance-blackout-dates'), false)
+})
+
+test('PIN configuration can issue plain and Localis-watermarked read-only access', () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    1111: {
+      role: 'admin',
+      displayName: 'Read-Only Review',
+      canEditAttendance: false,
+      canManageRoster: false,
+      canManageBlackouts: false,
+    },
+    2222: {
+      role: 'admin',
+      displayName: 'Localis Collective Review',
+      canEditAttendance: false,
+      canManageRoster: false,
+      canManageBlackouts: false,
+      watermark: 'localis',
+    },
+  })
+
+  try {
+    const plain = accessForPin('1111')
+    const watermarked = accessForPin('2222')
+    assert.equal(plain.canEditAttendance, false)
+    assert.equal(plain.watermark, null)
+    assert.equal(watermarked.canEditAttendance, false)
+    assert.equal(watermarked.watermark, 'localis')
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+  }
 })
 
 test('school managers can only write attendance for employees in their school', () => {

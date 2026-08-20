@@ -41,7 +41,7 @@ function formatDateShort(dateStr) {
 
 export default function LocationView() {
   const { id: urlId } = useParams()
-  const { role, locationId: myLocationId, canManageRoster } = useAuth()
+  const { role, locationId: myLocationId, canManageRoster, canEditAttendance } = useAuth()
   // School-role sessions are always locked to their own school, regardless of URL
   const id = role === 'school' ? myLocationId : urlId
   const location = LOCATION_MAP[id]
@@ -162,14 +162,14 @@ export default function LocationView() {
 
   // ─── LOCATION ROSTER VIEW ───
   const handleToggle = (empId, date) => {
-    if (!paintMode || getDateAvailability(date).unavailable) return
+    if (!canEditAttendance || !paintMode || getDateAvailability(date).unavailable) return
     const key = `${empId}-${date}`
     setAttendanceCode(empId, date, selectedCode)
     setAttendance(prev => ({ ...prev, [key]: { code: selectedCode, date, empId } }))
   }
 
   const handleSetCode = (empId, date, code, note = '') => {
-    if (getDateAvailability(date).unavailable) return
+    if (!canEditAttendance || getDateAvailability(date).unavailable) return
     const key = `${empId}-${date}`
     setAttendanceCode(empId, date, code, note)
     if (code === '') {
@@ -180,7 +180,7 @@ export default function LocationView() {
   }
 
   const handleSetAll = (date, code) => {
-    if (getDateAvailability(date).unavailable) return
+    if (!canEditAttendance || getDateAvailability(date).unavailable) return
     roster.forEach(emp => setAttendanceCode(emp.kronos_id || emp.id, date, code))
     setAttendance(prev => {
       const updated = { ...prev }
@@ -247,22 +247,28 @@ export default function LocationView() {
 
       {/* Paint Mode Bar */}
       <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 bg-white border border-gray-200 rounded-xl p-3">
-        <button onClick={() => setPaintMode(!paintMode)}
-          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-          {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
-        </button>
-        {paintMode && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
-              <button key={c.code} onClick={() => setSelectedCode(c.code)}
-                className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${selectedCode === c.code ? 'ring-2 ring-offset-1 ring-brand-400 scale-105' : ''}`}
-                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }} title={c.label}>
-                {c.shortLabel}
-              </button>
-            ))}
-          </div>
+        {canEditAttendance ? (
+          <>
+            <button onClick={() => setPaintMode(!paintMode)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${paintMode ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {paintMode ? '🎨 Paint ON' : '🎨 Paint Mode'}
+            </button>
+            {paintMode && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
+                  <button key={c.code} onClick={() => setSelectedCode(c.code)}
+                    className={`px-2 py-1 rounded text-xs font-semibold border transition-all ${selectedCode === c.code ? 'ring-2 ring-offset-1 ring-brand-400 scale-105' : ''}`}
+                    style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }} title={c.label}>
+                    {c.shortLabel}
+                  </button>
+                ))}
+              </div>
+            )}
+            <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{paintMode ? 'Click or drag to mark' : 'Select a day to choose a status and add a comment'}</span>
+          </>
+        ) : (
+          <span className="text-sm font-semibold text-gray-600">Read-only school review · Attendance controls are disabled</span>
         )}
-        <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{paintMode ? 'Click or drag to mark' : 'Select a day to choose a status and add a comment'}</span>
       </div>
 
       {/* ─── MOBILE: Card-based layout ─── */}
@@ -303,7 +309,7 @@ export default function LocationView() {
                     <button
                       key={date}
                       onClick={() => {
-                        if (availability.unavailable) return
+                        if (!canEditAttendance || availability.unavailable) return
                         if (paintMode) {
                           handleToggle(emp.kronos_id || emp.id, date)
                         } else {
@@ -318,14 +324,14 @@ export default function LocationView() {
                           })
                         }
                       }}
-                      disabled={availability.unavailable}
-                      title={availability.unavailable ? availability.label : formatDate(date)}
+                      disabled={!canEditAttendance || availability.unavailable}
+                      title={!canEditAttendance ? `${formatDate(date)} — Read-only access` : availability.unavailable ? availability.label : formatDate(date)}
                       className={`p-2 flex flex-col items-center gap-1 transition-colors ${
                         availability.type === 'blackout'
                           ? 'bg-charcoal-800 text-white cursor-not-allowed'
                           : availability.type === 'weekend'
                             ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                            : 'bg-white active:bg-gray-50'
+                            : canEditAttendance ? 'bg-white active:bg-gray-50' : 'bg-white cursor-default'
                       }`}
                     >
                       <span className={`text-[10px] uppercase ${availability.unavailable ? 'text-current opacity-70' : 'text-gray-400'}`}>{weekday[0]}</span>
@@ -372,7 +378,7 @@ export default function LocationView() {
                       <div className={`text-xs font-medium uppercase tracking-wide ${availability.unavailable ? 'text-current' : 'text-gray-500'}`}>{formatDate(d)}</div>
                       <button
                         onClick={() => handleSetAll(d, '')}
-                        disabled={availability.unavailable}
+                        disabled={!canEditAttendance || availability.unavailable}
                         className={`mt-1 text-[10px] ${availability.unavailable ? 'text-current opacity-60 cursor-not-allowed' : 'text-gray-400 hover:text-brand-500'}`}
                       >
                         {availability.type === 'blackout' ? availability.label : 'Clear All'}
@@ -409,7 +415,7 @@ export default function LocationView() {
                       <td key={d} className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800' : availability.type === 'weekend' ? 'bg-gray-100' : ''}`}>
                         <button
                           onClick={() => {
-                            if (availability.unavailable) return
+                            if (!canEditAttendance || availability.unavailable) return
                             if (paintMode) {
                               handleToggle(emp.kronos_id || emp.id, d)
                             } else {
@@ -423,12 +429,12 @@ export default function LocationView() {
                               })
                             }
                           }}
-                          onMouseDown={() => paintMode && !availability.unavailable && setIsPainting(true)}
+                          onMouseDown={() => canEditAttendance && paintMode && !availability.unavailable && setIsPainting(true)}
                           onMouseUp={() => setIsPainting(false)}
-                          onMouseEnter={() => { if (paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
-                          disabled={availability.unavailable}
-                          title={availability.unavailable ? availability.label : formatDate(d)}
-                          className={`w-full flex justify-center ${availability.unavailable ? 'cursor-not-allowed' : ''}`}
+                          onMouseEnter={() => { if (canEditAttendance && paintMode && isPainting) handleToggle(emp.kronos_id || emp.id, d) }}
+                          disabled={!canEditAttendance || availability.unavailable}
+                          title={!canEditAttendance ? `${formatDate(d)} — Read-only access` : availability.unavailable ? availability.label : formatDate(d)}
+                          className={`w-full flex justify-center ${availability.unavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : ''}`}
                         >
                           {availability.type === 'blackout' ? (
                             <span className="inline-flex items-center justify-center text-sm font-bold text-white w-[28px] h-[22px]">×</span>
@@ -458,7 +464,7 @@ export default function LocationView() {
       {/* Footer actions */}
       <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
         <div>
-          <p className="text-xs text-charcoal-300">Select a day to mark an exception or add a comment. Select a name for full-year history.</p>
+          <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history.</p>
           <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
             <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
@@ -483,6 +489,7 @@ export default function LocationView() {
         picker={picker}
         onClose={() => setPicker(null)}
         onSave={(code, note) => {
+          if (!canEditAttendance) return
           handleSetCode(picker.empId, picker.date, code, note)
           setPicker(null)
         }}
