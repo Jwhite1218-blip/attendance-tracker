@@ -1,6 +1,6 @@
-import { getStore } from '@netlify/blobs'
 import employees from '../../src/data/employees.json'
 import { jsonResponse, sessionFromRequest } from './_shared/auth.mjs'
+import { getStateStore } from './_shared/state-store.mjs'
 import {
   BLACKOUTS_KEY,
   CUSTOM_EMPLOYEES_KEY,
@@ -16,7 +16,6 @@ import {
   mergeSchoolStatuses,
 } from './_shared/permissions.mjs'
 
-const STORE_NAME = 'attendance-shared-state'
 const META_KEY = '__state_meta__'
 
 function employeeKey(employee) {
@@ -129,7 +128,7 @@ async function handleSet(store, entries, session, body) {
     value = mergeSchoolStatuses(entries[key], value, allowedEmployeeIds)
   }
 
-  await store.setJSON(key, value)
+  await store.setJSON(key, value, session.displayName || 'authenticated user')
   return jsonResponse({ ok: true })
 }
 
@@ -145,7 +144,7 @@ async function handleMerge(store, entries, session, body) {
   for (const [key, localValue] of Object.entries(incoming)) {
     if (!isManagedStateKey(key)) continue
     const value = mergeImportedValue(key, localValue, entries[key])
-    await store.setJSON(key, value)
+    await store.setJSON(key, value, session.displayName || 'district administrator')
     entries[key] = value
   }
 
@@ -153,7 +152,7 @@ async function handleMerge(store, entries, session, body) {
     await store.setJSON(META_KEY, {
       initializedAt: new Date().toISOString(),
       initializedBy: session.displayName || 'district administrator',
-    })
+    }, session.displayName || 'district administrator')
   }
 
   return jsonResponse({
@@ -166,7 +165,7 @@ export default async request => {
   const session = sessionFromRequest(request)
   if (!session) return jsonResponse({ error: 'Authentication required.' }, 401)
 
-  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
+  const store = getStateStore()
   const [entries, meta] = await Promise.all([
     loadEntries(store),
     store.get(META_KEY, { type: 'json' }),
