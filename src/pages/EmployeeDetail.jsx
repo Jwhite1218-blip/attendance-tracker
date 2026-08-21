@@ -4,6 +4,7 @@ import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendance
 import { getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
 import { getEmployeeByKey, saveEmployeeNotes, setEmployeeActive } from '../data/employeeLocations.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
+import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
@@ -43,6 +44,7 @@ function getMonthStats(attendance, year, monthIdx) {
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
   const { role, canManageRoster, canEditAttendance } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
+  const [mode, setMode] = useState(readCalendarMode)
   const [attendance, setAttendance] = useState({})
   const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
@@ -63,10 +65,24 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const empKey = employee?.kronos_id || employee?.id
   const attendanceStatus = getEmployeeAttendanceStatus(empKey)
 
+  const setCalendarMode = nextMode => {
+    setMode(nextMode)
+    writeCalendarMode(nextMode)
+  }
+
+  const displayMonths = mode === 'fiscal' ? getFiscalYearMonths(year) : getCalendarYearMonths(year)
+
   useEffect(() => {
     if (!empKey) return
-    setAttendance(getEmployeeYearAttendance(empKey, year))
-  }, [empKey, year])
+    // A school year (Jul-Jun) spans two calendar-year blobs — load and merge both so the
+    // fiscal grid has data for every displayed month, not just the ones in `year` itself.
+    const primary = getEmployeeYearAttendance(empKey, year)
+    if (mode === 'fiscal') {
+      setAttendance({ ...primary, ...getEmployeeYearAttendance(empKey, year + 1) })
+    } else {
+      setAttendance(primary)
+    }
+  }, [empKey, year, mode])
 
   useEffect(() => {
     const currentEmployee = getEmployeeByKey(empKey)
@@ -80,7 +96,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const handleDayClick = (dateKey) => {
     if (!canEditAttendance || getDateAvailability(dateKey).unavailable) return
     if (paintMode) {
-      setAttendance(setAttendanceCode(empKey, dateKey, selectedCode))
+      setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, dateKey, selectedCode) }))
     } else {
       const date = new Date(`${dateKey}T00:00:00`)
       setPicker({
@@ -96,7 +112,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   const handleDayMouseEnter = (dateKey) => {
     if (canEditAttendance && paintMode && isPainting && !getDateAvailability(dateKey).unavailable) {
-      setAttendance(setAttendanceCode(empKey, dateKey, selectedCode))
+      setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, dateKey, selectedCode) }))
     }
   }
 
@@ -117,10 +133,15 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     return stats
   }, [attendance])
 
-  // Pre-compute month stats for all 12 months (no hooks inside .map)
-  const allMonthStats = useMemo(() => {
-    return MONTHS.map((_, monthIdx) => getMonthStats(attendance, year, monthIdx))
-  }, [attendance, year])
+  // Pre-compute stats for every displayed month (no hooks inside .map). Keyed by "year-monthIdx"
+  // since a fiscal-year display spans two calendar years, unlike a plain 12-month calendar year.
+  const monthStatsByKey = useMemo(() => {
+    const map = {}
+    displayMonths.forEach(({ year: monthYear, monthIdx }) => {
+      map[`${monthYear}-${monthIdx}`] = getMonthStats(attendance, monthYear, monthIdx)
+    })
+    return map
+  }, [attendance, displayMonths])
 
   const today = new Date()
 
@@ -174,33 +195,53 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {role === 'admin' && canManageRoster && (
+          <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-2">
+              {role === 'admin' && canManageRoster && (
+                <button
+                  type="button"
+                  onClick={() => setShowEditEmployee(value => !value)}
+                  className="px-3 py-2 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100"
+                >
+                  {showEditEmployee ? 'Close edit' : 'Edit employee'}
+                </button>
+              )}
+              <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={() => setCalendarMode('calendar')}
+                  className={`px-2 py-1.5 ${mode === 'calendar' ? 'bg-brand-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                >
+                  Calendar Year
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCalendarMode('fiscal')}
+                  className={`px-2 py-1.5 ${mode === 'fiscal' ? 'bg-brand-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50'}`}
+                >
+                  School Year
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
               <button
-                type="button"
-                onClick={() => setShowEditEmployee(value => !value)}
-                className="px-3 py-2 rounded-lg border border-brand-200 bg-brand-50 text-brand-700 text-xs font-semibold hover:bg-brand-100"
+                onClick={() => setYear(y => y - 1)}
+                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
               >
-                {showEditEmployee ? 'Close edit' : 'Edit employee'}
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
               </button>
-            )}
-            <button
-              onClick={() => setYear(y => y - 1)}
-              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <span className="text-base sm:text-lg font-bold text-gray-900 min-w-[50px] text-center">{year}</span>
-            <button
-              onClick={() => setYear(y => y + 1)}
-              className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
+              <span className="text-base sm:text-lg font-bold text-gray-900 min-w-[50px] text-center">{formatYearLabel(year, mode)}</span>
+              <button
+                onClick={() => setYear(y => y + 1)}
+                className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -418,17 +459,18 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
         onMouseLeave={() => setIsPainting(false)}
       >
-        {MONTHS.map((monthName, monthIdx) => {
+        {displayMonths.map(({ year: monthYear, monthIdx }) => {
           if (!isMonthVisible(monthIdx)) return null
 
-          const daysInMonth = getDaysInMonth(year, monthIdx)
-          const firstWeekday = getFirstWeekday(year, monthIdx)
-          const monthStats = allMonthStats[monthIdx]
+          const monthName = MONTHS[monthIdx]
+          const daysInMonth = getDaysInMonth(monthYear, monthIdx)
+          const firstWeekday = getFirstWeekday(monthYear, monthIdx)
+          const monthStats = monthStatsByKey[`${monthYear}-${monthIdx}`] || {}
 
           return (
-            <div key={monthIdx} className="bg-white rounded-xl border border-gray-200 p-3">
+            <div key={`${monthYear}-${monthIdx}`} className="bg-white rounded-xl border border-gray-200 p-3">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">{monthName}</h3>
+                <h3 className="text-sm font-semibold text-gray-900">{monthName}{mode === 'fiscal' ? ` ${monthYear}` : ''}</h3>
                 <div className="flex gap-1">
                   {ATTENDANCE_CODES.filter(c => c.code && monthStats[c.code] > 0).map(c => (
                     <span
@@ -453,7 +495,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 ))}
                 {Array.from({ length: daysInMonth }).map((_, dayIdx) => {
                   const day = dayIdx + 1
-                  const dateKey = formatDateKey(year, monthIdx, day)
+                  const dateKey = formatDateKey(monthYear, monthIdx, day)
                   const record = attendance[dateKey]
                   const code = record?.code || ''
                   const info = CODE_MAP[code]
@@ -482,12 +524,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                         borderColor: info?.hex.border,
                       } : {}}
                       title={!canEditAttendance
-                        ? `${monthName} ${day}, ${year} — Read-only access`
+                        ? `${monthName} ${day}, ${monthYear} — Read-only access`
                         : isUnavailable
-                        ? `${monthName} ${day}, ${year} — ${availability.label}`
+                        ? `${monthName} ${day}, ${monthYear} — ${availability.label}`
                         : info
-                          ? `${monthName} ${day}, ${year} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
-                          : `${monthName} ${day}, ${year} — No attendance exception`}
+                          ? `${monthName} ${day}, ${monthYear} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
+                          : `${monthName} ${day}, ${monthYear} — No attendance exception`}
                     >
                       {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? day : info ? info.shortLabel : code || day}
                       {!isUnavailable && record?.note && (
@@ -520,7 +562,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         onClose={() => setPicker(null)}
         onSave={(code, note) => {
           if (!canEditAttendance) return
-          setAttendance(setAttendanceCode(empKey, picker.date, code, note))
+          setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, picker.date, code, note) }))
           setPicker(null)
         }}
       />

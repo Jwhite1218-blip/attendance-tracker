@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getBlackoutDates, removeBlackoutDate } from '../data/blackoutDates.js'
+import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { useAuth } from '../components/PinGate.jsx'
 import BlackoutDatesManager from '../components/BlackoutDatesManager.jsx'
 
@@ -25,15 +26,25 @@ function formatDate(value) {
 export default function CalendarView() {
   const { canManageBlackouts } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
+  const [mode, setMode] = useState(readCalendarMode)
   const [blackoutDates, setBlackoutDates] = useState(() => getBlackoutDates())
   const [selectedDate, setSelectedDate] = useState(null)
+
+  const setCalendarMode = nextMode => {
+    setMode(nextMode)
+    writeCalendarMode(nextMode)
+  }
+
+  const displayMonths = mode === 'fiscal' ? getFiscalYearMonths(year) : getCalendarYearMonths(year)
 
   const blackoutMap = useMemo(
     () => Object.fromEntries(blackoutDates.map(item => [item.date, item])),
     [blackoutDates]
   )
   const selectedBlackout = selectedDate ? blackoutMap[selectedDate] : null
-  const yearBlackouts = blackoutDates.filter(item => item.date.startsWith(`${year}-`))
+  const rangeStart = mode === 'fiscal' ? `${year}-07-01` : `${year}-01-01`
+  const rangeEnd = mode === 'fiscal' ? `${year + 1}-06-30` : `${year}-12-31`
+  const yearBlackouts = blackoutDates.filter(item => item.date >= rangeStart && item.date <= rangeEnd)
 
   const refreshBlackouts = dates => {
     setBlackoutDates(dates || getBlackoutDates())
@@ -49,28 +60,46 @@ export default function CalendarView() {
             The shared district calendar for blackout days. Every school with calendar access sees this view.
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => { setYear(value => value - 1); setSelectedDate(null) }}
-            aria-label="Previous year"
-            className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <span className="text-lg font-bold text-white min-w-16 text-center">{year}</span>
-          <button
-            type="button"
-            onClick={() => { setYear(value => value + 1); setSelectedDate(null) }}
-            aria-label="Next year"
-            className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
+        <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">
+          <div className="flex items-center rounded-lg border border-charcoal-600 overflow-hidden text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setCalendarMode('calendar')}
+              className={`px-2.5 py-1.5 ${mode === 'calendar' ? 'bg-brand-600 text-white' : 'bg-charcoal-700 text-charcoal-200 hover:bg-charcoal-600'}`}
+            >
+              Calendar Year
+            </button>
+            <button
+              type="button"
+              onClick={() => setCalendarMode('fiscal')}
+              className={`px-2.5 py-1.5 ${mode === 'fiscal' ? 'bg-brand-600 text-white' : 'bg-charcoal-700 text-charcoal-200 hover:bg-charcoal-600'}`}
+            >
+              School Year (Jul–Jun)
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setYear(value => value - 1); setSelectedDate(null) }}
+              aria-label="Previous year"
+              className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span className="text-lg font-bold text-white min-w-16 text-center">{formatYearLabel(year, mode)}</span>
+            <button
+              type="button"
+              onClick={() => { setYear(value => value + 1); setSelectedDate(null) }}
+              aria-label="Next year"
+              className="p-2 rounded-lg border border-charcoal-600 hover:bg-charcoal-600 text-charcoal-200"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -82,7 +111,7 @@ export default function CalendarView() {
             <h2 className="text-sm font-semibold text-gray-800">District Blackout Calendar</h2>
             <p className="text-xs text-gray-400 mt-1">Blackout dates are unavailable in every attendance-marking view.</p>
           </div>
-          <span className="text-xs font-semibold text-gray-500">{yearBlackouts.length} date{yearBlackouts.length === 1 ? '' : 's'} in {year}</span>
+          <span className="text-xs font-semibold text-gray-500">{yearBlackouts.length} date{yearBlackouts.length === 1 ? '' : 's'} in {formatYearLabel(year, mode)}</span>
         </div>
       </div>
 
@@ -105,15 +134,16 @@ export default function CalendarView() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {MONTHS.map((monthName, monthIndex) => {
-          const firstWeekday = new Date(year, monthIndex, 1).getDay()
-          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate()
-          const monthBlackouts = yearBlackouts.filter(item => Number(item.date.slice(5, 7)) === monthIndex + 1)
+        {displayMonths.map(({ year: monthYear, monthIdx: monthIndex }) => {
+          const monthName = MONTHS[monthIndex]
+          const firstWeekday = new Date(monthYear, monthIndex, 1).getDay()
+          const daysInMonth = new Date(monthYear, monthIndex + 1, 0).getDate()
+          const monthBlackouts = yearBlackouts.filter(item => item.date.startsWith(`${monthYear}-${String(monthIndex + 1).padStart(2, '0')}-`))
 
           return (
-            <section key={monthName} className="bg-white rounded-xl border border-gray-200 p-3">
+            <section key={`${monthYear}-${monthIndex}`} className="bg-white rounded-xl border border-gray-200 p-3">
               <div className="flex items-center justify-between gap-3 mb-2">
-                <h2 className="text-sm font-semibold text-gray-900">{monthName}</h2>
+                <h2 className="text-sm font-semibold text-gray-900">{monthName}{mode === 'fiscal' ? ` ${monthYear}` : ''}</h2>
                 {monthBlackouts.length > 0 && (
                   <span className="text-[10px] font-bold rounded-full bg-charcoal-800 text-white px-2 py-0.5">
                     {monthBlackouts.length} blackout{monthBlackouts.length === 1 ? '' : 's'}
@@ -130,9 +160,9 @@ export default function CalendarView() {
                 {Array.from({ length: firstWeekday }).map((_, index) => <div key={`empty-${index}`} />)}
                 {Array.from({ length: daysInMonth }).map((_, index) => {
                   const day = index + 1
-                  const key = dateKey(year, monthIndex, day)
+                  const key = dateKey(monthYear, monthIndex, day)
                   const blackout = blackoutMap[key]
-                  const isWeekend = new Date(year, monthIndex, day).getDay() % 6 === 0
+                  const isWeekend = new Date(monthYear, monthIndex, day).getDay() % 6 === 0
 
                   return (
                     <button
