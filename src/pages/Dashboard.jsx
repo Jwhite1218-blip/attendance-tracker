@@ -34,15 +34,22 @@ export default function Dashboard() {
   let totalByCode = {}
   ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
 
+  const employeeExceptions = []
   employees.forEach(emp => {
     const records = getEmployeeYearAttendance(emp.kronos_id || emp.id, year)
+    const byCode = {}
+    let empCount = 0
     Object.values(records).forEach(r => {
       if (r.code) {
         totalMarked++
         totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
+        empCount++
+        byCode[r.code] = (byCode[r.code] || 0) + 1
       }
     })
+    if (empCount > 0) employeeExceptions.push({ employee: emp, count: empCount, byCode })
   })
+  employeeExceptions.sort((a, b) => b.count - a.count)
 
   const birthdays = getCurrentMonthBirthdays(employees, today)
   const anniversaries = getCurrentMonthAnniversaries(employees, today)
@@ -73,6 +80,12 @@ export default function Dashboard() {
       label: 'Upcoming Requested Time Off',
       count: requestedTimeOff.length,
       description: 'Approved full and half days from today forward',
+    },
+    {
+      id: 'exceptions',
+      label: `Exceptions (${year})`,
+      count: totalMarked,
+      description: 'Every employee with a marked attendance exception this year',
     },
   ]
 
@@ -120,7 +133,7 @@ export default function Dashboard() {
       </div>
 
       {/* Dashboard drill-downs */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         {drilldowns.map(item => (
           <button
             key={item.id}
@@ -156,11 +169,12 @@ export default function Dashboard() {
           birthdays={birthdays}
           anniversaries={anniversaries}
           requestedTimeOff={requestedTimeOff}
+          employeeExceptions={employeeExceptions}
         />
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(locationCounts).length}</p>
@@ -172,10 +186,6 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Inactive Staff</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{inactiveEmployees.length}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Exceptions ({year})</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{totalMarked}</p>
         </div>
       </div>
 
@@ -361,14 +371,19 @@ export default function Dashboard() {
   )
 }
 
-function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff }) {
+function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff, employeeExceptions }) {
   const title = type === 'birthdays'
     ? `${monthName} Birthdays`
     : type === 'anniversaries'
       ? `${monthName} Work Anniversaries`
-      : 'Upcoming Requested Time Off'
+      : type === 'exceptions'
+        ? 'Employees With Exceptions'
+        : 'Upcoming Requested Time Off'
 
-  const items = type === 'birthdays' ? birthdays : type === 'anniversaries' ? anniversaries : requestedTimeOff
+  const items = type === 'birthdays' ? birthdays
+    : type === 'anniversaries' ? anniversaries
+    : type === 'exceptions' ? employeeExceptions
+    : requestedTimeOff
 
   return (
     <section id={id} className="bg-white rounded-xl border border-brand-200 p-5 mb-8" aria-live="polite">
@@ -387,12 +402,21 @@ function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, req
             const locationName = LOCATION_MAP[employee.location]?.name || employee.location || 'No location assigned'
 
             return (
-              <div key={`${employeeKey}-${item.dateKey || item.day}`} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4">
+              <div key={`${employeeKey}-${item.dateKey || item.day || 'exceptions'}`} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4">
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-gray-800">{employee.first_name} {employee.last_name}</p>
                   <p className="text-xs text-gray-400 mt-0.5">{locationName} · {employee.position || 'Position not listed'}</p>
                   {type === 'time-off' && item.record.note && (
                     <p className="text-xs text-gray-500 mt-1">{item.record.note}</p>
+                  )}
+                  {type === 'exceptions' && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {Object.entries(item.byCode).map(([code, count]) => (
+                        <span key={code} className="text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-200 rounded px-1.5 py-0.5">
+                          {CODE_MAP[code]?.shortLabel || code} × {count}
+                        </span>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="sm:text-right flex-shrink-0">
@@ -408,6 +432,9 @@ function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, req
                       <p className="text-sm font-semibold text-brand-700">{formatDateKey(item.dateKey)}</p>
                       <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
                     </>
+                  )}
+                  {type === 'exceptions' && (
+                    <p className="text-sm font-semibold text-brand-700">{item.count} total</p>
                   )}
                 </div>
               </div>
