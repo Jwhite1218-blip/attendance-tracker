@@ -51,7 +51,7 @@ export default function LocationView() {
   const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
-  const [showTransfer, setShowTransfer] = useState(false)
+  const [transferTarget, setTransferTarget] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [picker, setPicker] = useState(null)
   const [activeInsight, setActiveInsight] = useState(null)
@@ -296,23 +296,34 @@ export default function LocationView() {
           return (
             <div key={emp.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
               {/* Employee header - tap to open detail */}
-              <button
-                onClick={() => setSelectedEmployee(emp)}
-                className="w-full flex items-center gap-3 p-3 text-left hover:bg-gray-50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className={`text-sm font-medium flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900'}`}>
-                    {emp.first_name} {emp.last_name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">{emp.position}</p>
-                </div>
-                <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+              <div className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors">
+                <button
+                  onClick={() => setSelectedEmployee(emp)}
+                  className="flex items-center gap-3 text-left flex-1 min-w-0"
+                >
+                  <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-sm font-medium flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900'}`}>
+                      {emp.first_name} {emp.last_name}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">{emp.position}</p>
+                  </div>
+                  <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {role === 'admin' && canManageRoster && (
+                  <button
+                    onClick={() => setTransferTarget(emp)}
+                    title={`Transfer ${emp.first_name} ${emp.last_name} to another school`}
+                    className="flex-shrink-0 text-amber-600 hover:text-amber-700 p-1.5 -mr-1.5"
+                  >
+                    🔄
+                  </button>
+                )}
+              </div>
 
               {/* Day cells - horizontal row */}
               <div className="grid grid-cols-7 gap-px bg-gray-100 border-t border-gray-100">
@@ -406,20 +417,31 @@ export default function LocationView() {
               {roster.map((emp, idx) => (
                 <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}>
                   <td className={`sticky left-0 z-10 px-4 py-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
-                    <button onClick={() => setSelectedEmployee(emp)} className="flex items-center gap-3 text-left group w-full">
-                      <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className={`text-sm font-medium transition-colors truncate flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900 group-hover:text-brand-700'}`}>
-                          {emp.first_name} {emp.last_name}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">{emp.position}</p>
-                      </div>
-                      <svg className="w-4 h-4 text-gray-300 group-hover:text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setSelectedEmployee(emp)} className="flex items-center gap-3 text-left group flex-1 min-w-0">
+                        <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium transition-colors truncate flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900 group-hover:text-brand-700'}`}>
+                            {emp.first_name} {emp.last_name}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">{emp.position}</p>
+                        </div>
+                        <svg className="w-4 h-4 text-gray-300 group-hover:text-brand-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                      {role === 'admin' && canManageRoster && (
+                        <button
+                          onClick={() => setTransferTarget(emp)}
+                          title={`Transfer ${emp.first_name} ${emp.last_name} to another school`}
+                          className="flex-shrink-0 text-amber-600 hover:text-amber-700 p-1"
+                        >
+                          🔄
+                        </button>
+                      )}
+                    </div>
                   </td>
                   {dates.map(d => {
                     const key = `${emp.kronos_id || emp.id}-${d}`
@@ -476,26 +498,19 @@ export default function LocationView() {
       </div>
 
       {/* Footer actions */}
-      <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <div>
-          <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history.</p>
-          <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
-            <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
-          </div>
+      <div className="mt-4">
+        <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history{role === 'admin' && canManageRoster ? ', or 🔄 to transfer that employee.' : '.'}</p>
+        <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
         </div>
-        {role === 'admin' && canManageRoster && (
-          <button onClick={() => setShowTransfer(true)} className="text-xs text-amber-600 hover:text-amber-700 font-medium">
-            🔄 Transfer an employee to another school
-          </button>
-        )}
       </div>
 
-      {role === 'admin' && canManageRoster && showTransfer && roster[0] && (
+      {role === 'admin' && canManageRoster && transferTarget && (
         <TransferModal
-          employee={roster[0]}
-          onClose={() => setShowTransfer(false)}
-          onTransferred={() => setRefreshKey(k => k + 1)}
+          employee={transferTarget}
+          onClose={() => setTransferTarget(null)}
+          onTransferred={() => { setRefreshKey(k => k + 1); setTransferTarget(null) }}
         />
       )}
 

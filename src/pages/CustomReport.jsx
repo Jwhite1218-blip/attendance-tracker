@@ -26,9 +26,13 @@ function downloadCsv(report) {
 
 export default function CustomReport() {
   const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [])
-  const reportLocations = useMemo(() => (
-    LOCATIONS.filter(location => employees.some(employee => employee.location === location.id))
-  ), [employees])
+  const reportLocations = useMemo(() => {
+    const named = LOCATIONS.filter(location => employees.some(employee => employee.location === location.id))
+    const hasUnassigned = employees.some(employee => !employee.location)
+    return hasUnassigned
+      ? [...named, { id: '', name: 'Unassigned (no school on file)', sort: 999 }]
+      : named
+  }, [employees])
   const [selectedLocations, setSelectedLocations] = useState(() => reportLocations.map(location => location.id))
   const [selectedFields, setSelectedFields] = useState(DEFAULT_FIELDS)
 

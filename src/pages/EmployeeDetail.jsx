@@ -489,7 +489,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                           ? `${monthName} ${day}, ${year} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
                           : `${monthName} ${day}, ${year} — No attendance exception`}
                     >
-                      {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? day : code ? info.shortLabel : day}
+                      {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? day : info ? info.shortLabel : code || day}
                       {!isUnavailable && record?.note && (
                         <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/90 ring-1 ring-black/10" aria-label="Comment added" />
                       )}
