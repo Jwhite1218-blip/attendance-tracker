@@ -113,6 +113,26 @@ function mergeImportedValue(key, localValue, serverValue) {
   return serverValue
 }
 
+// Merges an incoming write into the value currently stored for that key, instead of blindly
+// replacing it. Every "set" write is a read-modify-write of a whole blob (a year of one
+// employee's attendance, a roster-override map, etc.) computed from whatever the client last
+// synced — without this, two edits to the same key made around the same time silently destroy
+// each other, since whichever write lands second simply overwrites the first in full.
+function mergeIncomingValue(key, currentValue, incomingValue) {
+  if (incomingValue === undefined) return currentValue
+  if (key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY) {
+    return mergeArrays(key, currentValue, incomingValue)
+  }
+  if (
+    currentValue && incomingValue &&
+    typeof currentValue === 'object' && !Array.isArray(currentValue) &&
+    typeof incomingValue === 'object' && !Array.isArray(incomingValue)
+  ) {
+    return { ...currentValue, ...incomingValue }
+  }
+  return incomingValue
+}
+
 async function handleSet(store, entries, session, body) {
   const key = String(body.key || '')
   const allowedEmployeeIds = session.role === 'school'
@@ -123,12 +143,20 @@ async function handleSet(store, entries, session, body) {
     return jsonResponse({ error: 'You do not have permission to make that change.' }, 403)
   }
 
+  // Re-read the current value immediately before merging, rather than relying solely on the
+  // whole-state snapshot loaded at the top of the request — this narrows the window in which a
+  // concurrent write to this same key could be missed.
+  const currentValue = await store.get(key, { type: 'json' })
+
   let value = body.value
   if (session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)) {
-    value = mergeSchoolStatuses(entries[key], value, allowedEmployeeIds)
+    value = mergeSchoolStatuses(currentValue, value, allowedEmployeeIds)
+  } else {
+    value = mergeIncomingValue(key, currentValue, value)
   }
 
   await store.setJSON(key, value, session.displayName || 'authenticated user')
+  entries[key] = value
   return jsonResponse({ ok: true })
 }
 
@@ -179,7 +207,8 @@ export default async request => {
   }
 
   if (request.method === 'POST') {
-    const body = await request.json().catch(() => ({}))
+    const parsedBody = await request.json().catch(() => null)
+    const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
     if (body.action === 'set') return handleSet(store, entries, session, body)
     if (body.action === 'merge') return handleMerge(store, entries, session, body)
     return jsonResponse({ error: 'Unsupported state action.' }, 400)

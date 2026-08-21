@@ -42,11 +42,14 @@ async function handleLogin(request, context) {
     return jsonResponse({ error: 'Too many incorrect attempts. Please wait 15 minutes and try again.' }, 429)
   }
 
-  const body = await request.json().catch(() => ({}))
+  const parsedBody = await request.json().catch(() => null)
+  const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
   const pin = String(body.pin || '').trim()
   let access = null
+  let token = null
   try {
     if (/^\d{4,8}$/.test(pin)) access = accessForPin(pin)
+    if (access) token = createSessionToken(access, now)
   } catch {
     return jsonResponse({ error: 'Secure login is temporarily unavailable.' }, 503)
   }
@@ -57,7 +60,6 @@ async function handleLogin(request, context) {
   }
 
   await rateStore.delete(key)
-  const token = createSessionToken(access, now)
   const secure = new URL(request.url).protocol === 'https:'
   return jsonResponse(
     { access: publicAccess(access) },
