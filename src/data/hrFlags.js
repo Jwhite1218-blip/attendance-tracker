@@ -20,6 +20,16 @@ function statusKey(empId, schoolYearStart) {
   return `${empId}-${schoolYearStart}`
 }
 
+// Matches attendanceStore.js's schoolYearStartOf, computed from "now" instead of a date key.
+// Duplicated locally (rather than imported) because attendanceStore.js imports checkAndFlag
+// from this module — importing back would create a circular dependency.
+function currentSchoolYearStart() {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth() + 1
+  return month >= 7 ? year : year - 1
+}
+
 function stageForCount(count) {
   if (count >= VERBAL_WARNING_THRESHOLD) return 'verbal_warning'
   if (count >= TRACKING_THRESHOLD) return 'formal_tracking'
@@ -121,10 +131,13 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
   saveAllStatuses(statuses)
 }
 
+// Only the current school year counts as an active status — the policy is a rolling one-year
+// period, so a stage from a prior year shouldn't keep showing as in-effect once a new school
+// year starts, even before that employee's first exception of the new year creates a fresh record.
 export function getEmployeeAttendanceStatus(empId) {
+  const currentYear = currentSchoolYearStart()
   return Object.values(getAllStatuses())
-    .filter(status => String(status.empId) === String(empId))
-    .sort((a, b) => b.schoolYearStart - a.schoolYearStart)[0] || null
+    .find(status => String(status.empId) === String(empId) && status.schoolYearStart === currentYear) || null
 }
 
 export function isFlagged(empId) {
@@ -133,8 +146,9 @@ export function isFlagged(empId) {
 }
 
 export function getAllFlaggedEmployees() {
+  const currentYear = currentSchoolYearStart()
   return Object.values(getAllStatuses())
-    .filter(status => status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset)
+    .filter(status => status.schoolYearStart === currentYear && (status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset))
     .sort((a, b) => {
       if (a.seniorityReset !== b.seniorityReset) return a.seniorityReset ? -1 : 1
       return new Date(b.updatedAt) - new Date(a.updatedAt)
