@@ -23,20 +23,35 @@ export function getBlackoutDate(date) {
   return readBlackoutDates().find(item => item.date === date) || null
 }
 
-export function saveBlackoutDate(date, label) {
-  const normalizedDate = String(date || '').trim()
+function nextDateKey(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00`)
+  date.setDate(date.getDate() + 1)
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+
+// Saves one blackout entry per day in [startDate, endDate], inclusive, under one label — e.g.
+// blocking out an entire winter or summer break in a single action instead of one day at a
+// time. Pass the same date for startDate and endDate to block out a single day.
+export function saveBlackoutDateRange(startDate, endDate, label) {
+  const normalizedStart = String(startDate || '').trim()
+  const normalizedEnd = String(endDate || startDate || '').trim()
   const normalizedLabel = String(label || '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) throw new Error('Choose a valid date.')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedStart)) throw new Error('Choose a valid start date.')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedEnd)) throw new Error('Choose a valid end date.')
   if (!normalizedLabel) throw new Error('Add a holiday or closure name.')
+  if (normalizedEnd < normalizedStart) throw new Error('End date must be on or after the start date.')
+
+  const dates = []
+  for (let cursor = normalizedStart; dates.length <= 366 && cursor <= normalizedEnd; cursor = nextDateKey(cursor)) {
+    dates.push(cursor)
+  }
+  if (dates.length > 366) throw new Error('That range is too long — split it into smaller chunks.')
 
   const current = readBlackoutDates()
-  const existingIndex = current.findIndex(item => item.date === normalizedDate)
-  const nextRecord = { date: normalizedDate, label: normalizedLabel }
+  const byDate = new Map(current.map(item => [item.date, item]))
+  dates.forEach(date => byDate.set(date, { date, label: normalizedLabel }))
 
-  if (existingIndex >= 0) current[existingIndex] = nextRecord
-  else current.push(nextRecord)
-
-  saveBlackoutDates(current)
+  saveBlackoutDates([...byDate.values()])
   return getBlackoutDates()
 }
 
