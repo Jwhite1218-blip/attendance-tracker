@@ -6,7 +6,7 @@ import LocationView from './pages/LocationView.jsx'
 import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
-import QuickMark from './pages/QuickMark.jsx'
+import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
@@ -34,15 +34,18 @@ function AppShell() {
 
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
-    { path: '/quickmark', label: 'Quick Mark' },
-    { path: '/calendar', label: 'Calendar View' },
-    { path: '/ledger', label: 'Ledger View' },
+    { path: '/ledger', label: 'Employee Records' },
+    ...(role === 'admin' ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
 
   const homePath = role === 'school' ? `/location/${locationId}` : '/'
   const schoolName = role === 'school' ? LOCATION_MAP[locationId]?.name : null
+  const navItemIsActive = item => (
+    location.pathname === item.path
+    || (item.path === '/ledger' && location.pathname.startsWith('/employee/'))
+  )
 
   // Close mobile menu on route change
   const handleNavClick = () => setMobileMenuOpen(false)
@@ -77,7 +80,7 @@ function AppShell() {
                   key={item.path}
                   to={item.path}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    location.pathname === item.path
+                    navItemIsActive(item)
                       ? 'bg-brand-500/15 text-brand-200'
                       : 'text-charcoal-200 hover:bg-charcoal-600 hover:text-brand-100'
                   }`}
@@ -111,6 +114,7 @@ function AppShell() {
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
                 title="Lock & Log Out"
+                aria-label="Lock and log out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -138,6 +142,7 @@ function AppShell() {
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
                 title="Lock & Log Out"
+                aria-label="Lock and log out"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -170,7 +175,7 @@ function AppShell() {
                   to={item.path}
                   onClick={handleNavClick}
                   className={`block px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
-                    location.pathname === item.path
+                    navItemIsActive(item)
                       ? 'bg-brand-500/15 text-brand-200'
                       : 'text-charcoal-200 hover:bg-charcoal-600'
                   }`}
@@ -193,15 +198,18 @@ function AppShell() {
         </div>
       )}
 
-      <Routes>
-        <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
-        <Route path="/location/:id" element={<LocationView />} />
-        <Route path="/quickmark" element={<QuickMark />} />
-        <Route path="/calendar" element={<CalendarView />} />
-        <Route path="/ledger" element={<LedgerView />} />
-        <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
-        <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
-      </Routes>
+      <main id="main-content">
+        <Routes>
+          <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
+          <Route path="/location/:id" element={<LocationView />} />
+          <Route path="/employee/:employeeId" element={<EmployeeRecordPage />} />
+          <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
+          <Route path="/calendar" element={role === 'admin' ? <CalendarView /> : <Navigate to={homePath} replace />} />
+          <Route path="/ledger" element={<LedgerView />} />
+          <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
+          <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
+        </Routes>
+      </main>
     </div>
   )
 }

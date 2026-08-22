@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createSupabaseStateStore } from './state-store.mjs'
+import { createBlobsStateStore, createSupabaseStateStore } from './state-store.mjs'
+import { createMemoryBlobStore } from './test-blob-store.mjs'
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), {
@@ -119,4 +120,56 @@ test('Supabase state store fails closed when a write is rejected', async () => {
     store.setJSON('attendance-blackout-dates', [], 'Elizabeth White'),
     /failed with status 403/
   )
+})
+
+test('Supabase state mutations use the atomic tenant-scoped RPC', async () => {
+  const calls = []
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), options })
+    if (String(url).includes('/districts?')) return jsonResponse([{ id: 7 }])
+    if (String(url).includes('/rpc/mutate_legacy_state_entry')) {
+      return jsonResponse({ '2026-08-21': { code: 'A' } })
+    }
+    if (String(url).includes('/legacy_state_entries?')) return jsonResponse([])
+    return jsonResponse({}, 404)
+  }
+  const store = createSupabaseStateStore({
+    baseUrl: 'https://example.supabase.co',
+    secretKey: 'test-secret-key',
+    districtSlug: 'warren-township',
+    fetchImpl,
+  })
+  const mutation = {
+    type: 'object-patch',
+    set: { '2026-08-21': { code: 'A' } },
+    remove: [],
+  }
+
+  const value = await store.updateJSON('att-emp-123-2026', mutation, 'Elizabeth White')
+  assert.deepEqual(value, { '2026-08-21': { code: 'A' } })
+
+  const rpc = calls.find(call => call.url.includes('/rpc/mutate_legacy_state_entry'))
+  assert.ok(rpc)
+  assert.equal(rpc.options.headers.apikey, 'test-secret-key')
+  assert.equal(rpc.options.headers.Authorization, undefined)
+  assert.deepEqual(JSON.parse(rpc.options.body), {
+    p_district_id: 7,
+    p_state_key: 'att-emp-123-2026',
+    p_mutation: mutation,
+    p_actor: 'Elizabeth White',
+  })
+})
+
+test('Blob mutations preserve all 30 concurrent same-key attendance edits', async () => {
+  const memory = createMemoryBlobStore()
+  const store = createBlobsStateStore({ store: memory })
+  await Promise.all(
+    Array.from({ length: 30 }, (_, index) => store.updateJSON('att-emp-123-2026', {
+      type: 'object-patch',
+      set: { [`2026-09-${String(index + 1).padStart(2, '0')}`]: { code: 'A' } },
+      remove: [],
+    }))
+  )
+
+  assert.equal(Object.keys(await store.get('att-emp-123-2026', { type: 'json' })).length, 30)
 })

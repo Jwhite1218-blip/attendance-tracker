@@ -1,10 +1,8 @@
-// Browser-local employee directory overlays. The imported JSON remains the
-// source roster, while transfers, notes, status, and newly added employees are
-// stored as reversible local overrides for this first phase.
+// The source roster is delivered only after server authentication and kept in
+// sessionStorage. It is intentionally not imported into the public JS bundle.
 
-import employees from './employees.json'
 import { normalizeBirthday } from './employeeFields.js'
-import { writeSharedStorage } from './sharedStore.js'
+import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
 const RECORD_STORAGE_KEY = 'employee-record-overrides'
@@ -51,7 +49,14 @@ function saveCustomEmployees(customEmployees) {
 }
 
 function getSourceEmployees() {
-  return [...employees, ...getCustomEmployees()]
+  let sourceEmployees = []
+  try {
+    const roster = JSON.parse(sessionStorage.getItem(ROSTER_SESSION_KEY) || '[]')
+    if (Array.isArray(roster)) sourceEmployees = roster
+  } catch {
+    sourceEmployees = []
+  }
+  return [...sourceEmployees, ...getCustomEmployees()]
 }
 
 function buildEmployee(employee, locationOverrides, recordOverrides) {

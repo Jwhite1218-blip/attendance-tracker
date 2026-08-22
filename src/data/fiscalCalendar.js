@@ -19,7 +19,7 @@ export function formatYearLabel(startYear, mode) {
 }
 
 // Persisted once, shared across every view that offers the calendar/school-year toggle so
-// switching it in one place (e.g. the district Calendar View) carries over everywhere else.
+// switching it in one place (e.g. the district Blackout Calendar) carries over everywhere else.
 const CALENDAR_MODE_KEY = 'attendance-calendar-mode'
 
 export function readCalendarMode() {

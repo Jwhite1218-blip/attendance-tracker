@@ -1,8 +1,11 @@
 import { getStore } from '@netlify/blobs'
+import { applyStateMutation } from '../../../src/data/stateMutations.js'
+import { updateBlobJSON } from './blob-json.mjs'
 
 const BLOBS_STORE_NAME = 'attendance-shared-state'
 const DEFAULT_DISTRICT_SLUG = 'warren-township'
 const PAGE_SIZE = 1000
+const BLOB_UPDATE_MAX_ATTEMPTS = 64
 
 function environmentValue(name) {
   return globalThis.Netlify?.env?.get(name) || process.env[name] || ''
@@ -34,6 +37,13 @@ async function checkedJson(response, operation) {
     throw new Error(`Supabase ${operation} returned an unexpected response.`)
   }
   return value
+}
+
+async function checkedValue(response, operation) {
+  if (!response.ok) {
+    throw new Error(`Supabase ${operation} failed with status ${response.status}.`)
+  }
+  return response.json()
 }
 
 export function createSupabaseStateStore({ baseUrl, secretKey, districtSlug, fetchImpl = fetch }) {
@@ -141,11 +151,39 @@ export function createSupabaseStateStore({ baseUrl, secretKey, districtSlug, fet
       const entries = await loadEntries()
       entries.set(stateKey, value)
     },
+
+    async updateJSON(key, mutation, actor = 'system') {
+      const id = await districtId()
+      const stateKey = String(key || '')
+      if (!stateKey) throw new Error('A state key is required.')
+
+      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/rpc/mutate_legacy_state_entry`, {
+        method: 'POST',
+        headers: apiHeaders(secretKey, {
+          'Content-Type': 'application/json',
+          'Content-Profile': 'public',
+          'Accept-Profile': 'public',
+        }),
+        body: JSON.stringify({
+          p_district_id: id,
+          p_state_key: stateKey,
+          p_mutation: mutation,
+          p_actor: String(actor || 'system'),
+        }),
+      })
+
+      const value = await checkedValue(response, 'atomic state mutation')
+      const entries = await loadEntries()
+      entries.set(stateKey, value)
+      return value
+    },
   }
 }
 
-function createBlobsStateStore() {
-  const store = getStore({ name: BLOBS_STORE_NAME, consistency: 'strong' })
+export function createBlobsStateStore({
+  store = getStore({ name: BLOBS_STORE_NAME, consistency: 'strong' }),
+  maxUpdateAttempts = BLOB_UPDATE_MAX_ATTEMPTS,
+} = {}) {
 
   // @netlify/blobs' Store.setJSON(key, value, options) treats its third argument
   // as a SetOptions object (onlyIfMatch/onlyIfNew/metadata), not an actor string.
@@ -156,6 +194,12 @@ function createBlobsStateStore() {
     list: (...args) => store.list(...args),
     get: (...args) => store.get(...args),
     setJSON: (key, value) => store.setJSON(key, value),
+    updateJSON: (key, mutation) => updateBlobJSON(
+      store,
+      key,
+      current => applyStateMutation(key, current, mutation),
+      maxUpdateAttempts
+    ),
   }
 }
 

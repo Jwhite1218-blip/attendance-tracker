@@ -1,3 +1,5 @@
+import { applyStateMutation, createStateMutation, isEmptyStateMutation } from './stateMutations.js'
+
 const FIXED_STORAGE_KEYS = new Set([
   'attendance-blackout-dates',
   'employee-location-overrides',
@@ -9,8 +11,10 @@ const FIXED_STORAGE_KEYS = new Set([
 
 const ATTENDANCE_KEY_PATTERN = /^att-emp-.+-\d{4}$/
 const PENDING_STORAGE_KEY = 'attendance-pending-sync-v1'
+export const ROSTER_SESSION_KEY = 'attendance-source-roster-v1'
 
 let saveQueue = Promise.resolve()
+let activeFlush = null
 let clientAccess = null
 
 function announceSyncStatus(status) {
@@ -35,28 +39,6 @@ function canWriteManagedKey(key) {
     return clientAccess.canManageRoster === true
   }
   return false
-}
-
-export function getLocalManagedEntries() {
-  const entries = {}
-
-  try {
-    for (let index = 0; index < localStorage.length; index++) {
-      const key = localStorage.key(index)
-      if (!key || !isManagedStorageKey(key)) continue
-      const rawValue = localStorage.getItem(key)
-      if (rawValue === null) continue
-      try {
-        entries[key] = JSON.parse(rawValue)
-      } catch {
-        // Ignore malformed legacy cache entries instead of uploading them.
-      }
-    }
-  } catch {
-    return {}
-  }
-
-  return entries
 }
 
 function readPendingWrites() {
@@ -107,40 +89,54 @@ function replaceManagedCache(entries) {
   })
 }
 
-export async function loadSharedState(access, { mergeLocal = true } = {}) {
-  await flushPendingWrites()
-  const localEntries = getLocalManagedEntries()
-  let state = await requestJson('/api/state')
+function replaceRosterCache(roster) {
+  sessionStorage.setItem(ROSTER_SESSION_KEY, JSON.stringify(Array.isArray(roster) ? roster : []))
+}
 
-  const canMigrate = access?.canManageRoster && access?.canManageBlackouts
-  if (mergeLocal && canMigrate && Object.keys(localEntries).length) {
-    state = await requestJson('/api/state', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'merge', entries: localEntries }),
-    })
+export function clearClientDataCache() {
+  const existingKeys = []
+  for (let index = 0; index < localStorage.length; index++) {
+    const key = localStorage.key(index)
+    if (key && isManagedStorageKey(key)) existingKeys.push(key)
   }
+  existingKeys.forEach(key => localStorage.removeItem(key))
+  sessionStorage.removeItem(ROSTER_SESSION_KEY)
+}
+
+export async function loadSharedState() {
+  await flushPendingWrites()
+  const state = await requestJson('/api/state')
 
   if (!state.initialized) {
-    const error = new Error(
-      canMigrate
-        ? 'No saved attendance data was found on this device. Sign in as Elizabeth on the device that currently holds the records to complete the one-time shared-data setup.'
-        : 'Elizabeth must sign in once on the device that currently holds the attendance records before other users can continue.'
-    )
+    const error = new Error('Shared attendance data has not been initialized. Contact the system administrator before entering records.')
     error.code = 'SHARED_DATA_SETUP_REQUIRED'
     throw error
   }
 
   replaceManagedCache(state.entries)
+  replaceRosterCache(state.roster)
   return state
 }
 
 export function writeSharedStorage(key, value) {
   if (!isManagedStorageKey(key)) throw new Error(`Unsupported shared storage key: ${key}`)
   if (!canWriteManagedKey(key)) throw new Error('This session is read-only for that information.')
+  const previousRaw = localStorage.getItem(key)
+  let previousValue = null
+  try {
+    previousValue = previousRaw === null ? null : JSON.parse(previousRaw)
+  } catch {
+    previousValue = null
+  }
   localStorage.setItem(key, JSON.stringify(value))
 
   const pending = readPendingWrites()
-  pending[key] = value
+  const existing = pending[key]
+  pending[key] = {
+    version: 2,
+    base: existing?.version === 2 ? existing.base : previousValue,
+    value,
+  }
   writePendingWrites(pending)
   announceSyncStatus('saving')
 
@@ -153,24 +149,57 @@ export function writeSharedStorage(key, value) {
   return value
 }
 
-export async function flushPendingWrites() {
+async function performPendingFlush() {
   const pending = readPendingWrites()
   const entries = Object.entries(pending)
   if (!entries.length) return
 
-  for (const [key, value] of entries) {
-    await requestJson('/api/state', {
+  for (const [key, rawPending] of entries) {
+    if (rawPending?.version !== 2) {
+      const latestPending = readPendingWrites()
+      if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
+        delete latestPending[key]
+        writePendingWrites(latestPending)
+      }
+      continue
+    }
+    const sent = rawPending
+    const mutation = createStateMutation(key, sent.base, sent.value)
+    if (isEmptyStateMutation(mutation)) {
+      const latestPending = readPendingWrites()
+      if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
+        delete latestPending[key]
+        writePendingWrites(latestPending)
+      }
+      continue
+    }
+
+    const response = await requestJson('/api/state', {
       method: 'POST',
-      body: JSON.stringify({ action: 'set', key, value }),
+      body: JSON.stringify({ action: 'mutate', key, mutation }),
       keepalive: true,
     })
 
     const latestPending = readPendingWrites()
-    if (JSON.stringify(latestPending[key]) === JSON.stringify(value)) {
+    if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
       delete latestPending[key]
       writePendingWrites(latestPending)
+      localStorage.setItem(key, JSON.stringify(response.value))
+    } else if (latestPending[key]?.version === 2) {
+      const laterMutation = createStateMutation(key, sent.value, latestPending[key].value)
+      const rebasedValue = applyStateMutation(key, response.value, laterMutation)
+      latestPending[key] = { version: 2, base: response.value, value: rebasedValue }
+      writePendingWrites(latestPending)
+      localStorage.setItem(key, JSON.stringify(rebasedValue))
     }
   }
+}
+
+export function flushPendingWrites() {
+  if (!activeFlush) {
+    activeFlush = performPendingFlush().finally(() => { activeFlush = null })
+  }
+  return activeFlush
 }
 
 export async function getServerSession() {
@@ -190,8 +219,18 @@ export async function createServerSession(pin) {
 }
 
 export async function endServerSession() {
-  await fetch('/api/session', {
-    method: 'DELETE',
-    credentials: 'same-origin',
-  }).catch(() => undefined)
+  let pendingWasFlushed = false
+  try {
+    await flushPendingWrites()
+    pendingWasFlushed = true
+    await fetch('/api/session', {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    })
+  } catch {
+    // The local cache is still cleared even if the network is unavailable.
+  } finally {
+    clearClientDataCache()
+    if (pendingWasFlushed) localStorage.removeItem(PENDING_STORAGE_KEY)
+  }
 }

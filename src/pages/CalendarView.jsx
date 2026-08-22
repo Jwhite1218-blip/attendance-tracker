@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getBlackoutDates, removeBlackoutDate } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { useAuth } from '../components/PinGate.jsx'
@@ -24,11 +24,16 @@ function formatDate(value) {
 }
 
 export default function CalendarView() {
-  const { canManageBlackouts } = useAuth()
+  const { canManageBlackouts, dataVersion } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
   const [blackoutDates, setBlackoutDates] = useState(() => getBlackoutDates())
   const [selectedDate, setSelectedDate] = useState(null)
+
+  useEffect(() => {
+    setBlackoutDates(getBlackoutDates())
+    setSelectedDate(null)
+  }, [dataVersion])
 
   const setCalendarMode = nextMode => {
     setMode(nextMode)
@@ -55,9 +60,9 @@ export default function CalendarView() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-white">Calendar View</h1>
+          <h1 className="text-2xl font-bold text-white">Blackout Calendar</h1>
           <p className="text-sm text-charcoal-200 mt-1">
-            The shared district calendar for blackout days. Every school with calendar access sees this view.
+            District administrators manage unavailable days here; school teams see them inside employee records.
           </p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">

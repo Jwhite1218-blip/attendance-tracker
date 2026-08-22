@@ -1,5 +1,9 @@
-import employees from '../../src/data/employees.json'
-import { jsonResponse, sessionFromRequest } from './_shared/auth.mjs'
+import { randomUUID } from 'node:crypto'
+import employees from '../../src/data/employees.json' with { type: 'json' }
+import { CODE_MAP } from '../../src/data/attendanceCodes.js'
+import { applyStateMutation } from '../../src/data/stateMutations.js'
+import { jsonResponse } from './_shared/auth.mjs'
+import { validatedSessionFromRequest } from './_shared/server-session.mjs'
 import { getStateStore } from './_shared/state-store.mjs'
 import {
   BLACKOUTS_KEY,
@@ -8,12 +12,10 @@ import {
   LEGACY_HR_STATUS_KEY,
   LOCATION_OVERRIDES_KEY,
   RECORD_OVERRIDES_KEY,
-  ROSTER_KEYS,
   attendanceEmployeeId,
   canWriteStateKey,
   filterStatusesForEmployees,
   isManagedStateKey,
-  mergeSchoolStatuses,
 } from './_shared/permissions.mjs'
 
 const META_KEY = '__state_meta__'
@@ -22,12 +24,40 @@ function employeeKey(employee) {
   return String(employee?.kronos_id || employee?.id || '')
 }
 
+function publicEmployee(employee, session) {
+  const shared = {
+    id: employee.id,
+    kronos_id: employee.kronos_id,
+    first_name: employee.first_name || '',
+    last_name: employee.last_name || '',
+    position: employee.position || '',
+    location: employee.location || '',
+  }
+
+  if (session.role !== 'admin' || session.canManageRoster !== true) return shared
+  return {
+    ...shared,
+    hire_date: employee.hire_date || '',
+    service_date: employee.service_date || '',
+    birthdate: employee.birthdate || '',
+    t_shirt_size: employee.t_shirt_size || '',
+  }
+}
+
 async function loadEntries(store) {
   const { blobs } = await store.list()
   const rows = await Promise.all(
     blobs
       .filter(blob => blob.key !== META_KEY && isManagedStateKey(blob.key))
       .map(async blob => [blob.key, await store.get(blob.key, { type: 'json' })])
+  )
+  return Object.fromEntries(rows.filter(([, value]) => value !== null))
+}
+
+async function loadSchoolRosterEntries(store) {
+  const rows = await Promise.all(
+    [LOCATION_OVERRIDES_KEY, RECORD_OVERRIDES_KEY, CUSTOM_EMPLOYEES_KEY]
+      .map(async key => [key, await store.get(key, { type: 'json' })])
   )
   return Object.fromEntries(rows.filter(([, value]) => value !== null))
 }
@@ -64,7 +94,9 @@ function filterEntriesForSession(entries, session) {
   const filtered = {}
 
   if (entries[BLACKOUTS_KEY]) filtered[BLACKOUTS_KEY] = entries[BLACKOUTS_KEY]
-  if (entries[LOCATION_OVERRIDES_KEY]) filtered[LOCATION_OVERRIDES_KEY] = entries[LOCATION_OVERRIDES_KEY]
+  if (entries[LOCATION_OVERRIDES_KEY]) {
+    filtered[LOCATION_OVERRIDES_KEY] = filterRecordMap(entries[LOCATION_OVERRIDES_KEY], allowedEmployeeIds)
+  }
   if (entries[RECORD_OVERRIDES_KEY]) {
     filtered[RECORD_OVERRIDES_KEY] = filterRecordMap(entries[RECORD_OVERRIDES_KEY], allowedEmployeeIds)
   }
@@ -87,134 +119,138 @@ function filterEntriesForSession(entries, session) {
   return filtered
 }
 
-function mergeArrays(key, localValue, serverValue) {
-  const identity = key === BLACKOUTS_KEY
-    ? item => String(item?.date || '')
-    : item => employeeKey(item)
-  const merged = new Map()
-  for (const item of Array.isArray(localValue) ? localValue : []) merged.set(identity(item), item)
-  for (const item of Array.isArray(serverValue) ? serverValue : []) merged.set(identity(item), item)
-  merged.delete('')
-  return [...merged.values()]
+function rosterForSession(entries, session) {
+  if (session.role === 'admin') return employees.map(employee => publicEmployee(employee, session))
+  const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
+  return employees
+    .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+    .map(employee => publicEmployee(employee, session))
 }
 
-function mergeImportedValue(key, localValue, serverValue) {
-  if (serverValue === undefined || serverValue === null) return localValue
-  if (key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY) {
-    return mergeArrays(key, localValue, serverValue)
-  }
-  if (
-    localValue && serverValue &&
-    typeof localValue === 'object' && !Array.isArray(localValue) &&
-    typeof serverValue === 'object' && !Array.isArray(serverValue)
-  ) {
-    return { ...localValue, ...serverValue }
-  }
-  return serverValue
+function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
+  if (mutation?.type !== 'object-patch') throw new Error('School status changes must be an object patch.')
+
+  const set = Object.fromEntries(
+    Object.entries(mutation.set || {}).filter(([, status]) =>
+      allowedEmployeeIds.has(String(status?.empId))
+    )
+  )
+  const remove = (Array.isArray(mutation.remove) ? mutation.remove : [])
+    .map(String)
+    .filter(statusKey => allowedEmployeeIds.has(String(currentValue?.[statusKey]?.empId)))
+  return { type: 'object-patch', set, remove }
 }
 
-// Merges an incoming write into the value currently stored for that key, instead of blindly
-// replacing it. Every "set" write is a read-modify-write of a whole blob (a year of one
-// employee's attendance, a roster-override map, etc.) computed from whatever the client last
-// synced — without this, two edits to the same key made around the same time silently destroy
-// each other, since whichever write lands second simply overwrites the first in full.
-function mergeIncomingValue(key, currentValue, incomingValue) {
-  if (incomingValue === undefined) return currentValue
-  if (key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY) {
-    return mergeArrays(key, currentValue, incomingValue)
-  }
-  if (
-    currentValue && incomingValue &&
-    typeof currentValue === 'object' && !Array.isArray(currentValue) &&
-    typeof incomingValue === 'object' && !Array.isArray(incomingValue)
-  ) {
-    return { ...currentValue, ...incomingValue }
-  }
-  return incomingValue
+function isSameOriginRequest(request) {
+  const origin = request.headers.get('origin')
+  return !origin || origin === new URL(request.url).origin
 }
 
-async function handleSet(store, entries, session, body) {
+function validateMutation(key, mutation) {
+  applyStateMutation(key, null, mutation)
+  if (!attendanceEmployeeId(key)) return
+  if (mutation.type !== 'object-patch') throw new Error('Attendance changes must be an object patch.')
+
+  const expectedYear = key.match(/-([0-9]{4})$/)?.[1]
+  const validDate = dateKey => {
+    if (!new RegExp(`^${expectedYear}-[0-9]{2}-[0-9]{2}$`).test(String(dateKey))) return false
+    const date = new Date(`${dateKey}T00:00:00Z`)
+    return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === dateKey
+  }
+
+  for (const [dateKey, record] of Object.entries(mutation.set || {})) {
+    if (!validDate(dateKey) || !record || typeof record !== 'object' || Array.isArray(record)) {
+      throw new Error('Attendance patch contains an invalid record.')
+    }
+    if (!CODE_MAP[String(record.code || '')] || record.date !== dateKey) {
+      throw new Error('Attendance patch contains an invalid code or date.')
+    }
+    if (record.note !== undefined && (typeof record.note !== 'string' || record.note.length > 2000)) {
+      throw new Error('Attendance comments cannot exceed 2,000 characters.')
+    }
+  }
+  if (!(mutation.remove || []).every(validDate)) {
+    throw new Error('Attendance patch contains an invalid removal date.')
+  }
+}
+
+export async function handleMutate(store, session, body) {
   const key = String(body.key || '')
+  const rosterEntries = session.role === 'school' ? await loadSchoolRosterEntries(store) : {}
   const allowedEmployeeIds = session.role === 'school'
-    ? allowedEmployeeIdsForSchool(entries, session.locationId)
+    ? allowedEmployeeIdsForSchool(rosterEntries, session.locationId)
     : new Set()
 
   if (!isManagedStateKey(key) || !canWriteStateKey(session, key, allowedEmployeeIds)) {
     return jsonResponse({ error: 'You do not have permission to make that change.' }, 403)
   }
 
-  // Re-read the current value immediately before merging, rather than relying solely on the
-  // whole-state snapshot loaded at the top of the request — this narrows the window in which a
-  // concurrent write to this same key could be missed.
-  const currentValue = await store.get(key, { type: 'json' })
+  let mutation = body.mutation
+  try {
+    validateMutation(key, mutation)
+  } catch {
+    return jsonResponse({ error: 'The requested state change is invalid.' }, 400)
+  }
 
-  let value = body.value
   if (session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)) {
-    value = mergeSchoolStatuses(currentValue, value, allowedEmployeeIds)
-  } else {
-    value = mergeIncomingValue(key, currentValue, value)
+    const currentValue = await store.get(key, { type: 'json' })
+    mutation = schoolStatusMutation(mutation, currentValue, allowedEmployeeIds)
   }
 
-  await store.setJSON(key, value, session.displayName || 'authenticated user')
-  entries[key] = value
-  return jsonResponse({ ok: true })
+  const value = await store.updateJSON(key, mutation, session.displayName || 'authenticated user')
+  const publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
+    ? filterStatusesForEmployees(value, allowedEmployeeIds)
+    : value
+  return jsonResponse({ ok: true, value: publicValue })
 }
 
-async function handleMerge(store, entries, session, body) {
-  if (session.role !== 'admin' || !session.canManageRoster || !session.canManageBlackouts) {
-    return jsonResponse({ error: 'Only Elizabeth can complete shared-data migration.' }, 403)
-  }
-
-  const incoming = body.entries && typeof body.entries === 'object' && !Array.isArray(body.entries)
-    ? body.entries
-    : {}
-
-  for (const [key, localValue] of Object.entries(incoming)) {
-    if (!isManagedStateKey(key)) continue
-    const value = mergeImportedValue(key, localValue, entries[key])
-    await store.setJSON(key, value, session.displayName || 'district administrator')
-    entries[key] = value
-  }
-
-  if (Object.keys(entries).length) {
-    await store.setJSON(META_KEY, {
-      initializedAt: new Date().toISOString(),
-      initializedBy: session.displayName || 'district administrator',
-    }, session.displayName || 'district administrator')
-  }
-
-  return jsonResponse({
-    initialized: Object.keys(entries).length > 0,
-    entries: filterEntriesForSession(entries, session),
-  })
-}
-
-export default async request => {
-  const session = sessionFromRequest(request)
+export async function handleStateRequest(request, { stateStore, sessionStore } = {}) {
+  const session = await validatedSessionFromRequest(request, Date.now(), sessionStore)
   if (!session) return jsonResponse({ error: 'Authentication required.' }, 401)
 
-  const store = getStateStore()
-  const [entries, meta] = await Promise.all([
-    loadEntries(store),
-    store.get(META_KEY, { type: 'json' }),
-  ])
-
+  const store = stateStore || getStateStore()
   if (request.method === 'GET') {
+    const [entries, meta] = await Promise.all([
+      loadEntries(store),
+      store.get(META_KEY, { type: 'json' }),
+    ])
     return jsonResponse({
       initialized: Boolean(meta),
       entries: filterEntriesForSession(entries, session),
+      roster: rosterForSession(entries, session),
     })
   }
 
   if (request.method === 'POST') {
+    if (!isSameOriginRequest(request)) return jsonResponse({ error: 'Cross-origin state changes are not allowed.' }, 403)
     const parsedBody = await request.json().catch(() => null)
     const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
-    if (body.action === 'set') return handleSet(store, entries, session, body)
-    if (body.action === 'merge') return handleMerge(store, entries, session, body)
+    if (body.action === 'mutate') return handleMutate(store, session, body)
     return jsonResponse({ error: 'Unsupported state action.' }, 400)
   }
 
   return jsonResponse({ error: 'Method not allowed.' }, 405, { Allow: 'GET, POST' })
+}
+
+export default async (request, context) => {
+  const startedAt = Date.now()
+  const requestId = context?.requestId || randomUUID()
+  let response
+  try {
+    response = await handleStateRequest(request)
+  } catch (error) {
+    console.error(JSON.stringify({ event: 'state-error', requestId, message: error.message }))
+    response = jsonResponse({ error: 'The shared attendance service is temporarily unavailable.', requestId }, 503)
+  }
+  response.headers.set('X-Request-ID', requestId)
+  console.log(JSON.stringify({
+    event: 'state-request',
+    requestId,
+    method: request.method,
+    status: response.status,
+    durationMs: Date.now() - startedAt,
+  }))
+  return response
 }
 
 export const config = {

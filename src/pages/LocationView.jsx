@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useParams, Link, Navigate } from 'react-router-dom'
+import { useParams, Link, Navigate, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
@@ -10,7 +10,6 @@ import { getDateAvailability } from '../data/blackoutDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
-import EmployeeDetail from './EmployeeDetail.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
 function getWeekDates(weekOffset = 0) {
@@ -41,13 +40,13 @@ function formatDateShort(dateStr) {
 
 export default function LocationView() {
   const { id: urlId } = useParams()
-  const { role, locationId: myLocationId, canManageRoster, canEditAttendance } = useAuth()
+  const navigate = useNavigate()
+  const { role, locationId: myLocationId, canManageRoster, canEditAttendance, dataVersion } = useAuth()
   // School-role sessions are always locked to their own school, regardless of URL
   const id = role === 'school' ? myLocationId : urlId
   const location = LOCATION_MAP[id]
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
-  const [selectedEmployee, setSelectedEmployee] = useState(null)
   const [selectedCode, setSelectedCode] = useState('UNEX')
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
@@ -57,7 +56,11 @@ export default function LocationView() {
   const [activeInsight, setActiveInsight] = useState(null)
 
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
-  const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey])
+  const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey, dataVersion])
+  const openEmployeeRecord = employee => {
+    const employeeId = employee.kronos_id || employee.id
+    navigate(`/employee/${encodeURIComponent(employeeId)}`)
+  }
 
   // Load this week's attendance for the roster from the shared store
   useEffect(() => {
@@ -134,44 +137,6 @@ export default function LocationView() {
     )
   }
 
-  // ─── EMPLOYEE DETAIL VIEW ───
-  if (selectedEmployee) {
-    return (
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-        {/* Sticky back bar - always visible, easy to reach on mobile */}
-        <div className="sticky top-16 z-40 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 mb-4 bg-charcoal-700/95 backdrop-blur-sm border-b border-charcoal-600 flex items-center justify-between gap-2">
-          <button
-            onClick={() => setSelectedEmployee(null)}
-            className="flex items-center gap-2 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors py-1.5 px-3 rounded-lg hover:bg-charcoal-600"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-            </svg>
-            <span className="hidden sm:inline">Back to {location.name}</span>
-            <span className="sm:hidden">Back</span>
-          </button>
-          <div className="flex items-center gap-2 text-xs text-charcoal-200 truncate">
-            <Link to="/" className="hover:text-brand-300 hidden sm:inline">Dashboard</Link>
-            <span className="hidden sm:inline">/</span>
-            <span className="truncate">{selectedEmployee.first_name} {selectedEmployee.last_name}</span>
-          </div>
-        </div>
-
-        <EmployeeDetail
-          employee={selectedEmployee}
-          onEmployeeUpdate={updatedEmployee => {
-            setSelectedEmployee(updatedEmployee)
-            setRefreshKey(key => key + 1)
-          }}
-          onStatusChange={() => {
-            setSelectedEmployee(null)
-            setRefreshKey(key => key + 1)
-          }}
-        />
-      </div>
-    )
-  }
-
   // ─── LOCATION ROSTER VIEW ───
   const handleToggle = (empId, date) => {
     if (!canEditAttendance || !paintMode || getDateAvailability(date).unavailable) return
@@ -238,7 +203,7 @@ export default function LocationView() {
       <SchoolDashboardInsights
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
-        onEmployeeSelect={setSelectedEmployee}
+        onEmployeeSelect={openEmployeeRecord}
         weekExceptions={weekExceptions}
         weekLabel={`${formatDate(dates[0])} – ${formatDate(dates[6])}`}
         {...schoolInsights}
@@ -298,7 +263,7 @@ export default function LocationView() {
               {/* Employee header - tap to open detail */}
               <div className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors">
                 <button
-                  onClick={() => setSelectedEmployee(emp)}
+                  onClick={() => openEmployeeRecord(emp)}
                   className="flex items-center gap-3 text-left flex-1 min-w-0"
                 >
                   <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
@@ -418,7 +383,7 @@ export default function LocationView() {
                 <tr key={emp.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}>
                   <td className={`sticky left-0 z-10 px-4 py-3 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setSelectedEmployee(emp)} className="flex items-center gap-3 text-left group flex-1 min-w-0">
+                      <button onClick={() => openEmployeeRecord(emp)} className="flex items-center gap-3 text-left group flex-1 min-w-0">
                         <div className="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
                           <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                         </div>

@@ -47,7 +47,7 @@ export default function PinGate({ children }) {
       try {
         const access = await getServerSession()
         configureClientAccess(access)
-        if (access) await loadSharedState(access)
+        if (access) await loadSharedState()
         if (!cancelled) setAuthed(access)
       } catch (restoreError) {
         configureClientAccess(null)
@@ -64,7 +64,12 @@ export default function PinGate({ children }) {
   }, [])
 
   useEffect(() => {
-    const handleSyncStatus = event => setSyncStatus(event.detail)
+    const handleSyncStatus = event => {
+      setSyncStatus(event.detail)
+      // A successful flush may return a server value that also contains edits
+      // from another device. Re-read the canonical cache in mounted views.
+      if (event.detail === 'saved') setDataVersion(version => version + 1)
+    }
     window.addEventListener('attendance-sync-status', handleSyncStatus)
     return () => window.removeEventListener('attendance-sync-status', handleSyncStatus)
   }, [])
@@ -77,7 +82,7 @@ export default function PinGate({ children }) {
       if (refreshing || document.visibilityState === 'hidden') return
       refreshing = true
       try {
-        await loadSharedState(authed, { mergeLocal: false })
+        await loadSharedState()
         setSyncStatus('saved')
         setDataVersion(version => version + 1)
       } catch {
@@ -104,7 +109,7 @@ export default function PinGate({ children }) {
     try {
       const access = await createServerSession(pin)
       configureClientAccess(access)
-      await loadSharedState(access)
+      await loadSharedState()
       setAuthed(access)
       setPin('')
     } catch (submitError) {
@@ -156,9 +161,10 @@ export default function PinGate({ children }) {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-charcoal-700 rounded-xl border border-charcoal-600 p-6 shadow-xl">
-          <label className="block text-sm font-medium text-charcoal-200 mb-3">Enter Access PIN</label>
+          <label htmlFor="access-pin" className="block text-sm font-medium text-charcoal-100 mb-3">Enter Access PIN</label>
           <div className="relative">
             <input
+              id="access-pin"
               type={showPin ? 'text' : 'password'}
               value={pin}
               onChange={e => { setPin(e.target.value); setError('') }}
@@ -173,7 +179,9 @@ export default function PinGate({ children }) {
             <button
               type="button"
               onClick={() => setShowPin(!showPin)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal-400 hover:text-charcoal-200"
+              aria-label={showPin ? 'Hide access PIN' : 'Show access PIN'}
+              aria-pressed={showPin}
+              className="absolute right-1 top-1/2 min-h-11 min-w-11 -translate-y-1/2 rounded-md text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
               {showPin ? (
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

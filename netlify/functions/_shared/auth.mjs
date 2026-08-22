@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
 export const SESSION_COOKIE = 'attendance-session'
 const SESSION_DURATION_SECONDS = 8 * 60 * 60
@@ -50,7 +50,10 @@ export function getAccessCodes() {
 }
 
 export function accessForPin(pin) {
-  const access = getAccessCodes()[String(pin || '')]
+  const candidate = String(pin || '')
+  const matchedEntry = Object.entries(getAccessCodes())
+    .find(([configuredPin]) => safeEqual(candidate, configuredPin))
+  const access = matchedEntry?.[1]
   if (!access) return null
 
   return {
@@ -65,9 +68,10 @@ export function accessForPin(pin) {
   }
 }
 
-export function createSessionToken(access, now = Date.now()) {
+export function createSessionToken(access, now = Date.now(), sessionId = randomUUID()) {
   const payload = Buffer.from(JSON.stringify({
     ...access,
+    sessionId,
     issuedAt: now,
     expiresAt: now + SESSION_DURATION_SECONDS * 1000,
   })).toString('base64url')
@@ -103,6 +107,8 @@ export function jsonResponse(body, status = 200, headers = {}) {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
+      'Referrer-Policy': 'no-referrer',
+      'X-Content-Type-Options': 'nosniff',
       ...headers,
     },
   })
