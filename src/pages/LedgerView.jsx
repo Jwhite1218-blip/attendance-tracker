@@ -1,369 +1,155 @@
-import { useState, useMemo, useEffect } from 'react'
-import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
-import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
-import { isFlagged } from '../data/hrFlags.js'
-import { getDateAvailability } from '../data/blackoutDates.js'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
-import TransferModal from '../components/TransferModal.jsx'
-import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
+import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
+import { isFlagged } from '../data/hrFlags.js'
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'April', 'May', 'June',
-  'July', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'
-]
-
-function daysInMonth(year, monthIdx) {
-  return new Date(year, monthIdx + 1, 0).getDate()
-}
-
-function formatDateKey(year, monthIdx, day) {
-  return `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+function employeeKey(employee) {
+  return String(employee?.kronos_id || employee?.id || '')
 }
 
 export default function LedgerView() {
-  const { role, locationId: myLocationId, canManageRoster, canEditAttendance } = useAuth()
+  const { role, locationId: myLocationId, dataVersion } = useAuth()
   const [search, setSearch] = useState('')
   const [selectedLocation, setSelectedLocation] = useState(role === 'school' ? myLocationId : '')
-  const [selectedId, setSelectedId] = useState(null)
-  const [startYear, setStartYear] = useState(new Date().getFullYear())
-  const [attendanceByYear, setAttendanceByYear] = useState({})
-  const [showTransfer, setShowTransfer] = useState(false)
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [picker, setPicker] = useState(null)
+  const [selectedKey, setSelectedKey] = useState('')
 
-  // Get employees with effective locations (including transfers)
-  const allEmployees = useMemo(() => getEmployeesWithEffectiveLocations(), [refreshKey])
+  const employees = useMemo(
+    () => getEmployeesWithEffectiveLocations(),
+    [dataVersion]
+  )
 
-  // Build school dropdown options with counts
   const schoolOptions = useMemo(() => {
     const counts = {}
-    allEmployees.forEach(e => {
-      const loc = e.location || ''
-      if (loc) counts[loc] = (counts[loc] || 0) + 1
+    employees.forEach(employee => {
+      if (employee.location) counts[employee.location] = (counts[employee.location] || 0) + 1
     })
     return LOCATIONS
-      .filter(l => counts[l.id])
-      .sort((a, b) => a.sort - b.sort)
-      .map(l => ({ ...l, count: counts[l.id] }))
-  }, [allEmployees])
+      .filter(location => counts[location.id])
+      .sort((left, right) => left.sort - right.sort)
+      .map(location => ({ ...location, count: counts[location.id] }))
+  }, [employees])
 
-  // Filtered employees based on school selection + search
   const filteredEmployees = useMemo(() => {
-    let list = allEmployees
-    if (selectedLocation) {
-      list = list.filter(e => e.location === selectedLocation)
-    }
-    if (search) {
-      list = list.filter(e =>
-        `${e.first_name} ${e.last_name}`.toLowerCase().includes(search.toLowerCase()) ||
-        (e.kronos_id || '').includes(search)
-      )
-    }
-    return list
-  }, [allEmployees, selectedLocation, search])
-
-  // Auto-select first employee if none selected
-  useEffect(() => {
-    if (!selectedId && filteredEmployees.length > 0) {
-      setSelectedId(filteredEmployees[0].id)
-    }
-    if (selectedId && !filteredEmployees.find(e => e.id === selectedId)) {
-      setSelectedId(filteredEmployees[0]?.id || null)
-    }
-  }, [filteredEmployees, selectedId])
-
-  const employee = useMemo(() => allEmployees.find(e => e.id === selectedId), [allEmployees, selectedId])
-  const empKey = employee?.kronos_id || employee?.id
-  const years = [startYear, startYear + 1]
+    const normalizedSearch = search.trim().toLowerCase()
+    return employees
+      .filter(employee => !selectedLocation || employee.location === selectedLocation)
+      .filter(employee => !normalizedSearch || (
+        `${employee.first_name} ${employee.last_name}`.toLowerCase().includes(normalizedSearch)
+        || employeeKey(employee).toLowerCase().includes(normalizedSearch)
+      ))
+      .sort((left, right) => (
+        `${left.last_name} ${left.first_name}`.localeCompare(`${right.last_name} ${right.first_name}`)
+      ))
+  }, [employees, search, selectedLocation])
 
   useEffect(() => {
-    if (!empKey) return
-    const data = {}
-    years.forEach(y => {
-      data[y] = getEmployeeYearAttendance(empKey, y)
-    })
-    setAttendanceByYear(data)
-  }, [empKey, startYear])
+    if (!filteredEmployees.some(employee => employeeKey(employee) === selectedKey)) {
+      setSelectedKey(employeeKey(filteredEmployees[0]))
+    }
+  }, [filteredEmployees, selectedKey])
 
-  const handleCellClick = (year, monthIdx, day) => {
-    const dateKey = formatDateKey(year, monthIdx, day)
-    if (!canEditAttendance || getDateAvailability(dateKey).unavailable) return
-    const record = attendanceByYear[year]?.[dateKey]
-    setPicker({
-      empId: empKey,
-      date: dateKey,
-      formattedDate: new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-      empName: `${employee.first_name} ${employee.last_name}`,
-      code: record?.code || '',
-      note: record?.note || '',
-    })
-  }
-
-  const handleSaveAttendance = (code, note) => {
-    if (!canEditAttendance || !picker) return
-    const recordYear = Number(picker.date.slice(0, 4))
-    const yearData = setAttendanceCode(picker.empId, picker.date, code, note)
-    setAttendanceByYear(prev => ({ ...prev, [recordYear]: yearData }))
-    setPicker(null)
-  }
-
-  const summary = useMemo(() => {
-    const stats = {}
-    ATTENDANCE_CODES.forEach(c => { if (c.code) stats[c.code] = 0 })
-    years.forEach(y => {
-      Object.values(attendanceByYear[y] || {}).forEach(r => {
-        if (r.code) stats[r.code] = (stats[r.code] || 0) + 1
-      })
-    })
-    return stats
-  }, [attendanceByYear, startYear])
-
-  if (!employee) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 py-8 text-charcoal-200">
-        Select a school and employee to view their attendance ledger.
-      </div>
-    )
-  }
+  const selectedEmployee = filteredEmployees.find(employee => employeeKey(employee) === selectedKey) || null
 
   return (
-    <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Ledger View</h1>
+        <h1 className="text-2xl font-bold text-white">Employee Records</h1>
         <p className="text-sm text-charcoal-200 mt-1">
-          Classic sheet-style attendance ledger — pick a school, pick an employee, mark their year.
+          Find an employee, then open the same record used from the school dashboard.
         </p>
       </div>
 
-      {/* School + Employee picker */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3">
-          {/* School dropdown */}
+      <section className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5" aria-labelledby="employee-record-picker">
+        <div className="mb-4">
+          <h2 id="employee-record-picker" className="text-sm font-semibold text-gray-900">Choose an employee</h2>
+          <p className="text-xs text-gray-400 mt-1">Attendance edits, comments, employee details, and both year views are consolidated in one record.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
+            <label htmlFor="employee-record-school" className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">School</label>
             {role === 'school' ? (
-              <div className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-700 font-medium">
-                {LOCATION_MAP[myLocationId]?.name}
+              <div id="employee-record-school" className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-700 font-medium">
+                {LOCATION_MAP[myLocationId]?.name || myLocationId}
               </div>
             ) : (
               <select
+                id="employee-record-school"
                 value={selectedLocation}
-                onChange={e => { setSelectedLocation(e.target.value); setSelectedId(null); }}
+                onChange={event => {
+                  setSelectedLocation(event.target.value)
+                  setSelectedKey('')
+                }}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 font-medium"
               >
                 <option value="">All Schools</option>
-                {schoolOptions.map(l => (
-                  <option key={l.id} value={l.id}>{l.name} ({l.count})</option>
+                {schoolOptions.map(location => (
+                  <option key={location.id} value={location.id}>{location.name} ({location.count})</option>
                 ))}
               </select>
             )}
           </div>
 
-          {/* Employee dropdown */}
           <div>
-            <label className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Employee</label>
-            <select
-              value={selectedId || ''}
-              onChange={e => setSelectedId(Number(e.target.value))}
-              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700"
-            >
-              {filteredEmployees.map(e => (
-                <option key={e.id} value={e.id} style={isFlagged(e.kronos_id || e.id) ? { color: '#dc2626' } : undefined}>
-                  {e.last_name}, {e.first_name} — {LOCATION_MAP[e.location]?.shortName || e.location || 'Unassigned'}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="employee-record-search" className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Search</label>
+            <input
+              id="employee-record-search"
+              type="search"
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Name or personnel ID"
+              className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
+            />
           </div>
-
-          {/* Transfer button */}
-          {role === 'admin' && canManageRoster && (
-            <div className="flex items-end">
-              <button
-                onClick={() => setShowTransfer(true)}
-                className="px-3 py-2 rounded-lg text-sm font-medium text-amber-600 border border-amber-200 hover:bg-amber-50 transition-colors whitespace-nowrap"
-              >
-                🔄 Transfer
-              </button>
-            </div>
-          )}
         </div>
 
-        {/* Search bar */}
         <div className="mt-3">
-          <input
-            type="text"
-            placeholder={role === 'school' ? 'Search by name or ID...' : 'Search by name or ID (works across all schools)...'}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2"
-          />
+          <label htmlFor="employee-record-select" className="text-xs font-medium text-gray-500 uppercase tracking-wide block mb-1">Employee</label>
+          <select
+            id="employee-record-select"
+            value={selectedKey}
+            onChange={event => setSelectedKey(event.target.value)}
+            disabled={!filteredEmployees.length}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            {!filteredEmployees.length && <option value="">No matching employees</option>}
+            {filteredEmployees.map(employee => (
+              <option key={employeeKey(employee)} value={employeeKey(employee)}>
+                {employee.last_name}, {employee.first_name} — {LOCATION_MAP[employee.location]?.shortName || employee.location || 'Unassigned'}
+              </option>
+            ))}
+          </select>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
-        {/* Main ledger */}
-        <div>
-          {/* Employee info header */}
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-gray-100">
-              <div className="p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Name</p>
-                <p className={`text-sm font-semibold mt-0.5 ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>{employee.first_name} {employee.last_name}</p>
+        {selectedEmployee && (
+          <div className="mt-5 rounded-xl border border-brand-200 bg-brand-50/60 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-full bg-brand-100 flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-bold text-brand-700">{selectedEmployee.first_name?.[0]}{selectedEmployee.last_name?.[0]}</span>
               </div>
-              <div className="p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Personnel #</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{employee.kronos_id}</p>
-              </div>
-              <div className="p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Job Title</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">{employee.position}</p>
-              </div>
-              <div className="p-3">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wide">Assigned To</p>
-                <p className="text-sm font-semibold text-gray-900 mt-0.5">
-                  {LOCATION_MAP[employee.location]?.name || employee.location || 'Unassigned'}
+              <div className="min-w-0">
+                <p className={`font-semibold truncate ${isFlagged(selectedKey) ? 'text-red-600' : 'text-gray-900'}`}>
+                  {selectedEmployee.first_name} {selectedEmployee.last_name}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {selectedEmployee.position || 'Position not listed'} · {LOCATION_MAP[selectedEmployee.location]?.name || selectedEmployee.location || 'Unassigned'}
                 </p>
               </div>
             </div>
-            <div className="px-3 py-2 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-              <p className="text-xs text-gray-500">
-                DOH: {employee.hire_date || '—'} · Service: {employee.service_date || '—'}
-              </p>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setStartYear(y => y - 1)} className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 text-gray-600">← Prev</button>
-                <span className="text-xs font-medium text-gray-500">{startYear}–{startYear + 1}</span>
-                <button onClick={() => setStartYear(y => y + 1)} className="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-100 text-gray-600">Next →</button>
-              </div>
-            </div>
+            <Link
+              to={`/employee/${encodeURIComponent(selectedKey)}`}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
+            >
+              Open employee record
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           </div>
-
-          {/* Ledger grids */}
-          {years.map(year => (
-            <div key={year} className="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
-              <div className="bg-brand-600 text-white text-sm font-bold px-3 py-2">{year}</div>
-              <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      <th className="sticky left-0 bg-gray-50 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wide px-2 py-1.5 border-b border-gray-200" style={{ minWidth: '64px' }}>Month</th>
-                      {Array.from({ length: 31 }).map((_, i) => (
-                        <th key={i} className="text-center text-[10px] font-medium text-gray-400 px-0 py-1.5 border-b border-l border-gray-100" style={{ minWidth: '30px' }}>{i + 1}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {MONTHS.map((monthName, monthIdx) => {
-                      const numDays = daysInMonth(year, monthIdx)
-                      return (
-                        <tr key={monthIdx} className="hover:bg-brand-50/30">
-                          <td className="sticky left-0 bg-white text-xs font-semibold text-gray-700 px-2 py-1 border-b border-gray-100" style={{ minWidth: '64px' }}>{monthName}</td>
-                          {Array.from({ length: 31 }).map((_, i) => {
-                            const day = i + 1
-                            if (day > numDays) return <td key={i} className="bg-gray-50 border-b border-l border-gray-100" />
-                            const dateKey = formatDateKey(year, monthIdx, day)
-                            const code = attendanceByYear[year]?.[dateKey]?.code || ''
-                            const info = CODE_MAP[code]
-                            const availability = getDateAvailability(dateKey)
-                            return (
-                              <td
-                                key={i}
-                                className={`border-b border-l p-0 ${
-                                  availability.type === 'blackout'
-                                    ? 'bg-charcoal-800 border-charcoal-700'
-                                    : availability.type === 'weekend'
-                                      ? 'bg-gray-100 border-gray-200'
-                                      : 'border-gray-100'
-                                }`}
-                              >
-                                <button
-                                  onClick={() => handleCellClick(year, monthIdx, day)}
-                                  disabled={!canEditAttendance || availability.unavailable}
-                                  className={`relative w-full h-7 flex items-center justify-center text-[9px] font-bold transition-all ${
-                                    availability.type === 'blackout'
-                                      ? 'text-white cursor-not-allowed'
-                                      : availability.type === 'weekend'
-                                        ? 'text-gray-300 cursor-not-allowed'
-                                        : canEditAttendance ? 'hover:ring-1 hover:ring-inset hover:ring-brand-300' : 'cursor-default'
-                                  }`}
-                                  style={!availability.unavailable && code ? { backgroundColor: info?.hex.bg, color: info?.hex.text } : {}}
-                                  title={!canEditAttendance
-                                    ? `${monthName} ${day}, ${year} — Read-only access`
-                                    : availability.unavailable
-                                    ? `${monthName} ${day}, ${year} — ${availability.label}`
-                                    : `${monthName} ${day}, ${year} — ${info?.label || 'No attendance exception'}${attendanceByYear[year]?.[dateKey]?.note ? ` — ${attendanceByYear[year][dateKey].note}` : ''}`}
-                                >
-                                  {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? '—' : code || ''}
-                                  {!availability.unavailable && attendanceByYear[year]?.[dateKey]?.note && (
-                                    <span className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/90" aria-label="Comment added" />
-                                  )}
-                                </button>
-                              </td>
-                            )
-                          })}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ))}
-
-          <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select any day to choose an attendance exception or add a comment.' : 'Attendance is read-only.'} Data is shared with the Year Calendar view.</p>
-        </div>
-
-        {/* Key sidebar */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl border border-gray-200 p-4 sticky top-20">
-            <h3 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">Key</h3>
-            <div className="space-y-1.5">
-              {ATTENDANCE_CODES.filter(c => c.code !== '').map(c => (
-                <div key={c.code} className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border px-1.5 py-1 min-w-[40px]"
-                    style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
-                  <span className="text-xs text-gray-600">{c.label}</span>
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border border-gray-200 bg-gray-100 text-gray-400 px-1.5 py-1 min-w-[40px]">—</span>
-                <span className="text-xs text-gray-600">Weekend</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center rounded text-[10px] font-bold border border-charcoal-700 bg-charcoal-800 text-white px-1.5 py-1 min-w-[40px]">×</span>
-                <span className="text-xs text-gray-600">Admin blackout</span>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{startYear}–{startYear + 1} Totals</h4>
-              <div className="space-y-1">
-                {ATTENDANCE_CODES.filter(c => c.code && summary[c.code] > 0).map(c => (
-                  <div key={c.code} className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">{c.shortLabel}</span>
-                    <span className="font-semibold text-gray-800">{summary[c.code]}</span>
-                  </div>
-                ))}
-                {Object.values(summary).every(v => v === 0) && <p className="text-xs text-gray-400">No attendance exceptions recorded yet.</p>}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {role === 'admin' && canManageRoster && showTransfer && employee && (
-        <TransferModal
-          employee={employee}
-          onClose={() => setShowTransfer(false)}
-          onTransferred={() => setRefreshKey(k => k + 1)}
-        />
-      )}
-
-      <AttendancePickerModal
-        picker={picker}
-        onClose={() => setPicker(null)}
-        onSave={handleSaveAttendance}
-      />
+        )}
+      </section>
     </div>
   )
 }

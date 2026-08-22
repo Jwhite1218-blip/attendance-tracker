@@ -4,13 +4,15 @@ import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js
 import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
+import { useAuth } from '../components/PinGate.jsx'
 
 export default function MasterReport() {
+  const { dataVersion } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [allAttendance, setAllAttendance] = useState({})
   const [filterLocation, setFilterLocation] = useState('all')
 
-  const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [])
+  const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [dataVersion])
 
   useEffect(() => {
     const data = {}

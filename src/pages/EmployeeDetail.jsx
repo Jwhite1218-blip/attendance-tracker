@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-import { getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
+import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
 import { getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
 import { getEmployeeByKey, saveEmployeeNotes, setEmployeeActive } from '../data/employeeLocations.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
@@ -42,7 +42,7 @@ function getMonthStats(attendance, year, monthIdx) {
 }
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
-  const { role, canManageRoster, canEditAttendance } = useAuth()
+  const { role, canManageRoster, canEditAttendance, dataVersion } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
   const [attendance, setAttendance] = useState({})
@@ -82,7 +82,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     } else {
       setAttendance(primary)
     }
-  }, [empKey, year, mode])
+  }, [empKey, year, mode, dataVersion])
 
   useEffect(() => {
     const currentEmployee = getEmployeeByKey(empKey)
@@ -93,10 +93,15 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     setShowEditEmployee(false)
   }, [empKey, employee?.notes, employee?.inactive_reason])
 
+  const applyYearSnapshot = (dateKey, yearData) => {
+    const changedYear = Number(dateKey.slice(0, 4))
+    setAttendance(current => replaceAttendanceYearSnapshot(current, changedYear, yearData))
+  }
+
   const handleDayClick = (dateKey) => {
     if (!canEditAttendance || getDateAvailability(dateKey).unavailable) return
     if (paintMode) {
-      setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, dateKey, selectedCode) }))
+      applyYearSnapshot(dateKey, setAttendanceCode(empKey, dateKey, selectedCode))
     } else {
       const date = new Date(`${dateKey}T00:00:00`)
       setPicker({
@@ -112,7 +117,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   const handleDayMouseEnter = (dateKey) => {
     if (canEditAttendance && paintMode && isPainting && !getDateAvailability(dateKey).unavailable) {
-      setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, dateKey, selectedCode) }))
+      applyYearSnapshot(dateKey, setAttendanceCode(empKey, dateKey, selectedCode))
     }
   }
 
@@ -438,111 +443,193 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         ))}
       </div>
 
-      {/* Month toggle for mobile */}
-      <div className="md:hidden flex items-center gap-2 flex-wrap">
-        <button
-          onClick={showCurrentMonthOnly}
-          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${visibleMonths !== null ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-gray-200 text-gray-600'}`}
-        >
-          Current Month
-        </button>
-        <button
-          onClick={showAllMonths}
-          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${visibleMonths === null ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-gray-200 text-gray-600'}`}
-        >
-          Show All 12
-        </button>
-      </div>
+      {mode === 'fiscal' && (
+        <div className="md:hidden flex items-center gap-2 flex-wrap">
+          <button
+            onClick={showCurrentMonthOnly}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${visibleMonths !== null ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-gray-200 text-gray-600'}`}
+          >
+            Current Month
+          </button>
+          <button
+            onClick={showAllMonths}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${visibleMonths === null ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-gray-200 text-gray-600'}`}
+          >
+            Show All 12
+          </button>
+        </div>
+      )}
 
-      {/* 12 Month Calendar Grid */}
-      <div
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4"
-        onMouseLeave={() => setIsPainting(false)}
-      >
-        {displayMonths.map(({ year: monthYear, monthIdx }) => {
-          if (!isMonthVisible(monthIdx)) return null
-
-          const monthName = MONTHS[monthIdx]
-          const daysInMonth = getDaysInMonth(monthYear, monthIdx)
-          const firstWeekday = getFirstWeekday(monthYear, monthIdx)
-          const monthStats = monthStatsByKey[`${monthYear}-${monthIdx}`] || {}
-
-          return (
-            <div key={`${monthYear}-${monthIdx}`} className="bg-white rounded-xl border border-gray-200 p-3">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">{monthName}{mode === 'fiscal' ? ` ${monthYear}` : ''}</h3>
-                <div className="flex gap-1">
-                  {ATTENDANCE_CODES.filter(c => c.code && monthStats[c.code] > 0).map(c => (
-                    <span
-                      key={c.code}
-                      className="inline-flex items-center justify-center rounded text-[9px] font-bold border px-1"
-                      style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}
-                      title={`${c.label}: ${monthStats[c.code]}`}
-                    >
-                      {c.shortLabel}{monthStats[c.code]}
-                    </span>
+      {mode === 'calendar' ? (
+        <section className="bg-white rounded-xl border border-gray-200 overflow-hidden" onMouseLeave={() => setIsPainting(false)} aria-labelledby="calendar-ledger-heading">
+          <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+            <h3 id="calendar-ledger-heading" className="text-sm font-semibold text-gray-900">Calendar-year ledger</h3>
+            <p className="text-xs text-gray-400 mt-0.5">January through December in one attendance sheet. Unmarked days have no stored attendance exception.</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="bg-gray-50">
+                  <th className="sticky left-0 z-10 bg-gray-50 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wide px-3 py-2 border-b border-gray-200 min-w-24">Month</th>
+                  {Array.from({ length: 31 }).map((_, index) => (
+                    <th key={index} className="text-center text-[10px] font-medium text-gray-400 px-0 py-2 border-b border-l border-gray-100 min-w-10">{index + 1}</th>
                   ))}
-                </div>
-              </div>
-              <div className="grid grid-cols-7 gap-0.5 mb-1">
-                {WEEKDAYS.map((d, i) => (
-                  <div key={i} className="text-center text-[9px] font-medium text-gray-400">{d}</div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-0.5">
-                {Array.from({ length: firstWeekday }).map((_, i) => (
-                  <div key={`empty-${i}`} />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, dayIdx) => {
-                  const day = dayIdx + 1
-                  const dateKey = formatDateKey(monthYear, monthIdx, day)
-                  const record = attendance[dateKey]
-                  const code = record?.code || ''
-                  const info = CODE_MAP[code]
-                  const availability = getDateAvailability(dateKey)
-                  const isUnavailable = availability.unavailable
-
+                </tr>
+              </thead>
+              <tbody>
+                {MONTHS.map((monthName, monthIdx) => {
+                  const numberOfDays = getDaysInMonth(year, monthIdx)
                   return (
-                    <button
-                      key={day}
-                      onClick={() => handleDayClick(dateKey)}
-                      onMouseDown={() => canEditAttendance && paintMode && !isUnavailable && setIsPainting(true)}
-                      onMouseUp={() => setIsPainting(false)}
-                      onMouseEnter={() => handleDayMouseEnter(dateKey)}
-                      disabled={!canEditAttendance || isUnavailable}
-                      className={`
-                        relative aspect-square rounded text-[10px] font-medium
-                        flex items-center justify-center transition-all
-                        ${isUnavailable ? 'border' : code ? 'border' : 'border border-gray-100'}
-                        ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white border-charcoal-800' : ''}
-                        ${availability.type === 'weekend' ? 'bg-gray-100 text-gray-300 border-gray-100' : ''}
-                        ${isUnavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
-                      `}
-                      style={!isUnavailable && code ? {
-                        backgroundColor: info?.hex.bg,
-                        color: info?.hex.text,
-                        borderColor: info?.hex.border,
-                      } : {}}
-                      title={!canEditAttendance
-                        ? `${monthName} ${day}, ${monthYear} — Read-only access`
-                        : isUnavailable
-                        ? `${monthName} ${day}, ${monthYear} — ${availability.label}`
-                        : info
-                          ? `${monthName} ${day}, ${monthYear} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
-                          : `${monthName} ${day}, ${monthYear} — No attendance exception`}
-                    >
-                      {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? day : info ? info.shortLabel : code || day}
-                      {!isUnavailable && record?.note && (
-                        <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/90 ring-1 ring-black/10" aria-label="Comment added" />
-                      )}
-                    </button>
+                    <tr key={monthName} className="hover:bg-brand-50/30">
+                      <td className="sticky left-0 z-10 bg-white text-xs font-semibold text-gray-700 px-3 py-1.5 border-b border-gray-100">{monthName}</td>
+                      {Array.from({ length: 31 }).map((_, index) => {
+                        const day = index + 1
+                        if (day > numberOfDays) return <td key={day} className="bg-gray-50 border-b border-l border-gray-100" />
+
+                        const dateKey = formatDateKey(year, monthIdx, day)
+                        const record = attendance[dateKey]
+                        const code = record?.code || ''
+                        const info = CODE_MAP[code]
+                        const availability = getDateAvailability(dateKey)
+                        const isUnavailable = availability.unavailable
+                        return (
+                          <td
+                            key={day}
+                            className={`border-b border-l p-0 ${
+                              availability.type === 'blackout'
+                                ? 'bg-charcoal-800 border-charcoal-700'
+                                : availability.type === 'weekend'
+                                  ? 'bg-gray-100 border-gray-200'
+                                  : 'border-gray-100'
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleDayClick(dateKey)}
+                              onMouseDown={() => canEditAttendance && paintMode && !isUnavailable && setIsPainting(true)}
+                              onMouseUp={() => setIsPainting(false)}
+                              onMouseEnter={() => handleDayMouseEnter(dateKey)}
+                              disabled={!canEditAttendance || isUnavailable}
+                              className={`relative w-full min-w-10 h-9 flex items-center justify-center text-[9px] font-bold transition-all ${
+                                availability.type === 'blackout'
+                                  ? 'text-white cursor-not-allowed'
+                                  : availability.type === 'weekend'
+                                    ? 'text-gray-300 cursor-not-allowed'
+                                    : canEditAttendance ? 'hover:ring-1 hover:ring-inset hover:ring-brand-300' : 'cursor-default'
+                              }`}
+                              style={!isUnavailable && code ? {
+                                backgroundColor: info?.hex.bg,
+                                color: info?.hex.text,
+                              } : {}}
+                              title={!canEditAttendance
+                                ? `${monthName} ${day}, ${year} — Read-only access`
+                                : isUnavailable
+                                  ? `${monthName} ${day}, ${year} — ${availability.label}`
+                                  : info
+                                    ? `${monthName} ${day}, ${year} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
+                                    : `${monthName} ${day}, ${year} — No attendance exception`}
+                            >
+                              {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? '—' : info?.shortLabel || ''}
+                              {!isUnavailable && record?.note && (
+                                <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/90 ring-1 ring-black/10" aria-label="Comment added" />
+                              )}
+                            </button>
+                          </td>
+                        )
+                      })}
+                    </tr>
                   )
                 })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4" onMouseLeave={() => setIsPainting(false)}>
+          {displayMonths.map(({ year: monthYear, monthIdx }) => {
+            if (!isMonthVisible(monthIdx)) return null
+
+            const monthName = MONTHS[monthIdx]
+            const numberOfDays = getDaysInMonth(monthYear, monthIdx)
+            const firstWeekday = getFirstWeekday(monthYear, monthIdx)
+            const monthStats = monthStatsByKey[`${monthYear}-${monthIdx}`] || {}
+
+            return (
+              <div key={`${monthYear}-${monthIdx}`} className="bg-white rounded-xl border border-gray-200 p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-900">{monthName} {monthYear}</h3>
+                  <div className="flex gap-1">
+                    {ATTENDANCE_CODES.filter(codeInfo => codeInfo.code && monthStats[codeInfo.code] > 0).map(codeInfo => (
+                      <span
+                        key={codeInfo.code}
+                        className="inline-flex items-center justify-center rounded text-[9px] font-bold border px-1"
+                        style={{ backgroundColor: codeInfo.hex.bg, color: codeInfo.hex.text, borderColor: codeInfo.hex.border }}
+                        title={`${codeInfo.label}: ${monthStats[codeInfo.code]}`}
+                      >
+                        {codeInfo.shortLabel}{monthStats[codeInfo.code]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-0.5 mb-1">
+                  {WEEKDAYS.map((weekday, index) => (
+                    <div key={`${weekday}-${index}`} className="text-center text-[9px] font-medium text-gray-400">{weekday}</div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-0.5">
+                  {Array.from({ length: firstWeekday }).map((_, index) => <div key={`empty-${index}`} />)}
+                  {Array.from({ length: numberOfDays }).map((_, dayIndex) => {
+                    const day = dayIndex + 1
+                    const dateKey = formatDateKey(monthYear, monthIdx, day)
+                    const record = attendance[dateKey]
+                    const code = record?.code || ''
+                    const info = CODE_MAP[code]
+                    const availability = getDateAvailability(dateKey)
+                    const isUnavailable = availability.unavailable
+
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        onClick={() => handleDayClick(dateKey)}
+                        onMouseDown={() => canEditAttendance && paintMode && !isUnavailable && setIsPainting(true)}
+                        onMouseUp={() => setIsPainting(false)}
+                        onMouseEnter={() => handleDayMouseEnter(dateKey)}
+                        disabled={!canEditAttendance || isUnavailable}
+                        className={`
+                          relative aspect-square rounded text-[10px] font-medium
+                          flex items-center justify-center transition-all
+                          ${isUnavailable ? 'border' : code ? 'border' : 'border border-gray-100'}
+                          ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white border-charcoal-800' : ''}
+                          ${availability.type === 'weekend' ? 'bg-gray-100 text-gray-300 border-gray-100' : ''}
+                          ${isUnavailable ? 'cursor-not-allowed' : !canEditAttendance ? 'cursor-default' : 'cursor-pointer hover:scale-110 hover:z-10 active:scale-95'}
+                        `}
+                        style={!isUnavailable && code ? {
+                          backgroundColor: info?.hex.bg,
+                          color: info?.hex.text,
+                          borderColor: info?.hex.border,
+                        } : {}}
+                        title={!canEditAttendance
+                          ? `${monthName} ${day}, ${monthYear} — Read-only access`
+                          : isUnavailable
+                            ? `${monthName} ${day}, ${monthYear} — ${availability.label}`
+                            : info
+                              ? `${monthName} ${day}, ${monthYear} — ${info.label}${record?.note ? ` — ${record.note}` : ''}`
+                              : `${monthName} ${day}, ${monthYear} — No attendance exception`}
+                      >
+                        {availability.type === 'blackout' ? '×' : availability.type === 'weekend' ? day : info ? info.shortLabel : code || day}
+                        {!isUnavailable && record?.note && (
+                          <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-white/90 ring-1 ring-black/10" aria-label="Comment added" />
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <p className="text-xs text-gray-400 text-center px-4">
         {!canEditAttendance
@@ -562,7 +649,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         onClose={() => setPicker(null)}
         onSave={(code, note) => {
           if (!canEditAttendance) return
-          setAttendance(prev => ({ ...prev, ...setAttendanceCode(empKey, picker.date, code, note) }))
+          applyYearSnapshot(picker.date, setAttendanceCode(empKey, picker.date, code, note))
           setPicker(null)
         }}
       />

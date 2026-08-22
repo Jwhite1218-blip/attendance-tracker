@@ -8,6 +8,7 @@ import {
   reportToCsv,
   summarizeTShirtSizes,
 } from '../data/customReports.js'
+import { useAuth } from '../components/PinGate.jsx'
 
 const DEFAULT_FIELDS = ['employee_id', 'first_name', 'last_name', 'school', 'position', 't_shirt_size']
 
@@ -25,7 +26,8 @@ function downloadCsv(report) {
 }
 
 export default function CustomReport() {
-  const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [])
+  const { dataVersion } = useAuth()
+  const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [dataVersion])
   const reportLocations = useMemo(() => {
     const named = LOCATIONS.filter(location => employees.some(employee => employee.location === location.id))
     const hasUnassigned = employees.some(employee => !employee.location)

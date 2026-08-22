@@ -1,6 +1,6 @@
 // Single source of truth for attendance records.
-// Storage remains browser-local for this first phase; every marking view uses
-// this module so status and comments stay consistent across the app.
+// The browser cache is backed by the authenticated shared-state service; every
+// marking view uses this module so status and comments stay consistent.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
 import { checkAndFlag } from './hrFlags.js'
@@ -34,6 +34,19 @@ function normalizeYearData(data) {
       }]]
     })
   )
+}
+
+// Replace one complete calendar-year snapshot while retaining the other year
+// in a school-year view. A shallow object merge cannot represent a cleared day:
+// the deleted key would remain in component state until the next page reload.
+export function replaceAttendanceYearSnapshot(current, year, yearData) {
+  const prefix = `${year}-`
+  return {
+    ...Object.fromEntries(
+      Object.entries(current || {}).filter(([dateKey]) => !dateKey.startsWith(prefix))
+    ),
+    ...normalizeYearData(yearData),
+  }
 }
 
 export function getEmployeeYearAttendance(empId, year) {
