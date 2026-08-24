@@ -28,7 +28,12 @@ Required:
 
 ## State backend
 
-`ATTENDANCE_STATE_BACKEND=supabase` is intentional, not a leftover default. The app is mid-migration off Netlify Blobs onto Supabase (see `supabase/migrations/`), and this is expected to reset/lose test data occasionally until that migration is verified and the app is considered stable — that's normal during this phase, not an incident. `.env.example` still says to keep local dev on `blobs`, which is fine; it doesn't need to match production.
+`ATTENDANCE_STATE_BACKEND=supabase` is intentional, not a leftover default. The
+production migration from Netlify Blobs was verified on August 24, 2026 (see
+`supabase/migrations/`). Production shared state is now live data: do not reset,
+reseed, clear, or replace `legacy_state_entries`. `.env.example` keeps local
+development on `blobs`, which is appropriate for local work and the isolated
+stress site; it does not need to match production.
 
 ## Where this fits
 

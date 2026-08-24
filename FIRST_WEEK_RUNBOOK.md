@@ -10,8 +10,34 @@ Rollout window: August 24–28, 2026
 - State backend: Supabase, district `warren-township`
 - Functions: `session` at `/api/session`, `state` at `/api/state`
 
+## Isolated testing clone
+
+- Application: https://allstartracker-stress-20260821.netlify.app
+- Netlify admin: https://app.netlify.com/projects/allstartracker-stress-20260821
+- State backend: isolated Netlify Blobs test data
+- Current security-patch validation deploy: `6a8bd8ed12e8bed0fcb789e8`
+
 Do not use `allstartracker-stress-20260821.netlify.app` with staff. It is an
 isolated load-test deployment and is not Git-linked.
+
+## Verified launch baseline — August 24, 2026
+
+- 44 automated tests pass and the production build completes.
+- The production dependency audit reports zero known vulnerabilities.
+- The testing clone passes the public readiness check after the React Router
+  7.18.2 security update: application and assets load, anonymous API requests
+  return 401, and all required security headers are present.
+- The production roster has 146 unique employees across 15 schools plus
+  District Admin. The two blank birthdays match the source import note.
+- Production shared state has 19 valid attendance records with no malformed
+  dates, mismatched embedded dates, unknown codes, or invalid JSON shapes.
+- The blackout calendar has 27 unique valid dates. The first date is Labor Day,
+  September 7, 2026; September 8 is also recorded as E Learning. There are no
+  blackout dates in the August 24–28 opening week.
+- Supabase is on the Pro plan and daily physical backups are active. The most
+  recent backup visible during this audit was August 23, 2026 at 08:10:38 UTC.
+  Point-in-time recovery is not enabled; daily restore points are the current
+  recovery method.
 
 ## Opening check
 
@@ -102,5 +128,6 @@ rollback.
 ## Items requiring an owner check
 
 - Using the existing full PIN roster, confirm representative Liz, restricted-district, and school PINs enforce the expected permissions above.
-- Confirm Supabase backup or point-in-time recovery coverage in the Supabase
-  dashboard before the first live attendance entry.
+- Confirm with Liz that the consolidated Employee Records and weekly school
+  workflows are accepted as the replacement for the former duplicate Quick
+  Mark screen.

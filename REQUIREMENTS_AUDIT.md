@@ -80,6 +80,12 @@ their values.
 
 - Automated tests: 44 passed, 0 failed.
 - Production build: passed.
-- Release `2206381` passed preview and live public security/readiness checks on
-  August 24, 2026.
+- Production dependency audit: zero known vulnerabilities after validating the
+  React Router 7.18.2 security update on the isolated testing clone.
+- Production state integrity: 19 attendance records; zero malformed dates,
+  embedded-date mismatches, unknown codes, or invalid JSON shapes.
+- Recovery: Supabase Pro daily physical backups are active; point-in-time
+  recovery is not enabled.
+- The current live release and isolated testing candidate both passed their
+  public security/readiness checks on August 24, 2026.
 
