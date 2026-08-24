@@ -47,6 +47,7 @@ test('authenticated roster omits unused payroll fields and stale merge actions a
     assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'department'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'birthdate'), false)
+    assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
 
     const mergeRequest = await authenticatedRequest(
       { role: 'admin', canEditAttendance: true, canManageRoster: true, canManageBlackouts: true },
@@ -82,6 +83,20 @@ test('school state filters roster and location overrides to that school', async 
         [schoolId(schoolEmployee)]: schoolEmployee.location,
         [schoolId(outsider)]: outsider.location,
       },
+      'employee-record-overrides': {
+        [schoolId(schoolEmployee)]: { notes: 'School-visible note', t_shirt_size: 'XL' },
+        [schoolId(outsider)]: { notes: 'Other school note', t_shirt_size: 'S' },
+      },
+      'employee-custom-records': [
+        {
+          id: 999999,
+          kronos_id: 'custom-school-employee',
+          first_name: 'Custom',
+          last_name: 'Employee',
+          location: schoolEmployee.location,
+          t_shirt_size: 'M',
+        },
+      ],
     })
     const request = await authenticatedRequest({
       role: 'school',
@@ -103,6 +118,79 @@ test('school state filters roster and location overrides to that school', async 
     assert.equal(body.roster[0].service_date, schoolEmployee.service_date || '')
     assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'pay_amount'), false)
+    assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
+    assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
+    assert.equal(Object.hasOwn(body.entries['employee-record-overrides'][schoolId(schoolEmployee)], 't_shirt_size'), false)
+    assert.equal(Object.hasOwn(body.entries['employee-custom-records'][0], 't_shirt_size'), false)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('T-shirt sizes are returned only to Liz full-admin access', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const employeeId = String(employees[0].kronos_id || employees[0].id)
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'employee-record-overrides': {
+        [employeeId]: { notes: 'Administrative note', t_shirt_size: '2XL' },
+      },
+    })
+
+    const lizRequest = await authenticatedRequest({
+      role: 'admin',
+      canEditAttendance: true,
+      canManageRoster: true,
+      canManageBlackouts: true,
+    }, sessions)
+    const lizResponse = await handleStateRequest(lizRequest, { stateStore: store, sessionStore: sessions })
+    const lizBody = await lizResponse.json()
+
+    assert.equal(lizResponse.status, 200)
+    assert.equal(Object.hasOwn(lizBody.roster[0], 't_shirt_size'), true)
+    assert.equal(lizBody.entries['employee-record-overrides'][employeeId].t_shirt_size, '2XL')
+
+    const limitedRequest = await authenticatedRequest({
+      role: 'admin',
+      canEditAttendance: true,
+      canManageRoster: true,
+      canManageBlackouts: false,
+    }, sessions)
+    const limitedResponse = await handleStateRequest(limitedRequest, { stateStore: store, sessionStore: sessions })
+    const limitedBody = await limitedResponse.json()
+
+    assert.equal(limitedResponse.status, 200)
+    assert.equal(Object.hasOwn(limitedBody.roster[0], 't_shirt_size'), false)
+    assert.equal(limitedBody.entries['employee-record-overrides'][employeeId].notes, 'Administrative note')
+    assert.equal(Object.hasOwn(limitedBody.entries['employee-record-overrides'][employeeId], 't_shirt_size'), false)
+
+    const limitedWriteRequest = await authenticatedRequest(
+      {
+        role: 'admin',
+        canEditAttendance: true,
+        canManageRoster: true,
+        canManageBlackouts: false,
+      },
+      sessions,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+        body: JSON.stringify({
+          action: 'mutate',
+          key: 'employee-record-overrides',
+          mutation: {
+            type: 'object-patch',
+            set: { [employeeId]: { notes: 'Changed', t_shirt_size: 'XS' } },
+            remove: [],
+          },
+        }),
+      }
+    )
+    assert.equal((await handleStateRequest(limitedWriteRequest, { stateStore: store, sessionStore: sessions })).status, 403)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

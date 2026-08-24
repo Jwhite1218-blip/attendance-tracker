@@ -9,8 +9,9 @@ import {
   summarizeTShirtSizes,
 } from '../data/customReports.js'
 import { useAuth } from '../components/PinGate.jsx'
+import { hasLizAdminAccess } from '../data/futureTools.js'
 
-const DEFAULT_FIELDS = ['employee_id', 'first_name', 'last_name', 'school', 'position', 't_shirt_size']
+const DEFAULT_FIELDS = ['employee_id', 'first_name', 'last_name', 'school', 'position']
 
 function downloadCsv(report) {
   const csv = `\ufeff${reportToCsv(report)}`
@@ -26,7 +27,13 @@ function downloadCsv(report) {
 }
 
 export default function CustomReport() {
-  const { dataVersion } = useAuth()
+  const access = useAuth()
+  const { dataVersion } = access
+  const lizAdminAccess = hasLizAdminAccess(access)
+  const availableFields = useMemo(
+    () => EMPLOYEE_REPORT_FIELDS.filter(field => lizAdminAccess || field.id !== 't_shirt_size'),
+    [lizAdminAccess]
+  )
   const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [dataVersion])
   const reportLocations = useMemo(() => {
     const named = LOCATIONS.filter(location => employees.some(employee => employee.location === location.id))
@@ -36,7 +43,9 @@ export default function CustomReport() {
       : named
   }, [employees])
   const [selectedLocations, setSelectedLocations] = useState(() => reportLocations.map(location => location.id))
-  const [selectedFields, setSelectedFields] = useState(DEFAULT_FIELDS)
+  const [selectedFields, setSelectedFields] = useState(() => (
+    lizAdminAccess ? [...DEFAULT_FIELDS, 't_shirt_size'] : DEFAULT_FIELDS
+  ))
 
   const selectedEmployees = useMemo(
     () => filterEmployeesByLocations(employees, selectedLocations),
@@ -121,12 +130,12 @@ export default function CustomReport() {
             <span className="text-xs font-semibold text-brand-700">{selectedFields.length} selected</span>
           </div>
           <div className="flex gap-2 mt-3">
-            <button type="button" onClick={() => setSelectedFields(EMPLOYEE_REPORT_FIELDS.map(field => field.id))} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Select all</button>
+            <button type="button" onClick={() => setSelectedFields(availableFields.map(field => field.id))} className="text-xs font-semibold text-brand-600 hover:text-brand-700">Select all</button>
             <span className="text-gray-300">·</span>
             <button type="button" onClick={() => setSelectedFields([])} className="text-xs font-semibold text-gray-500 hover:text-gray-700">Clear</button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-            {EMPLOYEE_REPORT_FIELDS.map(field => (
+            {availableFields.map(field => (
               <label key={field.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
                 <input
                   type="checkbox"
@@ -141,7 +150,7 @@ export default function CustomReport() {
         </section>
       </div>
 
-      {selectedFields.includes('t_shirt_size') && selectedEmployees.length > 0 && (
+      {lizAdminAccess && selectedFields.includes('t_shirt_size') && selectedEmployees.length > 0 && (
         <section className="bg-white rounded-xl border border-gray-200 p-5 mb-6" aria-labelledby="shirt-summary-heading">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div>

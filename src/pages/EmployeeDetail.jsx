@@ -9,6 +9,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
+import { hasLizAdminAccess } from '../data/futureTools.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -42,7 +43,9 @@ function getMonthStats(attendance, year, monthIdx) {
 }
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
-  const { role, canManageRoster, canEditAttendance, dataVersion } = useAuth()
+  const access = useAuth()
+  const { canEditAttendance, dataVersion } = access
+  const lizAdminAccess = hasLizAdminAccess(access)
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
   const [attendance, setAttendance] = useState({})
@@ -202,7 +205,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
           <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">
             <div className="flex items-center gap-2">
-              {role === 'admin' && canManageRoster && (
+              {lizAdminAccess && (
                 <button
                   type="button"
                   onClick={() => setShowEditEmployee(value => !value)}
@@ -267,14 +270,16 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Birthdate</p>
             <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{formatBirthday(birthdate)}</p>
           </div>
-          <div>
-            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">T-shirt Size</p>
-            <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{tShirtSize || '—'}</p>
-          </div>
+          {lizAdminAccess && (
+            <div>
+              <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">T-shirt Size</p>
+              <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{tShirtSize || '—'}</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {role === 'admin' && canManageRoster && showEditEmployee && (
+      {lizAdminAccess && showEditEmployee && (
         <EmployeeEditForm
           employee={employee}
           onCancel={() => setShowEditEmployee(false)}
@@ -285,7 +290,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         />
       )}
 
-      {role === 'admin' && canManageRoster && (
+      {lizAdminAccess && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row gap-5">
             <div className="flex-1">

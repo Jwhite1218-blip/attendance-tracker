@@ -6,13 +6,17 @@ import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/a
 import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
+import { canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
 const ALL_STAR_TRACKER_URL = String(import.meta.env.VITE_ALL_STAR_TRACKER_URL || '').trim()
+const PROFESSIONAL_STANDARDS_URL = String(import.meta.env.VITE_PROFESSIONAL_STANDARDS_URL || '').trim()
 
 export default function Dashboard() {
-  const { canManageRoster } = useAuth()
+  const access = useAuth()
+  const showLizFutureTools = canSeeLizFutureTools(access)
+  const lizAdminAccess = hasLizAdminAccess(access)
   const [, setDirectoryVersion] = useState(0)
   const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
@@ -116,22 +120,19 @@ export default function Dashboard() {
               <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
             </span>
           </Link>
-          {ALL_STAR_TRACKER_URL && (
-            <a
-              href={ALL_STAR_TRACKER_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-3 rounded-xl border border-brand-500/50 bg-brand-600 px-4 py-3 text-white shadow-sm hover:bg-brand-500 transition-colors"
-            >
-              <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg" aria-hidden="true">★</span>
-              <span>
-                <span className="block text-sm font-bold">All Star Performance Tracker</span>
-                <span className="block text-[11px] text-brand-100 mt-0.5">Open manager feedback</span>
-              </span>
-              <svg className="w-4 h-4 text-brand-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M5 5h5M5 5v14h14v-5" />
-              </svg>
-            </a>
+          {showLizFutureTools && (
+            <>
+              <FutureToolButton
+                symbol="★"
+                title="All Star Performance Tracker"
+                url={ALL_STAR_TRACKER_URL}
+              />
+              <FutureToolButton
+                symbol="✓"
+                title="Professional Standards"
+                url={PROFESSIONAL_STANDARDS_URL}
+              />
+            </>
           )}
         </div>
       </div>
@@ -254,7 +255,7 @@ export default function Dashboard() {
               Add employees or restore inactive records. Existing attendance history stays attached to the employee.
             </p>
           </div>
-          {canManageRoster ? (
+          {lizAdminAccess ? (
             <button
               type="button"
               onClick={() => setShowAddEmployee(true)}
@@ -284,7 +285,7 @@ export default function Dashboard() {
                         {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
                       </p>
                     </div>
-                    {canManageRoster && (
+                    {lizAdminAccess && (
                       <button
                         type="button"
                         onClick={() => {
@@ -361,7 +362,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {canManageRoster && (
+      {lizAdminAccess && (
         <AddEmployeeModal
           open={showAddEmployee}
           onClose={() => setShowAddEmployee(false)}
@@ -373,6 +374,35 @@ export default function Dashboard() {
       )}
     </div>
   )
+}
+
+function FutureToolButton({ symbol, title, url }) {
+  const content = (
+    <>
+      <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center text-lg" aria-hidden="true">{symbol}</span>
+      <span>
+        <span className="block text-sm font-bold">{title}</span>
+        <span className="block text-[11px] text-brand-100 mt-0.5">
+          {url ? 'Open tracker' : 'Setup pending · Liz only'}
+        </span>
+      </span>
+      {url && (
+        <svg className="w-4 h-4 text-brand-100" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 3h7m0 0v7m0-7L10 14M5 5h5M5 5v14h14v-5" />
+        </svg>
+      )}
+    </>
+  )
+
+  const className = `inline-flex items-center gap-3 rounded-xl border border-brand-500/50 bg-brand-600 px-4 py-3 text-white shadow-sm transition-colors ${
+    url ? 'hover:bg-brand-500' : 'cursor-not-allowed opacity-75'
+  }`
+
+  if (url) {
+    return <a href={url} target="_blank" rel="noreferrer" className={className}>{content}</a>
+  }
+
+  return <button type="button" disabled className={className} title="Awaiting Liz's approved parameters">{content}</button>
 }
 
 function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff, employeeExceptions }) {

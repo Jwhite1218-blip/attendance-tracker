@@ -4,6 +4,7 @@
 // seniority status.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
+import { getDateAvailability } from './blackoutDates.js'
 import { writeSharedStorage } from './sharedStore.js'
 
 const FLAGS_KEY = 'hr-attendance-progress-v2'
@@ -36,20 +37,19 @@ function stageForCount(count) {
   return 'documented'
 }
 
-function nextWorkday(dateKey) {
+function nextScheduledWorkday(dateKey) {
   const date = new Date(`${dateKey}T12:00:00`)
   do {
     date.setDate(date.getDate() + 1)
-  } while (date.getDay() === 0 || date.getDay() === 6)
+  } while (getDateAvailability(date.toISOString().slice(0, 10)).unavailable)
   return date.toISOString().slice(0, 10)
 }
 
 function findSeniorityResetDate(triggers) {
-  const callIns = triggers.filter(trigger => trigger.code === 'UNEX' || trigger.code === 'CC')
-  for (let index = 0; index < callIns.length; index++) {
-    if (callIns[index].code === 'CC') return callIns[index].date
-    if (index > 0 && nextWorkday(callIns[index - 1].date) === callIns[index].date) {
-      return callIns[index].date
+  const unexcusedCallIns = triggers.filter(trigger => trigger.code === 'UNEX')
+  for (let index = 1; index < unexcusedCallIns.length; index++) {
+    if (nextScheduledWorkday(unexcusedCallIns[index - 1].date) === unexcusedCallIns[index].date) {
+      return unexcusedCallIns[index].date
     }
   }
   return null
@@ -63,8 +63,9 @@ function migrateLegacyFlags() {
         const triggers = (flag.triggers || []).map(trigger => ({
           ...trigger,
           code: normalizeAttendanceCode(trigger.code),
-        }))
+        })).filter(trigger => !getDateAvailability(trigger.date).unavailable)
         const year = Number(flag.year) || new Date(flag.flaggedAt || Date.now()).getFullYear()
+        const seniorityResetAt = findSeniorityResetDate(triggers)
         return [statusKey(flag.empId, year), {
           empId: flag.empId,
           schoolYearStart: year,
@@ -72,8 +73,8 @@ function migrateLegacyFlags() {
           stage: stageForCount(triggers.length),
           updatedAt: flag.flaggedAt || new Date().toISOString(),
           triggers,
-          seniorityReset: Boolean(flag.seniorityReset || findSeniorityResetDate(triggers)),
-          seniorityResetAt: flag.seniorityResetAt || findSeniorityResetDate(triggers),
+          seniorityReset: Boolean(seniorityResetAt),
+          seniorityResetAt,
         }]
       })
     )
@@ -108,7 +109,7 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
   const statuses = getAllStatuses()
   const key = statusKey(empId, schoolYearStart)
   const triggers = Object.values(schoolYearData)
-    .filter(record => isQualifyingCode(record.code))
+    .filter(record => isQualifyingCode(record.code) && !getDateAvailability(record.date).unavailable)
     .map(record => ({ date: record.date, code: normalizeAttendanceCode(record.code) }))
     .sort((a, b) => a.date.localeCompare(b.date))
 
@@ -118,6 +119,7 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     return
   }
 
+  const seniorityResetAt = findSeniorityResetDate(triggers)
   statuses[key] = {
     empId,
     schoolYearStart,
@@ -125,8 +127,8 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     stage: stageForCount(triggers.length),
     updatedAt: new Date().toISOString(),
     triggers,
-    seniorityReset: Boolean(findSeniorityResetDate(triggers)),
-    seniorityResetAt: findSeniorityResetDate(triggers),
+    seniorityReset: Boolean(seniorityResetAt),
+    seniorityResetAt,
   }
   saveAllStatuses(statuses)
 }

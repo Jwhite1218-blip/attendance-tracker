@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
+import { hasLizAdminAccess } from '../../src/data/futureTools.js'
 import { applyStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
@@ -24,6 +25,36 @@ function employeeKey(employee) {
   return String(employee?.kronos_id || employee?.id || '')
 }
 
+function withoutLizOnlyEmployeeFields(employee) {
+  if (!employee || typeof employee !== 'object' || Array.isArray(employee)) return employee
+  const { t_shirt_size: _tShirtSize, ...publicEmployeeFields } = employee
+  return publicEmployeeFields
+}
+
+function redactRecordOverrides(records) {
+  return Object.fromEntries(
+    Object.entries(records || {}).map(([employeeId, record]) => [
+      employeeId,
+      withoutLizOnlyEmployeeFields(record),
+    ])
+  )
+}
+
+function redactCustomEmployees(records) {
+  return (Array.isArray(records) ? records : []).map(withoutLizOnlyEmployeeFields)
+}
+
+function redactLizOnlyEmployeeEntries(entries) {
+  const redacted = { ...entries }
+  if (redacted[RECORD_OVERRIDES_KEY]) {
+    redacted[RECORD_OVERRIDES_KEY] = redactRecordOverrides(redacted[RECORD_OVERRIDES_KEY])
+  }
+  if (Array.isArray(redacted[CUSTOM_EMPLOYEES_KEY])) {
+    redacted[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(redacted[CUSTOM_EMPLOYEES_KEY])
+  }
+  return redacted
+}
+
 function publicEmployee(employee, session) {
   const shared = {
     id: employee.id,
@@ -43,7 +74,7 @@ function publicEmployee(employee, session) {
     }
   }
 
-  if (session.role !== 'admin' || session.canManageRoster !== true) return shared
+  if (!hasLizAdminAccess(session)) return shared
   return {
     ...shared,
     hire_date: employee.hire_date || '',
@@ -97,7 +128,8 @@ function filterRecordMap(records, allowedEmployeeIds) {
 }
 
 function filterEntriesForSession(entries, session) {
-  if (session.role === 'admin') return entries
+  if (hasLizAdminAccess(session)) return entries
+  if (session.role === 'admin') return redactLizOnlyEmployeeEntries(entries)
 
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
   const filtered = {}
@@ -107,11 +139,15 @@ function filterEntriesForSession(entries, session) {
     filtered[LOCATION_OVERRIDES_KEY] = filterRecordMap(entries[LOCATION_OVERRIDES_KEY], allowedEmployeeIds)
   }
   if (entries[RECORD_OVERRIDES_KEY]) {
-    filtered[RECORD_OVERRIDES_KEY] = filterRecordMap(entries[RECORD_OVERRIDES_KEY], allowedEmployeeIds)
+    filtered[RECORD_OVERRIDES_KEY] = redactRecordOverrides(
+      filterRecordMap(entries[RECORD_OVERRIDES_KEY], allowedEmployeeIds)
+    )
   }
   if (Array.isArray(entries[CUSTOM_EMPLOYEES_KEY])) {
-    filtered[CUSTOM_EMPLOYEES_KEY] = entries[CUSTOM_EMPLOYEES_KEY]
-      .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+    filtered[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(
+      entries[CUSTOM_EMPLOYEES_KEY]
+        .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+    )
   }
   if (entries[HR_STATUS_KEY]) {
     filtered[HR_STATUS_KEY] = filterStatusesForEmployees(entries[HR_STATUS_KEY], allowedEmployeeIds)
@@ -193,6 +229,9 @@ export async function handleMutate(store, session, body) {
   if (!isManagedStateKey(key) || !canWriteStateKey(session, key, allowedEmployeeIds)) {
     return jsonResponse({ error: 'You do not have permission to make that change.' }, 403)
   }
+  if ((key === RECORD_OVERRIDES_KEY || key === CUSTOM_EMPLOYEES_KEY) && !hasLizAdminAccess(session)) {
+    return jsonResponse({ error: 'Only Liz administrator access can change employee-card details.' }, 403)
+  }
 
   let mutation = body.mutation
   try {
@@ -207,9 +246,15 @@ export async function handleMutate(store, session, body) {
   }
 
   const value = await store.updateJSON(key, mutation, session.displayName || 'authenticated user')
-  const publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
+  let publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
     ? filterStatusesForEmployees(value, allowedEmployeeIds)
     : value
+  if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
+    publicValue = redactRecordOverrides(publicValue)
+  }
+  if (!hasLizAdminAccess(session) && key === CUSTOM_EMPLOYEES_KEY) {
+    publicValue = redactCustomEmployees(publicValue)
+  }
   return jsonResponse({ ok: true, value: publicValue })
 }
 

@@ -28,19 +28,20 @@ authentication were superseded by Liz's later Warren-specific requirements.
 | Exception-only attendance | Unmarked workdays remain unrecorded; managers enter an exception and optional comment. |
 | Attendance comments | One comment-capable picker is used by the active weekly and employee-calendar workflows. |
 | July-June accountability | The third qualifying occurrence starts formal tracking; the fourth requires a verbal warning; prior school-year stages expire. Direct automated tests cover the thresholds and year boundary. |
-| Union seniority reset | Two consecutive UNEX weekdays, including Friday-to-Monday, trigger the reset. Direct automated coverage was added. |
+| Union seniority reset | Only UNEX records count. Weekends and district blackout/holiday dates are skipped when determining the next scheduled workday, and UNEX records on closed dates are ignored. Direct automated coverage includes weekends, holidays, and legacy non-UNEX codes. |
 | Tuesday-Monday week | The school attendance week starts Tuesday and renders seven days through Monday. |
 | Weekends and blackout dates | Weekends are locked. Admin-created blackout dates are locked in every attendance view. |
 | Blackout ranges | A single admin action creates a labeled inclusive date range, including a range crossing December-January. Invalid, reversed, and oversized ranges are tested. |
 | School-year calendar | Calendar and employee history can run July-June, and the preference is shared between views. |
 | School blackout visibility | School managers can open the Blackout Calendar and see district dates, but server and UI permissions prevent them from editing those dates. This was restored after finding a regression. |
-| Employee cards | Liz can add, edit, transfer, inactivate, and reactivate employees without changing the locked Personnel ID or deleting attendance history. Notes are shared. |
+| Employee cards | Liz can add, edit, transfer, inactivate, and reactivate employees without changing the locked Personnel ID or deleting attendance history. Notes are shared. T-shirt sizes are Liz-only: school and limited-admin API responses redact them, and their employee-card/report controls are hidden. |
 | Employee milestones | Birthday, completed service-anniversary, and upcoming RTO drill-downs exist for Liz and each school. School-scoped birth/service fields were restored after finding a server-filtering regression. |
 | Birthday import | 144 birthdays are populated; Rayeanna McIlquham and Kira Smith remain blank, matching the written import note. Birth years are not retained. |
 | T-shirt workflow | Add/edit forms and custom reports support T-shirt size and summarize missing values. |
 | Reports | Master and custom employee reports are district-admin only. Custom CSV export is tested. |
 | School isolation | School sessions receive only their assigned roster and attendance state, redirect away from other school URLs, and cannot write another school's records. |
 | Liz and restricted admins | Permission tests cover full Liz administration, limited district editing, school managers, and read-only reviewers. |
+| Future tracker access | All Star Performance Tracker and Professional Standards appear only for Liz's full-admin access. They remain disabled placeholders until approved parameters or destination URLs are supplied. |
 | Read-only review | Plain and Localis-watermarked review modes can navigate but cannot change attendance, roster, notes, or blackouts. |
 | Shared persistence | PIN authentication and attendance state are server-side; production uses tenant-scoped Supabase storage with atomic state mutations. |
 | Privacy | Payroll amount, weekly hours, department, and other unused source fields are excluded from authenticated roster responses and the public browser bundle. |
@@ -53,23 +54,19 @@ authentication were superseded by Liz's later Warren-specific requirements.
 2. **Quick Mark:** the former duplicate Quick Mark screen was intentionally
    replaced by the consolidated Employee Records and weekly school workflows.
    Confirm from PLAUD/Liz that the replacement is accepted.
-3. **Separate All Star Performance Tracker:** the only saved URL pointed back to
-   this attendance app. The misleading self-link is now hidden unless a distinct
-   `VITE_ALL_STAR_TRACKER_URL` is supplied. Liz's approved destination is needed.
-4. **Professional Standards / CEU tracker:** GitHub explicitly records this as
-   blocked on Liz's specification; it is not part of the attendance application.
-5. **T-shirt data:** the feature is complete, but all 146 imported T-shirt-size
-   values are currently blank. A source list is required if the tracker should
-   launch with those values populated.
-6. **Production access map:** Netlify masks the PIN mapping by design. Liz's PIN
+3. **All Star and Professional Standards parameters:** Liz can see both buttons,
+   but they remain disabled until their separate specifications or approved URLs
+   are supplied.
+4. **T-shirt data:** the source roster and normalized employee table contain no
+   sizes. Production has one saved employee-card override with a size, leaving
+   145 employees without a stored value. A roster/spreadsheet with the remaining
+   values is required; the existing live override must be preserved.
+5. **Production access map:** Netlify masks the PIN mapping by design. Liz's PIN
    and one school PIN must be verified by their owners without exposing them.
-7. **Consecutive workday interpretation:** current seniority logic skips weekends.
-   Confirm whether district blackout/holiday dates must also be skipped when
-   deciding whether two UNEX dates are consecutive workdays.
 
 ## Current verification result
 
-- Automated tests: 37 passed, 0 failed.
+- Automated tests: 43 passed, 0 failed.
 - Production build: passed.
 - Public production security/readiness checks: passed before this corrective
   release; rerun on the preview and production deploy before handoff.
