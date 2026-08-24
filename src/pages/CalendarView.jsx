@@ -62,7 +62,7 @@ export default function CalendarView() {
         <div>
           <h1 className="text-2xl font-bold text-white">Blackout Calendar</h1>
           <p className="text-sm text-charcoal-200 mt-1">
-            District administrators manage unavailable days here; school teams see them inside employee records.
+            District administrators manage unavailable days here; school teams can review them without editing.
           </p>
         </div>
         <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">

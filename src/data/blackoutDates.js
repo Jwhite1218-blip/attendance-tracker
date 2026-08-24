@@ -29,6 +29,13 @@ function nextDateKey(dateKey) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+function isValidDateKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [year, month, day] = value.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  return date.toISOString().slice(0, 10) === value
+}
+
 // Saves one blackout entry per day in [startDate, endDate], inclusive, under one label — e.g.
 // blocking out an entire winter or summer break in a single action instead of one day at a
 // time. Pass the same date for startDate and endDate to block out a single day.
@@ -36,8 +43,8 @@ export function saveBlackoutDateRange(startDate, endDate, label) {
   const normalizedStart = String(startDate || '').trim()
   const normalizedEnd = String(endDate || startDate || '').trim()
   const normalizedLabel = String(label || '').trim()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedStart)) throw new Error('Choose a valid start date.')
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalizedEnd)) throw new Error('Choose a valid end date.')
+  if (!isValidDateKey(normalizedStart)) throw new Error('Choose a valid start date.')
+  if (!isValidDateKey(normalizedEnd)) throw new Error('Choose a valid end date.')
   if (!normalizedLabel) throw new Error('Add a holiday or closure name.')
   if (normalizedEnd < normalizedStart) throw new Error('End date must be on or after the start date.')
 

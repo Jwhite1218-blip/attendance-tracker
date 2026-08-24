@@ -75,6 +75,9 @@ test('school state filters roster and location overrides to that school', async 
     const schoolId = employee => String(employee.kronos_id || employee.id)
     const store = stateStore({
       __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'attendance-blackout-dates': [
+        { date: '2026-09-07', label: 'Labor Day' },
+      ],
       'employee-location-overrides': {
         [schoolId(schoolEmployee)]: schoolEmployee.location,
         [schoolId(outsider)]: outsider.location,
@@ -92,7 +95,14 @@ test('school state filters roster and location overrides to that school', async 
     assert.ok(body.roster.length > 0)
     assert.ok(body.roster.every(employee => employee.location === schoolEmployee.location))
     assert.equal(Object.hasOwn(body.entries['employee-location-overrides'], schoolId(outsider)), false)
-    assert.equal(Object.hasOwn(body.roster[0], 'birthdate'), false)
+    assert.deepEqual(body.entries['attendance-blackout-dates'], [
+      { date: '2026-09-07', label: 'Labor Day' },
+    ])
+    assert.equal(body.roster[0].birthdate, schoolEmployee.birthdate || '')
+    assert.equal(body.roster[0].hire_date, schoolEmployee.hire_date || '')
+    assert.equal(body.roster[0].service_date, schoolEmployee.service_date || '')
+    assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
+    assert.equal(Object.hasOwn(body.roster[0], 'pay_amount'), false)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

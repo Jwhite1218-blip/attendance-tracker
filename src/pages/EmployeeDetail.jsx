@@ -292,7 +292,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               <label htmlFor="employee-admin-notes" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Employee notes
               </label>
-              <p className="text-[11px] text-gray-400 mt-1">Administrative notes saved with this employee record in this browser.</p>
+              <p className="text-[11px] text-gray-400 mt-1">Administrative notes are saved with this shared employee record.</p>
               <textarea
                 id="employee-admin-notes"
                 value={notesDraft}
