@@ -34,6 +34,15 @@ function publicEmployee(employee, session) {
     location: employee.location || '',
   }
 
+  if (session.role === 'school') {
+    return {
+      ...shared,
+      hire_date: employee.hire_date || '',
+      service_date: employee.service_date || '',
+      birthdate: employee.birthdate || '',
+    }
+  }
+
   if (session.role !== 'admin' || session.canManageRoster !== true) return shared
   return {
     ...shared,

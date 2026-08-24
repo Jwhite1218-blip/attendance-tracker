@@ -28,14 +28,16 @@ function AppShell() {
 
   const accessLabel = !canEditAttendance
     ? 'Read-only review'
-    : canManageRoster && canManageBlackouts
-      ? 'Administrator'
-      : 'Administrator · Limited editing'
+    : role === 'school'
+      ? 'School Manager'
+      : canManageRoster && canManageBlackouts
+        ? 'Administrator'
+        : 'Administrator · Limited editing'
 
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
     { path: '/ledger', label: 'Employee Records' },
-    ...(role === 'admin' ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
+    { path: '/calendar', label: 'Blackout Calendar' },
     ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
@@ -204,7 +206,7 @@ function AppShell() {
           <Route path="/location/:id" element={<LocationView />} />
           <Route path="/employee/:employeeId" element={<EmployeeRecordPage />} />
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
-          <Route path="/calendar" element={role === 'admin' ? <CalendarView /> : <Navigate to={homePath} replace />} />
+          <Route path="/calendar" element={<CalendarView />} />
           <Route path="/ledger" element={<LedgerView />} />
           <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
