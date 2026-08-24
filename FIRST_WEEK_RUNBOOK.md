@@ -43,6 +43,14 @@ Complete one school-manager check with a school PIN:
 5. Open an employee card and confirm no T-shirt size label or value is visible.
 6. Log out.
 
+Complete one restricted-district check with the Marlene/Reese or Jayden/Jess PIN:
+
+1. Confirm the district dashboard and attendance workflows are available.
+2. Confirm `Blackout Calendar` is not in navigation and `/calendar` redirects to the dashboard.
+3. Confirm employee-card edit, add, reactivate, and roster-management controls are not available.
+4. Confirm T-shirt size, `All Star Performance Tracker`, and `Professional Standards` are not visible.
+5. Log out.
+
 ## Staff guidance
 
 1. Use https://allstartracker.netlify.app only.

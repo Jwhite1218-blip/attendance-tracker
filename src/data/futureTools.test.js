@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { canSeeLizFutureTools, hasLizAdminAccess } from './futureTools.js'
+import {
+  canSeeLizFutureTools,
+  canViewBlackoutCalendar,
+  hasLizAdminAccess,
+} from './futureTools.js'
 
 test('future-tool buttons are limited to Liz full-admin access', () => {
   assert.equal(canSeeLizFutureTools({
@@ -40,4 +44,30 @@ test('Liz-only employee fields use the same full-admin boundary', () => {
     canManageRoster: true,
     canManageBlackouts: true,
   }), false)
+})
+
+test('blackout calendar is hidden only from editable restricted-district access', () => {
+  assert.equal(canViewBlackoutCalendar({
+    role: 'admin',
+    canEditAttendance: true,
+    canManageBlackouts: true,
+  }), true)
+
+  assert.equal(canViewBlackoutCalendar({
+    role: 'admin',
+    canEditAttendance: true,
+    canManageBlackouts: false,
+  }), false)
+
+  assert.equal(canViewBlackoutCalendar({
+    role: 'admin',
+    canEditAttendance: false,
+    canManageBlackouts: false,
+  }), true)
+
+  assert.equal(canViewBlackoutCalendar({
+    role: 'school',
+    canEditAttendance: true,
+    canManageBlackouts: false,
+  }), true)
 })

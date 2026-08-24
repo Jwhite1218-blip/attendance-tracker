@@ -8,6 +8,7 @@ import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
+import { canViewBlackoutCalendar } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import aramarkLogo from './assets/aramark-logo.png'
@@ -34,15 +35,16 @@ function AppShell() {
         ? 'Administrator'
         : 'Administrator · Limited editing'
 
+  const homePath = role === 'school' ? `/location/${locationId}` : '/'
+  const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const navItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
     { path: '/ledger', label: 'Employee Records' },
-    { path: '/calendar', label: 'Blackout Calendar' },
+    ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
   ]
 
-  const homePath = role === 'school' ? `/location/${locationId}` : '/'
   const schoolName = role === 'school' ? LOCATION_MAP[locationId]?.name : null
   const navItemIsActive = item => (
     location.pathname === item.path
@@ -206,7 +208,7 @@ function AppShell() {
           <Route path="/location/:id" element={<LocationView />} />
           <Route path="/employee/:employeeId" element={<EmployeeRecordPage />} />
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
-          <Route path="/calendar" element={<CalendarView />} />
+          <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />
           <Route path="/ledger" element={<LedgerView />} />
           <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
