@@ -17,6 +17,12 @@ function signature(value) {
   return createHmac('sha256', signingSecret()).update(value).digest('base64url')
 }
 
+function credentialFingerprint(pin) {
+  return createHmac('sha256', signingSecret())
+    .update(`attendance-pin:${String(pin || '')}`)
+    .digest('base64url')
+}
+
 function safeEqual(left, right) {
   const leftBuffer = Buffer.from(left)
   const rightBuffer = Buffer.from(right)
@@ -38,7 +44,18 @@ function parseCookies(request) {
   )
 }
 
-export function getAccessCodes() {
+function isLizAdministrator(access, configuredEmployeeId) {
+  const displayName = String(access?.displayName || '').trim().toLowerCase()
+  const employeeId = String(access?.employeeId || '').trim()
+  const lizIdentity = /\b(liz|elizabeth)\b/.test(displayName)
+    || (configuredEmployeeId && employeeId === configuredEmployeeId)
+  return access?.role === 'admin'
+    && access?.canManageRoster !== false
+    && access?.canManageBlackouts !== false
+    && lizIdentity
+}
+
+function accessCodeConfiguration() {
   const rawCodes = environmentValue('ATTENDANCE_ACCESS_CODES_JSON')
   if (!rawCodes) throw new Error('Attendance access codes are not configured.')
 
@@ -46,7 +63,37 @@ export function getAccessCodes() {
   if (!codes || typeof codes !== 'object' || Array.isArray(codes)) {
     throw new Error('Attendance access codes are invalid.')
   }
-  return codes
+  const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
+  if (!replacementPin) return { codes, replacementApplied: false }
+  let problem = ''
+  if (!/^\d{4,8}$/.test(replacementPin)) {
+    problem = 'invalid-format'
+  }
+
+  const configuredEmployeeId = environmentValue('ATTENDANCE_LIZ_EMPLOYEE_ID').trim()
+  const lizEntries = Object.entries(codes)
+    .filter(([, access]) => isLizAdministrator(access, configuredEmployeeId))
+  if (lizEntries.length !== 1) problem = 'non-unique-liz-access'
+
+  const [currentPin, lizAccess] = lizEntries[0] || []
+  if (currentPin === replacementPin) problem = 'unchanged-pin'
+  if (codes[replacementPin] && currentPin !== replacementPin) problem = 'pin-conflict'
+
+  // Preserve the known-good roster when a replacement is misconfigured. The
+  // health check remains observable without locking every other user out.
+  if (problem) {
+    console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
+    return { codes, replacementApplied: false }
+  }
+
+  const replacedCodes = { ...codes }
+  delete replacedCodes[currentPin]
+  replacedCodes[replacementPin] = lizAccess
+  return { codes: replacedCodes, replacementApplied: true }
+}
+
+export function getAccessCodes() {
+  return accessCodeConfiguration().codes
 }
 
 export function accessForPin(pin) {
@@ -65,6 +112,9 @@ export function accessForPin(pin) {
     canManageRoster: access.role === 'admin' && access.canManageRoster !== false,
     canManageBlackouts: access.role === 'admin' && access.canManageBlackouts !== false,
     watermark: access.watermark === 'localis' ? 'localis' : null,
+    ...(environmentValue('ATTENDANCE_SESSION_SECRET')
+      ? { credentialFingerprint: credentialFingerprint(candidate) }
+      : {}),
   }
 }
 
@@ -87,6 +137,16 @@ export function sessionFromRequest(request, now = Date.now()) {
 
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (!session.expiresAt || session.expiresAt <= now) return null
+    const configuration = session.credentialFingerprint || environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
+      ? accessCodeConfiguration()
+      : null
+    if (session.credentialFingerprint) {
+      const activeFingerprints = Object.keys(configuration.codes).map(credentialFingerprint)
+      if (!activeFingerprints.some(fingerprint => safeEqual(fingerprint, session.credentialFingerprint))) return null
+    } else if (configuration?.replacementApplied) {
+      const configuredEmployeeId = environmentValue('ATTENDANCE_LIZ_EMPLOYEE_ID').trim()
+      if (isLizAdministrator(session, configuredEmployeeId)) return null
+    }
     return session
   } catch {
     return null

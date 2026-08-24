@@ -61,6 +61,9 @@ authentication were superseded by Liz's later Warren-specific requirements.
 2. **All Star and Professional Standards parameters:** Liz can see both buttons,
    but they remain disabled until their separate specifications or approved URLs
    are supplied.
+3. **End-of-day email activation:** the privacy-limited weekday report engine is
+   implemented and tested. Initial live delivery is routed to Jon for review
+   and manual forwarding to Liz; direct delivery to Liz remains deferred.
 
 ## Deferred data entry
 
@@ -80,7 +83,8 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 44 passed, 0 failed.
+- Automated tests: 51 passed, 0 failed on the end-of-day-report and targeted
+  Liz PIN-rotation candidate.
 - Production build: passed.
 - Production dependency audit: zero known vulnerabilities after validating the
   React Router 7.18.2 security update on the isolated testing clone.

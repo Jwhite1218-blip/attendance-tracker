@@ -45,3 +45,60 @@ test('rate limiting is atomic, does not let one wrong PIN lock the valid PIN, an
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+test('replacing Liz PIN revokes her existing session without logging out other staff', async () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  const previousReplacement = process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN
+  const previousLizEmployeeId = process.env.ATTENDANCE_LIZ_EMPLOYEE_ID
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    4101: {
+      role: 'admin',
+      displayName: 'Elizabeth Schmitt',
+      employeeId: 'emp-pwsfc85t',
+      canManageRoster: true,
+      canManageBlackouts: true,
+    },
+    4102: {
+      role: 'school',
+      displayName: 'School Manager',
+      locationId: 'CrestonMS',
+    },
+  })
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  process.env.ATTENDANCE_LIZ_EMPLOYEE_ID = 'emp-pwsfc85t'
+  delete process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN
+
+  try {
+    const stores = { rate: createMemoryBlobStore(), sessions: createMemoryBlobStore() }
+    const lizLogin = await handleSessionRequest(loginRequest('4101'), { ip: '203.0.113.20' }, stores)
+    const schoolLogin = await handleSessionRequest(loginRequest('4102'), { ip: '203.0.113.21' }, stores)
+    assert.equal(lizLogin.status, 200)
+    assert.equal(schoolLogin.status, 200)
+    const lizCookie = lizLogin.headers.get('set-cookie').split(';')[0]
+    const schoolCookie = schoolLogin.headers.get('set-cookie').split(';')[0]
+
+    process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN = '941001'
+
+    const oldLizSession = new Request('https://example.test/api/session', { headers: { cookie: lizCookie } })
+    const existingSchoolSession = new Request('https://example.test/api/session', { headers: { cookie: schoolCookie } })
+    assert.equal((await handleSessionRequest(oldLizSession, {}, stores)).status, 401)
+    assert.equal((await handleSessionRequest(existingSchoolSession, {}, stores)).status, 200)
+    assert.equal((await handleSessionRequest(loginRequest('4101'), { ip: '203.0.113.22' }, stores)).status, 401)
+
+    const replacementLogin = await handleSessionRequest(loginRequest('941001'), { ip: '203.0.113.23' }, stores)
+    assert.equal(replacementLogin.status, 200)
+    const body = await replacementLogin.json()
+    assert.equal(body.access.displayName, 'Elizabeth Schmitt')
+    assert.equal(body.access.credentialFingerprint, undefined)
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+    if (previousReplacement === undefined) delete process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN
+    else process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN = previousReplacement
+    if (previousLizEmployeeId === undefined) delete process.env.ATTENDANCE_LIZ_EMPLOYEE_ID
+    else process.env.ATTENDANCE_LIZ_EMPLOYEE_ID = previousLizEmployeeId
+  }
+})
