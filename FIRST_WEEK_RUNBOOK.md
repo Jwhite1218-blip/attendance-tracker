@@ -15,14 +15,14 @@ Rollout window: August 24–28, 2026
 - Application: https://allstartracker-stress-20260821.netlify.app
 - Netlify admin: https://app.netlify.com/projects/allstartracker-stress-20260821
 - State backend: isolated Netlify Blobs test data
-- Current security-patch validation deploy: `6a8bd8ed12e8bed0fcb789e8`
+- Current release-candidate validation deploy: `6a8c2de20407f6aeefea4523`
 
 Do not use `allstartracker-stress-20260821.netlify.app` with staff. It is an
 isolated load-test deployment and is not Git-linked.
 
 ## Verified launch baseline — August 24, 2026
 
-- 44 automated tests pass and the production build completes.
+- 56 automated tests pass and the production build completes.
 - The production dependency audit reports zero known vulnerabilities.
 - The testing clone passes the public readiness check after the React Router
   7.18.2 security update: application and assets load, anonymous API requests
@@ -31,8 +31,10 @@ isolated load-test deployment and is not Git-linked.
   District Admin. The two blank birthdays match the source import note.
 - All 146 T-shirt-size fields are blank by design until Liz supplies the Excel
   sheet. The previous single test value was removed on August 24.
-- Production shared state has 19 valid attendance records with no malformed
-  dates, mismatched embedded dates, unknown codes, or invalid JSON shapes.
+- Production attendance and HR progress were reset for launch on August 24,
+  2026. All 19 test attendance records, 3 current HR-progress records, and 2
+  legacy HR flags are now empty. The reset retained the existing state
+  containers and produced 14 database audit events.
 - The blackout calendar has 27 unique valid dates. The first date is Labor Day,
   September 7, 2026; September 8 is also recorded as E Learning. There are no
   blackout dates in the August 24–28 opening week.
@@ -104,6 +106,54 @@ Never run `tests/remote/deployment-verification.mjs` against production during
 the rollout. It writes concurrent load-test attendance records. Use the stress
 site for that test.
 
+## End-of-day email activation
+
+The end-of-day report code is safe to deploy while disabled. The initial live
+recipient is Jon, who will review and manually forward accepted reports to Liz.
+Test and stress sites must remain disabled.
+
+Current production staging status on August 24, 2026:
+
+- Jon's review address is stored as a protected production Functions-only
+  environment variable. Liz is not a direct recipient yet.
+- The Localis sender, tracker URL, Indianapolis time zone, and 5:00 PM hour are
+  staged in the production context.
+- `ATTENDANCE_REPORT_ENABLED=false` while the production function deploy is
+  verified.
+- `RESEND_API_KEY` is stored as a protected production Functions-only secret.
+  DKIM and both Resend CNAME records resolve publicly.
+- The isolated test clone has no real recipient, mail credential, or Supabase
+  production secret.
+
+For the controlled first delivery:
+
+1. Deploy the reviewed report code to production while
+   `ATTENDANCE_REPORT_ENABLED=false`.
+2. Confirm production has `ATTENDANCE_REPORT_TO`, `ATTENDANCE_REPORT_FROM`,
+   `ATTENDANCE_REPORT_SITE_URL`, `ATTENDANCE_REPORT_TIME_ZONE`, and a
+   sending-only `RESEND_API_KEY`.
+3. Confirm the recipient is Jon only and that comments/employee-card details
+   are absent from the generated message.
+4. Enable the production flag, use the scheduled function's `Run now` control,
+   and confirm receipt directly with Jon before he forwards it to Liz.
+5. Check the function log for a single `sent` result and provider delivery ID.
+6. Confirm a test/clone invocation reports `disabled` and sends nothing.
+
+If the controlled delivery fails, immediately return
+`ATTENDANCE_REPORT_ENABLED` to `false`, keep the provider error/request ID, and
+correct the sender-domain or API-key configuration before retrying.
+
+## Live cleanup and Liz PIN activation
+
+The district-wide test reset was approved and completed on August 24, 2026.
+Independent verification returned zero attendance records, zero current
+HR-progress records, zero legacy HR flags, and zero non-empty target state
+containers. Existing audit history and all non-target state were preserved.
+
+Liz's production PIN has not been rotated. When the replacement PIN is ready,
+set it as a secret, reload Liz's browser, confirm the old PIN/session fail, and
+confirm a representative school PIN remains active.
+
 ## Incident response
 
 If sign-in fails for everyone:
@@ -113,6 +163,12 @@ If sign-in fails for everyone:
    exist in the production environment context.
 3. Do not replace either secret until the replacement PIN distribution and
    forced session reset have been coordinated.
+
+For a targeted Liz PIN rotation, set `ATTENDANCE_LIZ_EMPLOYEE_ID` and the secret
+`ATTENDANCE_LIZ_REPLACEMENT_PIN`. The application removes the original Liz PIN
+at runtime, rejects pre-rotation Liz sessions on their next request, and leaves
+other staff sessions active. Remove the replacement variable only if the full
+PIN roster has first been updated with the intended permanent Liz PIN.
 
 If attendance reads or saves fail:
 
