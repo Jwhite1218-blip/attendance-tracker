@@ -72,6 +72,6 @@ authentication were superseded by Liz's later Warren-specific requirements.
 
 - Automated tests: 44 passed, 0 failed.
 - Production build: passed.
-- Release `e0d29fc` passed preview and live public security/readiness checks on
+- Release `2206381` passed preview and live public security/readiness checks on
   August 24, 2026.
 
