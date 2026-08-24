@@ -158,7 +158,12 @@ export default function CalendarView() {
 
               <div className="grid grid-cols-7 gap-1 mb-1">
                 {WEEKDAYS.map((weekday, index) => (
-                  <div key={`${weekday}-${index}`} className="text-center text-[9px] font-medium text-gray-400">{weekday}</div>
+                  <div
+                    key={`${weekday}-${index}`}
+                    className={`rounded-sm py-0.5 text-center text-[9px] font-semibold ${index % 6 === 0 ? 'bg-gray-200 text-gray-700' : 'text-gray-400'}`}
+                  >
+                    {weekday}
+                  </div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1">
@@ -181,7 +186,7 @@ export default function CalendarView() {
                         blackout
                           ? 'bg-charcoal-800 text-white border-charcoal-800 cursor-pointer hover:ring-2 hover:ring-brand-300'
                           : isWeekend
-                            ? 'bg-gray-100 text-gray-400 border-gray-100 cursor-default'
+                            ? 'bg-gray-300 text-gray-700 border-gray-400 cursor-default'
                             : 'bg-white text-gray-600 border-gray-100 cursor-default'
                       } ${selectedDate === key ? 'ring-2 ring-brand-400 ring-offset-1' : ''}`}
                     >
@@ -212,7 +217,7 @@ export default function CalendarView() {
       </div>
 
       <div className="mt-4 flex items-center justify-center gap-5 text-xs text-charcoal-200">
-        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-gray-300 border border-gray-400" /> Weekend</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-charcoal-800" /> District blackout</span>
       </div>
     </div>

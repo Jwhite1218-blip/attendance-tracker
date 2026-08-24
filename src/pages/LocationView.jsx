@@ -237,6 +237,38 @@ export default function LocationView() {
         )}
       </div>
 
+      {/* Keep the active week visible while Liz scrolls through the mobile roster. */}
+      <div
+        className={`md:hidden sticky ${canEditAttendance ? 'top-16' : 'top-[97px]'} z-30 -mx-3 mb-3 border-y border-charcoal-600 bg-charcoal-800/95 px-3 py-2 shadow-lg backdrop-blur-sm`}
+      >
+        <p className="mb-1.5 text-center text-[10px] font-semibold uppercase tracking-wider text-charcoal-100">
+          {formatDate(dates[0])} – {formatDate(dates[6])}
+        </p>
+        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-charcoal-500 bg-charcoal-500">
+          {dates.map(date => {
+            const { weekday, day } = formatDateShort(date)
+            const availability = getDateAvailability(date)
+
+            return (
+              <div
+                key={date}
+                className={`flex min-h-[42px] flex-col items-center justify-center ${
+                  availability.type === 'blackout'
+                    ? 'bg-charcoal-900 text-white'
+                    : availability.type === 'weekend'
+                      ? 'bg-gray-500 text-white'
+                      : 'bg-gray-50 text-gray-800'
+                }`}
+                title={availability.unavailable ? availability.label : formatDate(date)}
+              >
+                <span className="text-[9px] font-semibold uppercase">{weekday[0]}</span>
+                <span className="text-xs font-bold">{day}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       {/* ─── MOBILE: Card-based layout ─── */}
       <div className="md:hidden space-y-3">
         {roster.map((emp, idx) => {
@@ -246,7 +278,7 @@ export default function LocationView() {
           })
 
           return (
-            <div key={emp.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div key={emp.id} className="bg-white rounded-xl border border-gray-300 overflow-hidden">
               {/* Employee header - tap to open detail */}
               <div className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors">
                 <button
@@ -278,7 +310,7 @@ export default function LocationView() {
               </div>
 
               {/* Day cells - horizontal row */}
-              <div className="grid grid-cols-7 gap-px bg-gray-100 border-t border-gray-100">
+              <div className="grid grid-cols-7 gap-px bg-gray-300 border-t border-gray-300">
                 {empAtt.map(({ date, code }) => {
                   const { weekday, day } = formatDateShort(date)
                   const availability = getDateAvailability(date)
@@ -307,8 +339,8 @@ export default function LocationView() {
                         availability.type === 'blackout'
                           ? 'bg-charcoal-800 text-white cursor-not-allowed'
                           : availability.type === 'weekend'
-                            ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
-                            : canEditAttendance ? 'bg-white active:bg-gray-50' : 'bg-white cursor-default'
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed'
+                            : canEditAttendance ? 'bg-gray-50 active:bg-gray-100' : 'bg-gray-50 cursor-default'
                       }`}
                     >
                       <span className={`text-[10px] uppercase ${availability.unavailable ? 'text-current opacity-70' : 'text-gray-400'}`}>{weekday[0]}</span>
@@ -325,7 +357,7 @@ export default function LocationView() {
                           )}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 w-[28px] h-[22px]">·</span>
+                        <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-400 bg-white/70 text-xs text-gray-500 w-[28px] h-[22px]">·</span>
                       )}
                     </button>
                   )
@@ -340,15 +372,15 @@ export default function LocationView() {
       <div className="hidden md:block overflow-x-auto">
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full">
-            <thead>
+            <thead className="sticky top-16 z-20 shadow-sm">
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="sticky left-0 bg-gray-50 z-10 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>Employee</th>
+                <th className="sticky left-0 bg-gray-50 z-30 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>Employee</th>
                 {dates.map(d => {
                   const availability = getDateAvailability(d)
                   return (
                     <th
                       key={d}
-                      className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white' : availability.type === 'weekend' ? 'bg-gray-100' : ''}`}
+                      className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800 text-white' : availability.type === 'weekend' ? 'bg-gray-300 text-gray-700' : 'bg-gray-50'}`}
                       style={{ minWidth: '90px' }}
                       title={availability.unavailable ? availability.label : undefined}
                     >
@@ -400,7 +432,7 @@ export default function LocationView() {
                     const code = attendance[key]?.code || ''
                     const availability = getDateAvailability(d)
                     return (
-                      <td key={d} className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800' : availability.type === 'weekend' ? 'bg-gray-100' : ''}`}>
+                      <td key={d} className={`text-center px-2 py-3 ${availability.type === 'blackout' ? 'bg-charcoal-800' : availability.type === 'weekend' ? 'bg-gray-300' : 'bg-gray-50/70'}`}>
                         <button
                           onClick={() => {
                             if (!canEditAttendance || availability.unavailable) return
@@ -427,7 +459,7 @@ export default function LocationView() {
                           {availability.type === 'blackout' ? (
                             <span className="inline-flex items-center justify-center text-sm font-bold text-white w-[28px] h-[22px]">×</span>
                           ) : availability.type === 'weekend' ? (
-                            <span className="inline-flex items-center justify-center text-xs text-gray-300 w-[28px] h-[22px]">—</span>
+                            <span className="inline-flex items-center justify-center text-xs text-gray-600 w-[28px] h-[22px]">—</span>
                           ) : code ? (
                             <span className="relative">
                               <StatusBadge code={code} size="small" />
@@ -436,7 +468,7 @@ export default function LocationView() {
                               )}
                             </span>
                           ) : (
-                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-200 text-xs text-gray-300 hover:border-brand-300 hover:text-brand-400 transition-colors w-[28px] h-[22px]">·</span>
+                            <span className="inline-flex items-center justify-center rounded border border-dashed border-gray-400 bg-white/70 text-xs text-gray-500 hover:border-brand-400 hover:text-brand-600 transition-colors w-[28px] h-[22px]">·</span>
                           )}
                         </button>
                       </td>
@@ -453,7 +485,7 @@ export default function LocationView() {
       <div className="mt-4">
         <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history{role === 'admin' && canManageRoster ? ', or 🔄 to transfer that employee.' : '.'}</p>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
-          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-100 border border-gray-200" /> Weekend</span>
+          <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-300 border border-gray-400" /> Weekend</span>
           <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
         </div>
       </div>
