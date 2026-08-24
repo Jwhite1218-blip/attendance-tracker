@@ -35,8 +35,11 @@ function canWriteManagedKey(key) {
     return clientAccess.canEditAttendance !== false
   }
   if (key === 'attendance-blackout-dates') return clientAccess.canManageBlackouts === true
-  if (key === 'employee-location-overrides' || key === 'employee-record-overrides' || key === 'employee-custom-records') {
-    return clientAccess.canManageRoster === true
+  if (key === 'employee-location-overrides') return clientAccess.canManageRoster === true
+  if (key === 'employee-record-overrides' || key === 'employee-custom-records') {
+    return clientAccess.role === 'admin'
+      && clientAccess.canManageRoster === true
+      && clientAccess.canManageBlackouts === true
   }
   return false
 }

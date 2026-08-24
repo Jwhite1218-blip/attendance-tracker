@@ -29,16 +29,19 @@ Then complete one manual Liz check without entering test attendance:
 1. Sign in with Liz's assigned production PIN.
 2. Confirm the header shows Liz's name and `Administrator`.
 3. Confirm the shared-data indicator is green and reads `Shared`.
-4. Open Employee Records and verify the expected roster is present.
-5. Open one school and confirm its staff list loads.
-6. Log out and confirm the PIN screen returns.
+4. Confirm `All Star Performance Tracker` and `Professional Standards` are visible and show `Setup pending · Liz only`.
+5. Open Employee Records, verify the expected roster is present, and confirm T-shirt size is visible on an employee card.
+6. Open one school and confirm its staff list loads.
+7. Log out and confirm the PIN screen returns.
 
 Complete one school-manager check with a school PIN:
 
 1. Confirm the account opens only its assigned school.
 2. Confirm another school's URL redirects back to the assigned school.
-3. Confirm roster-management and blackout controls are not available.
-4. Log out.
+3. Confirm the `Blackout Calendar` is view-only and roster-management/blackout controls are not available.
+4. Confirm `All Star Performance Tracker` and `Professional Standards` are not visible.
+5. Open an employee card and confirm no T-shirt size label or value is visible.
+6. Log out.
 
 ## Staff guidance
 
