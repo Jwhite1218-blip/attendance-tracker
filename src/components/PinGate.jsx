@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import {
   createServerSession,
+  clearClientDataCache,
   configureClientAccess,
   endServerSession,
   getServerSession,
@@ -48,6 +49,7 @@ export default function PinGate({ children }) {
         const access = await getServerSession()
         configureClientAccess(access)
         if (access) await loadSharedState()
+        else clearClientDataCache()
         if (!cancelled) setAuthed(access)
       } catch (restoreError) {
         configureClientAccess(null)
@@ -169,6 +171,8 @@ export default function PinGate({ children }) {
               value={pin}
               onChange={e => { setPin(e.target.value); setError('') }}
               autoFocus
+              required
+              minLength={4}
               maxLength={8}
               inputMode="numeric"
               pattern="[0-9]*"

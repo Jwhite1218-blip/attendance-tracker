@@ -3,7 +3,7 @@ import { check, sleep } from 'k6'
 import { Rate, Trend } from 'k6/metrics'
 
 const BASE_URL = (__ENV.BASE_URL || 'http://127.0.0.1:8788').replace(/\/$/, '')
-const TEST_PIN = __ENV.TEST_PIN || '609106'
+const TEST_PIN = __ENV.TEST_PIN || ''
 const PROFILE = __ENV.PROFILE || 'smoke'
 const WRITE_RATIO = Number(__ENV.WRITE_RATIO || '0.20')
 
@@ -52,6 +52,10 @@ const stateWriteDuration = new Trend('state_write_duration', true)
 const applicationErrors = new Rate('application_errors')
 
 export function setup() {
+  if (!/^\d{4,8}$/.test(TEST_PIN)) {
+    throw new Error('TEST_PIN must be provided as 4 to 8 digits.')
+  }
+
   const homepage = http.get(BASE_URL)
   if (!check(homepage, { 'homepage is available': response => response.status === 200 })) {
     throw new Error(`Homepage failed with HTTP ${homepage.status}.`)
