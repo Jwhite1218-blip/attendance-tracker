@@ -29,6 +29,8 @@ isolated load-test deployment and is not Git-linked.
   return 401, and all required security headers are present.
 - The production roster has 146 unique employees across 15 schools plus
   District Admin. The two blank birthdays match the source import note.
+- All 146 T-shirt-size fields are blank by design until Liz supplies the Excel
+  sheet. The previous single test value was removed on August 24.
 - Production shared state has 19 valid attendance records with no malformed
   dates, mismatched embedded dates, unknown codes, or invalid JSON shapes.
 - The blackout calendar has 27 unique valid dates. The first date is Labor Day,

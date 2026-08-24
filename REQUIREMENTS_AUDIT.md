@@ -65,9 +65,11 @@ authentication were superseded by Liz's later Warren-specific requirements.
 ## Deferred data entry
 
 T-shirt sizes are intentionally being entered later after Liz supplies them.
-Production currently has one saved employee-card override with a size and 145
-blank values; those blanks are expected and are not a launch blocker. The
-existing live override must be preserved when the remaining sizes are loaded.
+Jon confirmed on August 24 that the one previously saved size was test data. It
+was removed from production without changing the employee's other saved card
+details. All 146 employee cards now resolve to a blank T-shirt size. The values
+will be imported from Liz's Excel sheet when it is supplied; the blank values
+are expected and are not a launch blocker.
 
 ## Owner smoke tests
 
