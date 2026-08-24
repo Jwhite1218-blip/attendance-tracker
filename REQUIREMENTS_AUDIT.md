@@ -42,6 +42,7 @@ authentication were superseded by Liz's later Warren-specific requirements.
 | Employee milestones | Birthday, completed service-anniversary, and upcoming RTO drill-downs exist for Liz and each school. School-scoped birth/service fields were restored after finding a server-filtering regression. |
 | Birthday import | 144 birthdays are populated; Rayeanna McIlquham and Kira Smith remain blank, matching the written import note. Birth years are not retained. |
 | T-shirt workflow | Add/edit forms and custom reports support T-shirt size and summarize missing values. |
+| Production PIN roster | Jon confirmed on August 24 that the complete production PIN roster is already in use. Owner smoke tests are representative permission checks, not PIN setup or roster-completeness work. |
 | Reports | Master and custom employee reports are district-admin only. Custom CSV export is tested. |
 | Alphabetized dashboard schools | The dashboard location cards are sorted alphabetically by school name, matching the PLAUD action item. |
 | School isolation | School sessions receive only their assigned roster and attendance state, redirect away from other school URLs, and cannot write another school's records. |
@@ -60,13 +61,20 @@ authentication were superseded by Liz's later Warren-specific requirements.
 2. **All Star and Professional Standards parameters:** Liz can see both buttons,
    but they remain disabled until their separate specifications or approved URLs
    are supplied.
-3. **T-shirt data:** the source roster and normalized employee table contain no
-   sizes. Production has one saved employee-card override with a size, leaving
-   145 employees without a stored value. A roster/spreadsheet with the remaining
-   values is required; the existing live override must be preserved.
-4. **Production access map:** Netlify masks the PIN mapping by design. Liz's PIN,
-   the restricted district PIN(s), and one school PIN must be verified by their
-   owners without exposing them.
+
+## Deferred data entry
+
+T-shirt sizes are intentionally being entered later after Liz supplies them.
+Production currently has one saved employee-card override with a size and 145
+blank values; those blanks are expected and are not a launch blocker. The
+existing live override must be preserved when the remaining sizes are loaded.
+
+## Owner smoke tests
+
+Netlify masks the PIN mapping by design, but Jon confirmed that the full roster
+of production PINs is already in use. Liz's PIN, one restricted-district PIN,
+and one school PIN still need representative behavior checks without exposing
+their values.
 
 ## Current verification result
 
