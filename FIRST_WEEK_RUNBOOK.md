@@ -30,7 +30,7 @@ Then complete one manual Liz check without entering test attendance:
 2. Confirm the header shows Liz's name and `Administrator`.
 3. Confirm the shared-data indicator is green and reads `Shared`.
 4. Confirm `All Star Performance Tracker` and `Professional Standards` are visible and show `Setup pending · Liz only`.
-5. Open Employee Records, verify the expected roster is present, and confirm T-shirt size is visible on an employee card.
+5. Open Employee Records, verify the expected roster is present, and confirm the T-shirt-size field is visible on an employee card. A blank size is expected until Liz supplies the values.
 6. Open one school and confirm its staff list loads.
 7. Log out and confirm the PIN screen returns.
 
@@ -101,8 +101,6 @@ rollback.
 
 ## Items requiring an owner check
 
-- Confirm Liz's PIN and at least one school PIN work in production.
+- Using the existing full PIN roster, confirm representative Liz, restricted-district, and school PINs enforce the expected permissions above.
 - Confirm Supabase backup or point-in-time recovery coverage in the Supabase
   dashboard before the first live attendance entry.
-- Confirm the production PIN map includes every school expected to participate
-  this week and that each `locationId` exactly matches a location in the app.
