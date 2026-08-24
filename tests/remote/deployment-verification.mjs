@@ -5,6 +5,11 @@ const testPin = String(process.env.TEST_PIN || process.argv[3] || '')
 
 assert.match(baseUrl, /^https:\/\//, 'BASE_URL must be an HTTPS URL')
 assert.match(testPin, /^\d{4,8}$/, 'TEST_PIN must contain 4 to 8 digits')
+assert.ok(
+  new URL(baseUrl).hostname !== 'allstartracker.netlify.app'
+    || process.env.ALLOW_PRODUCTION_WRITES === '1',
+  'This verification writes load-test attendance. Use the stress site, or explicitly set ALLOW_PRODUCTION_WRITES=1.'
+)
 
 async function request(path, options = {}) {
   return fetch(`${baseUrl}${path}`, {
