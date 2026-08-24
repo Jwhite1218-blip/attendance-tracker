@@ -3,15 +3,19 @@
 Audit date: 2026-08-24
 
 This is a traceability review of the written requirements currently available
-in the repository and its GitHub pull-request history. It is not final client
-acceptance until the PLAUD transcripts are reviewed and the two authenticated
-production smoke tests in `FIRST_WEEK_RUNBOOK.md` are completed.
+in the repository, its GitHub pull-request history, and the replacement PLAUD
+recording supplied on August 24. It is not final client acceptance until the
+remaining access interpretation and authenticated production smoke tests in
+`FIRST_WEEK_RUNBOOK.md` are completed.
 
 ## Sources reviewed
 
 - The original `attendance-tracker-docstar.gz` planning package.
 - GitHub pull requests 2 through 10, especially the items explicitly described
   as Liz's terminology, union-rule, calendar, dashboard, and workflow requests.
+- PLAUD recording `ccb70394de72ba41d380d3fd085b154c`, **08-20 Meeting:
+  System Access Levels and Feature Development** (59 transcript segments). The
+  earlier shared PLAUD link was explicitly withdrawn and was not used.
 - The current application, Netlify Functions, Supabase migrations, automated
   tests, production build, Netlify configuration, and public production checks.
 
@@ -39,9 +43,10 @@ authentication were superseded by Liz's later Warren-specific requirements.
 | Birthday import | 144 birthdays are populated; Rayeanna McIlquham and Kira Smith remain blank, matching the written import note. Birth years are not retained. |
 | T-shirt workflow | Add/edit forms and custom reports support T-shirt size and summarize missing values. |
 | Reports | Master and custom employee reports are district-admin only. Custom CSV export is tested. |
+| Alphabetized dashboard schools | The dashboard location cards are sorted alphabetically by school name, matching the PLAUD action item. |
 | School isolation | School sessions receive only their assigned roster and attendance state, redirect away from other school URLs, and cannot write another school's records. |
-| Liz and restricted admins | Permission tests cover full Liz administration, limited district editing, school managers, and read-only reviewers. |
-| Future tracker access | All Star Performance Tracker and Professional Standards appear only for Liz's full-admin access. They remain disabled placeholders until approved parameters or destination URLs are supplied. |
+| Liz and restricted admins | The code supports the PLAUD access tiers: building-scoped managers; restricted district users who can edit attendance but cannot access the blackout calendar, edit employee cards, or add/remove employees; Liz full administration; and read-only review. Marlene/Reese and Jayden/Jess were assigned the same restricted capabilities for now, while their future split remains undecided. |
+| Future tracker access | All Star Performance Tracker and Professional Standards appear only for Liz's full-admin access, following the later clarification. They remain disabled placeholders until Liz supplies the behavior and layout described as open in PLAUD. |
 | Read-only review | Plain and Localis-watermarked review modes can navigate but cannot change attendance, roster, notes, or blackouts. |
 | Shared persistence | PIN authentication and attendance state are server-side; production uses tenant-scoped Supabase storage with atomic state mutations. |
 | Privacy | Payroll amount, weekly hours, department, and other unused source fields are excluded from authenticated roster responses and the public browser bundle. |
@@ -49,25 +54,24 @@ authentication were superseded by Liz's later Warren-specific requirements.
 
 ## Open acceptance items
 
-1. **PLAUD transcripts:** not yet present. They may contain requirements that do
-   not appear in GitHub or the Docstar package.
-2. **Quick Mark:** the former duplicate Quick Mark screen was intentionally
+1. **Quick Mark:** the former duplicate Quick Mark screen was intentionally
    replaced by the consolidated Employee Records and weekly school workflows.
    Confirm from PLAUD/Liz that the replacement is accepted.
-3. **All Star and Professional Standards parameters:** Liz can see both buttons,
+2. **All Star and Professional Standards parameters:** Liz can see both buttons,
    but they remain disabled until their separate specifications or approved URLs
    are supplied.
-4. **T-shirt data:** the source roster and normalized employee table contain no
+3. **T-shirt data:** the source roster and normalized employee table contain no
    sizes. Production has one saved employee-card override with a size, leaving
    145 employees without a stored value. A roster/spreadsheet with the remaining
    values is required; the existing live override must be preserved.
-5. **Production access map:** Netlify masks the PIN mapping by design. Liz's PIN
-   and one school PIN must be verified by their owners without exposing them.
+4. **Production access map:** Netlify masks the PIN mapping by design. Liz's PIN,
+   the restricted district PIN(s), and one school PIN must be verified by their
+   owners without exposing them.
 
 ## Current verification result
 
-- Automated tests: 43 passed, 0 failed.
+- Automated tests: 44 passed, 0 failed.
 - Production build: passed.
-- Public production security/readiness checks: passed before this corrective
-  release; rerun on the preview and production deploy before handoff.
+- Release `e0d29fc` passed preview and live public security/readiness checks on
+  August 24, 2026.
 
