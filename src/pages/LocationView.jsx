@@ -7,24 +7,11 @@ import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttenda
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { isFlagged } from '../data/hrFlags.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
+import { getWeekDates } from '../data/weekDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
-
-function getWeekDates(weekOffset = 0) {
-  const today = new Date()
-  const tuesday = new Date(today)
-  const daysSinceTuesday = (today.getDay() - 2 + 7) % 7
-  tuesday.setDate(today.getDate() - daysSinceTuesday + weekOffset * 7)
-  const dates = []
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(tuesday)
-    d.setDate(tuesday.getDate() + i)
-    dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
-  }
-  return dates
-}
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
