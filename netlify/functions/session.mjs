@@ -28,6 +28,7 @@ function publicAccess(session) {
     displayName: session.displayName || null,
     employeeId: session.employeeId || null,
     canEditAttendance: (session.role === 'admin' || session.role === 'school') && session.canEditAttendance !== false,
+    canWriteEmployeeNotes: session.role === 'admin' && session.canEditAttendance !== false,
     canManageRoster: session.role === 'admin' && session.canManageRoster === true,
     canManageBlackouts: session.role === 'admin' && session.canManageBlackouts === true,
     watermark: session.watermark === 'localis' ? 'localis' : null,

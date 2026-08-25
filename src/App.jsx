@@ -11,7 +11,6 @@ import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { canViewBlackoutCalendar } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
-import aramarkLogo from './assets/aramark-logo.png'
 import localisLogo from './assets/localis-logo.png'
 
 export default function App() {
@@ -94,7 +93,7 @@ function AppShell() {
               ))}
             </div>
 
-            {/* Right side - Aramark + logout (desktop) */}
+            {/* Right side - Localis product mark + logout (desktop) */}
             <div className="hidden md:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
               <span
                 className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
@@ -113,7 +112,7 @@ function AppShell() {
                   <span className="block text-[10px] text-charcoal-300">{accessLabel}</span>
                 </div>
               )}
-              <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-8 object-contain" />
+              <img src={localisLogo} alt="Localis" className="h-9 w-auto object-contain" />
               <button
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
@@ -188,8 +187,8 @@ function AppShell() {
                 </Link>
               ))}
               <div className="flex items-center gap-2 px-3 pt-3 mt-2 border-t border-charcoal-600">
-                <img src={aramarkLogo} alt="Aramark Student Nutrition" className="h-7 object-contain" />
-                <span className="text-xs text-charcoal-400">Aramark Student Nutrition</span>
+                <img src={localisLogo} alt="Localis" className="h-8 w-auto object-contain" />
+                <span className="text-xs text-charcoal-300">Localis Collective</span>
               </div>
             </div>
           )}

@@ -9,6 +9,7 @@ import { getStateStore } from './_shared/state-store.mjs'
 import {
   BLACKOUTS_KEY,
   CUSTOM_EMPLOYEES_KEY,
+  EMPLOYEE_NOTES_KEY,
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
   LOCATION_OVERRIDES_KEY,
@@ -65,21 +66,16 @@ function publicEmployee(employee, session) {
     location: employee.location || '',
   }
 
-  if (session.role === 'school') {
-    return {
-      ...shared,
-      hire_date: employee.hire_date || '',
-      service_date: employee.service_date || '',
-      birthdate: employee.birthdate || '',
-    }
-  }
-
-  if (!hasLizAdminAccess(session)) return shared
-  return {
-    ...shared,
+  const milestones = {
     hire_date: employee.hire_date || '',
     service_date: employee.service_date || '',
     birthdate: employee.birthdate || '',
+  }
+
+  if (!hasLizAdminAccess(session)) return { ...shared, ...milestones }
+  return {
+    ...shared,
+    ...milestones,
     t_shirt_size: employee.t_shirt_size || '',
   }
 }
@@ -149,6 +145,8 @@ function filterEntriesForSession(entries, session) {
         .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
     )
   }
+  // Manager HR notes are district-administrator records. School sessions do
+  // not receive them, even though their roster remains school-scoped.
   if (entries[HR_STATUS_KEY]) {
     filtered[HR_STATUS_KEY] = filterStatusesForEmployees(entries[HR_STATUS_KEY], allowedEmployeeIds)
   }
@@ -193,6 +191,17 @@ function isSameOriginRequest(request) {
 
 function validateMutation(key, mutation) {
   applyStateMutation(key, null, mutation)
+  if (key === EMPLOYEE_NOTES_KEY) {
+    if (mutation.type !== 'object-patch' || (mutation.remove || []).length > 0) {
+      throw new Error('Employee note changes must be an object patch without deletions.')
+    }
+    for (const [employeeId, note] of Object.entries(mutation.set || {})) {
+      if (!employeeId || employeeId.length > 200 || typeof note !== 'string' || note.length > 4000) {
+        throw new Error('Employee note changes contain an invalid entry.')
+      }
+    }
+    return
+  }
   if (!attendanceEmployeeId(key)) return
   if (mutation.type !== 'object-patch') throw new Error('Attendance changes must be an object patch.')
 

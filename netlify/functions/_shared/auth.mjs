@@ -109,6 +109,7 @@ export function accessForPin(pin) {
     displayName: access.displayName || null,
     employeeId: access.employeeId || null,
     canEditAttendance: (access.role === 'admin' || access.role === 'school') && access.canEditAttendance !== false,
+    canWriteEmployeeNotes: access.role === 'admin' && access.canEditAttendance !== false,
     canManageRoster: access.role === 'admin' && access.canManageRoster !== false,
     canManageBlackouts: access.role === 'admin' && access.canManageBlackouts !== false,
     watermark: access.watermark === 'localis' ? 'localis' : null,

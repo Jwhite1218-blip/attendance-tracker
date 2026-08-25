@@ -44,7 +44,7 @@ function getMonthStats(attendance, year, monthIdx) {
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
   const access = useAuth()
-  const { canEditAttendance, dataVersion } = access
+  const { role, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
@@ -290,14 +290,19 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         />
       )}
 
-      {lizAdminAccess && (
+      {role === 'admin' && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row gap-5">
             <div className="flex-1">
               <label htmlFor="employee-admin-notes" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Employee notes
               </label>
-              <p className="text-[11px] text-gray-400 mt-1">Administrative notes are saved with this shared employee record.</p>
+              <p className="text-[11px] text-gray-400 mt-1">Shared HR notes are saved across district-manager logins and recorded in the audit history.</p>
+              {attendanceStatus && isFlagged(empKey) && (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                  <span className="font-bold">HR occurrence alert:</span> {getAttendanceStageLabel(attendanceStatus)}
+                </div>
+              )}
               <textarea
                 id="employee-admin-notes"
                 value={notesDraft}
@@ -307,24 +312,29 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 }}
                 rows={3}
                 placeholder="Add an employee note…"
-                className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                disabled={!canWriteEmployeeNotes}
+                className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-gray-50 disabled:text-gray-500"
               />
-              <div className="mt-2 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    saveEmployeeNotes(empKey, notesDraft)
-                    setNotesSaved(true)
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700"
-                >
-                  Save notes
-                </button>
-                {notesSaved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
-              </div>
+              {canWriteEmployeeNotes ? (
+                <div className="mt-2 flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      saveEmployeeNotes(empKey, notesDraft)
+                      setNotesSaved(true)
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700"
+                  >
+                    Save HR notes
+                  </button>
+                  {notesSaved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs font-medium text-gray-400">Read-only HR notes</p>
+              )}
             </div>
 
-            <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
+            {lizAdminAccess && <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Employee status</p>
               <p className="text-[11px] text-gray-400 mt-1">Inactive employees leave active rosters without losing their history.</p>
               <input
@@ -367,7 +377,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   Move to inactive
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         </div>
       )}
