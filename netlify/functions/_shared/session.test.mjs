@@ -30,10 +30,13 @@ test('rate limiting is atomic, does not let one wrong PIN lock the valid PIN, an
 
     const login = await handleSessionRequest(loginRequest('609106'), { ip: '203.0.113.10' }, stores)
     assert.equal(login.status, 200)
+    assert.equal((await login.clone().json()).access.canWriteEmployeeNotes, true)
     const cookie = login.headers.get('set-cookie').split(';')[0]
 
     const authenticated = new Request('https://example.test/api/session', { headers: { cookie } })
-    assert.equal((await handleSessionRequest(authenticated, {}, stores)).status, 200)
+    const authenticatedResponse = await handleSessionRequest(authenticated, {}, stores)
+    assert.equal(authenticatedResponse.status, 200)
+    assert.equal((await authenticatedResponse.json()).access.canWriteEmployeeNotes, true)
 
     const logout = new Request('https://example.test/api/session', { method: 'DELETE', headers: { cookie } })
     assert.equal((await handleSessionRequest(logout, {}, stores)).status, 200)

@@ -2,6 +2,7 @@ export const BLACKOUTS_KEY = 'attendance-blackout-dates'
 export const LOCATION_OVERRIDES_KEY = 'employee-location-overrides'
 export const RECORD_OVERRIDES_KEY = 'employee-record-overrides'
 export const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
+export const EMPLOYEE_NOTES_KEY = 'employee-manager-notes-v1'
 export const HR_STATUS_KEY = 'hr-attendance-progress-v2'
 export const LEGACY_HR_STATUS_KEY = 'hr-flags'
 
@@ -19,6 +20,7 @@ export function isManagedStateKey(key) {
   return Boolean(attendanceEmployeeId(key)) || [
     BLACKOUTS_KEY,
     ...ROSTER_KEYS,
+    EMPLOYEE_NOTES_KEY,
     HR_STATUS_KEY,
     LEGACY_HR_STATUS_KEY,
   ].includes(key)
@@ -37,6 +39,7 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
 
   if (session.role !== 'admin') return false
   if (isAttendanceState) return true
+  if (key === EMPLOYEE_NOTES_KEY) return session.canEditAttendance !== false
   if (ROSTER_KEYS.has(key)) return session.canManageRoster === true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false

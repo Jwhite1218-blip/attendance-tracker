@@ -46,7 +46,9 @@ test('authenticated roster omits unused payroll fields and stale merge actions a
     assert.equal(Object.hasOwn(body.roster[0], 'pay_amount'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'department'), false)
-    assert.equal(Object.hasOwn(body.roster[0], 'birthdate'), false)
+    assert.equal(body.roster[0].birthdate, employees[0].birthdate || '')
+    assert.equal(body.roster[0].hire_date, employees[0].hire_date || '')
+    assert.equal(body.roster[0].service_date, employees[0].service_date || '')
     assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
 
     const mergeRequest = await authenticatedRequest(
@@ -87,6 +89,10 @@ test('school state filters roster and location overrides to that school', async 
         [schoolId(schoolEmployee)]: { notes: 'School-visible note', t_shirt_size: 'XL' },
         [schoolId(outsider)]: { notes: 'Other school note', t_shirt_size: 'S' },
       },
+      'employee-manager-notes-v1': {
+        [schoolId(schoolEmployee)]: 'District HR note',
+        [schoolId(outsider)]: 'Other district HR note',
+      },
       'employee-custom-records': [
         {
           id: 999999,
@@ -121,6 +127,7 @@ test('school state filters roster and location overrides to that school', async 
     assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
     assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
     assert.equal(Object.hasOwn(body.entries['employee-record-overrides'][schoolId(schoolEmployee)], 't_shirt_size'), false)
+    assert.equal(Object.hasOwn(body.entries, 'employee-manager-notes-v1'), false)
     assert.equal(Object.hasOwn(body.entries['employee-custom-records'][0], 't_shirt_size'), false)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
@@ -138,6 +145,9 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
       __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
       'employee-record-overrides': {
         [employeeId]: { notes: 'Administrative note', t_shirt_size: '2XL' },
+      },
+      'employee-manager-notes-v1': {
+        [employeeId]: 'Shared HR note',
       },
     })
 
@@ -165,8 +175,37 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
 
     assert.equal(limitedResponse.status, 200)
     assert.equal(Object.hasOwn(limitedBody.roster[0], 't_shirt_size'), false)
+    assert.equal(limitedBody.roster[0].birthdate, employees[0].birthdate || '')
     assert.equal(limitedBody.entries['employee-record-overrides'][employeeId].notes, 'Administrative note')
     assert.equal(Object.hasOwn(limitedBody.entries['employee-record-overrides'][employeeId], 't_shirt_size'), false)
+    assert.equal(limitedBody.entries['employee-manager-notes-v1'][employeeId], 'Shared HR note')
+
+    const limitedNoteRequest = await authenticatedRequest(
+      {
+        role: 'admin',
+        displayName: 'Restricted Manager',
+        canEditAttendance: true,
+        canManageRoster: false,
+        canManageBlackouts: false,
+      },
+      sessions,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+        body: JSON.stringify({
+          action: 'mutate',
+          key: 'employee-manager-notes-v1',
+          mutation: {
+            type: 'object-patch',
+            set: { [employeeId]: 'Updated by restricted manager' },
+            remove: [],
+          },
+        }),
+      }
+    )
+    const limitedNoteResponse = await handleStateRequest(limitedNoteRequest, { stateStore: store, sessionStore: sessions })
+    assert.equal(limitedNoteResponse.status, 200)
+    assert.equal((await limitedNoteResponse.json()).value[employeeId], 'Updated by restricted manager')
 
     const limitedWriteRequest = await authenticatedRequest(
       {

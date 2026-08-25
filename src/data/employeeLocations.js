@@ -6,6 +6,7 @@ import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
 const RECORD_STORAGE_KEY = 'employee-record-overrides'
+const EMPLOYEE_NOTES_KEY = 'employee-manager-notes-v1'
 const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
 
 function readStorage(key, fallback) {
@@ -36,6 +37,10 @@ export function getEmployeeRecordOverrides() {
   return readStorage(RECORD_STORAGE_KEY, {})
 }
 
+export function getEmployeeManagerNotes() {
+  return readStorage(EMPLOYEE_NOTES_KEY, {})
+}
+
 function saveEmployeeRecordOverrides(overrides) {
   writeStorage(RECORD_STORAGE_KEY, overrides)
 }
@@ -59,15 +64,16 @@ function getSourceEmployees() {
   return [...sourceEmployees, ...getCustomEmployees()]
 }
 
-function buildEmployee(employee, locationOverrides, recordOverrides) {
+function buildEmployee(employee, locationOverrides, recordOverrides, managerNotes) {
   const key = employeeKey(employee)
   const override = recordOverrides[key] || {}
+  const hasManagerNote = Object.hasOwn(managerNotes, key)
   return {
     ...employee,
     ...override,
     location: locationOverrides[key] || override.location || employee.location,
     active: override.active !== false,
-    notes: override.notes || '',
+    notes: hasManagerNote ? managerNotes[key] : (override.notes || ''),
     inactive_reason: override.inactive_reason || '',
     inactive_at: override.inactive_at || null,
   }
@@ -76,8 +82,9 @@ function buildEmployee(employee, locationOverrides, recordOverrides) {
 export function getEmployeesWithEffectiveLocations({ includeInactive = false } = {}) {
   const locationOverrides = getLocationOverrides()
   const recordOverrides = getEmployeeRecordOverrides()
+  const managerNotes = getEmployeeManagerNotes()
   const allEmployees = getSourceEmployees().map(employee =>
-    buildEmployee(employee, locationOverrides, recordOverrides)
+    buildEmployee(employee, locationOverrides, recordOverrides, managerNotes)
   )
   return includeInactive ? allEmployees : allEmployees.filter(employee => employee.active)
 }
@@ -119,7 +126,11 @@ export function updateEmployeeRecord(empId, updates) {
 }
 
 export function saveEmployeeNotes(empId, notes) {
-  return updateEmployeeRecord(empId, { notes: String(notes || '').trim() })
+  const key = String(empId)
+  const managerNotes = getEmployeeManagerNotes()
+  managerNotes[key] = String(notes || '').trim()
+  writeStorage(EMPLOYEE_NOTES_KEY, managerNotes)
+  return getEmployeeByKey(key)
 }
 
 export function setEmployeeActive(empId, active, reason = '') {

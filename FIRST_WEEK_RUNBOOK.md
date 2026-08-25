@@ -79,7 +79,10 @@ Complete one restricted-district check with the Marlene/Reese or Jayden/Jess PIN
 2. Confirm `Blackout Calendar` is not in navigation and `/calendar` redirects to the dashboard.
 3. Confirm employee-card edit, add, reactivate, and roster-management controls are not available.
 4. Confirm T-shirt size, `All Star Performance Tracker`, and `Professional Standards` are not visible.
-5. Log out.
+5. Confirm birthday and anniversary dashboard totals are populated from the district roster.
+6. Open an employee card, update the shared HR note, and confirm the note is visible from a second restricted-district login.
+7. Confirm a qualifying employee shows the same HR occurrence alert for the restricted manager and Liz.
+8. Log out.
 
 ## Staff guidance
 
