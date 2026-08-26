@@ -2,6 +2,13 @@ import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 
 export const SESSION_COOKIE = 'attendance-session'
 const SESSION_DURATION_SECONDS = 8 * 60 * 60
+const CHEF_ACCESS = Object.freeze({
+  role: 'admin',
+  displayName: 'Chef',
+  canEditAttendance: true,
+  canManageRoster: false,
+  canManageBlackouts: false,
+})
 
 function environmentValue(name) {
   return globalThis.Netlify?.env?.get(name) || process.env[name] || ''
@@ -55,6 +62,24 @@ function isLizAdministrator(access, configuredEmployeeId) {
     && lizIdentity
 }
 
+function withChefAccess(codes) {
+  const chefPin = environmentValue('ATTENDANCE_CHEF_PIN').trim()
+  if (!chefPin) return { codes, chefApplied: false }
+
+  let problem = ''
+  if (!/^\d{4}$/.test(chefPin)) problem = 'invalid-format'
+  if (codes[chefPin]) problem = 'pin-conflict'
+
+  // Chef is additive so a bad or conflicting value can never replace an
+  // existing production credential.
+  if (problem) {
+    console.error(JSON.stringify({ event: 'chef-pin-addition-skipped', reason: problem }))
+    return { codes, chefApplied: false }
+  }
+
+  return { codes: { ...codes, [chefPin]: CHEF_ACCESS }, chefApplied: true }
+}
+
 function accessCodeConfiguration() {
   const rawCodes = environmentValue('ATTENDANCE_ACCESS_CODES_JSON')
   if (!rawCodes) throw new Error('Attendance access codes are not configured.')
@@ -64,7 +89,7 @@ function accessCodeConfiguration() {
     throw new Error('Attendance access codes are invalid.')
   }
   const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
-  if (!replacementPin) return { codes, replacementApplied: false }
+  if (!replacementPin) return { ...withChefAccess(codes), replacementApplied: false }
   let problem = ''
   if (!/^\d{4,8}$/.test(replacementPin)) {
     problem = 'invalid-format'
@@ -83,13 +108,13 @@ function accessCodeConfiguration() {
   // health check remains observable without locking every other user out.
   if (problem) {
     console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
-    return { codes, replacementApplied: false }
+    return { ...withChefAccess(codes), replacementApplied: false }
   }
 
   const replacedCodes = { ...codes }
   delete replacedCodes[currentPin]
   replacedCodes[replacementPin] = lizAccess
-  return { codes: replacedCodes, replacementApplied: true }
+  return { ...withChefAccess(replacedCodes), replacementApplied: true }
 }
 
 export function getAccessCodes() {
@@ -138,7 +163,9 @@ export function sessionFromRequest(request, now = Date.now()) {
 
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (!session.expiresAt || session.expiresAt <= now) return null
-    const configuration = session.credentialFingerprint || environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
+    const pinConfigurationChanged = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
+      || environmentValue('ATTENDANCE_CHEF_PIN')
+    const configuration = session.credentialFingerprint || pinConfigurationChanged
       ? accessCodeConfiguration()
       : null
     if (session.credentialFingerprint) {
