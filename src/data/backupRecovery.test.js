@@ -13,7 +13,7 @@ const validBackup = {
   exportedBy: 'Liz',
   entries: {
     'attendance-blackout-dates': [],
-    'employee-manager-notes-v1': {},
+    'all-star-recognition-v1': {},
   },
 }
 
