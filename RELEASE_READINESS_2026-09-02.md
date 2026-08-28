@@ -12,7 +12,7 @@ Production launch: Wednesday, September 2, 2026
   Netlify deploy `6a90d9a07b7e160009de2d61`, built from Git commit
   `b0bbccedfba2591c5096283ce2ac2085a2e237a0`.
 - **The release candidate is on the isolated lab only.** Its current Netlify
-  deploy is `6a8fa9d51cfd58881108cd7b` at
+  deploy is `6a90e6b41bbd188ac306a359` at
   <https://allstartracker-stress-20260821.netlify.app>.
 - The lab displays `Recognition Test Lab`, uses isolated Netlify Blobs data,
   and has scheduled email reports disabled.
@@ -32,6 +32,8 @@ Production launch: Wednesday, September 2, 2026
   security headers pass the remote readiness check.
 - All 15 lab NFC pages return the correct school, accept no PIN, reject unknown
   tokens, and expose only name plus separate public recognition counts.
+- Employees with only a Shout-Out, Shooting Star nomination, monthly All-Star,
+  or Employee of the Month remain visible without increasing earned-star rank.
 - Public responses exclude attendance, HR data, employee IDs, location IDs,
   criteria, notes, source names, and manager attribution.
 - Browser checks confirm the Warren-branded crowd view, empty-school state,
