@@ -12,7 +12,7 @@ Production launch: Wednesday, September 2, 2026
   Netlify deploy `6a90d9a07b7e160009de2d61`, built from Git commit
   `b0bbccedfba2591c5096283ce2ac2085a2e237a0`.
 - **The release candidate is on the isolated lab only.** Its current Netlify
-  deploy is `6a90e6b41bbd188ac306a359` at
+  deploy is `6a916347d1c3f3e45af22d49` at
   <https://allstartracker-stress-20260821.netlify.app>.
 - The lab displays `Recognition Test Lab`, uses isolated Netlify Blobs data,
   and has scheduled email reports disabled.
@@ -23,7 +23,7 @@ Production launch: Wednesday, September 2, 2026
   to NFC cards now, but those links will not display the new boards until the
   September 2 production deployment succeeds.
 
-## Verified August 27
+## Verified August 28
 
 - 86 automated tests pass, including the administrator-only recognition boundary.
 - The Vite production bundle builds successfully.
