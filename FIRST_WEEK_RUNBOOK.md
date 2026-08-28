@@ -85,9 +85,11 @@ Complete one school-manager check with a school PIN:
 1. Confirm the account opens only its assigned school.
 2. Confirm another school's URL redirects back to the assigned school.
 3. Confirm the `Blackout Calendar` is view-only and roster-management/blackout controls are not available.
-4. Open `All-Stars`, confirm only the assigned building's roster and recognition history appear, and do not finalize a monthly winner during a smoke test.
+4. Confirm `All-Stars` is not in navigation and that opening `/recognition`
+   directly redirects back to the assigned school.
 5. Confirm `Professional Standards` is not visible.
-6. Open an employee card and confirm the employee's All-Star summary appears but no T-shirt size label or value is visible.
+6. Open an employee card and confirm no All-Star administration section, T-shirt
+   size label, or T-shirt size value is visible.
 7. Log out.
 
 Complete one restricted-district check with the Marlene/Reese or Jayden/Jess PIN:
