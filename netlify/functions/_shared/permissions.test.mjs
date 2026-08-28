@@ -185,7 +185,7 @@ test('PIN profiles fail closed for invalid buildings and contradictory capabilit
   })
   assert.equal(school.locationId, 'SunnyHt ES')
   assert.equal(school.canEditAttendance, true)
-  assert.equal(school.canEditRecognition, true)
+  assert.equal(school.canEditRecognition, false)
   assert.equal(school.canManageRoster, false)
   assert.equal(school.canManageBlackouts, false)
   assert.equal(school.canManageRecognitionAwards, false)
@@ -197,10 +197,7 @@ test('PIN profiles fail closed for invalid buildings and contradictory capabilit
     canEditAttendance: true,
     canEditRecognition: true,
   })
-  assert.equal(recognitionOnlySchool.locationId, 'CrestonMS')
-  assert.equal(recognitionOnlySchool.canEditAttendance, false)
-  assert.equal(recognitionOnlySchool.canEditRecognition, true)
-  assert.equal(recognitionOnlySchool.recognitionOnly, true)
+  assert.equal(recognitionOnlySchool, null)
 
   const readOnlyAdmin = normalizeAccessProfile({ role: 'admin', canEditAttendance: false })
   assert.equal(readOnlyAdmin.canManageRoster, false)
@@ -264,7 +261,7 @@ test('school managers can only write attendance for employees in their school', 
 
   assert.equal(canWriteStateKey(schoolManager, 'att-emp-123-2026', allowedEmployeeIds), true)
   assert.equal(canWriteStateKey(schoolManager, 'att-emp-456-2026', allowedEmployeeIds), false)
-  assert.equal(canWriteStateKey(schoolManager, RECOGNITION_KEY, allowedEmployeeIds), true)
+  assert.equal(canWriteStateKey(schoolManager, RECOGNITION_KEY, allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, EMPLOYEE_NOTES_KEY, allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, 'attendance-blackout-dates', allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, 'employee-location-overrides', allowedEmployeeIds), false)
