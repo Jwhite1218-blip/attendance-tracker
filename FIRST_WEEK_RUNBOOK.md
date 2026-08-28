@@ -15,14 +15,15 @@ Rollout window: August 24–28, 2026
 - Application: https://allstartracker-stress-20260821.netlify.app
 - Netlify admin: https://app.netlify.com/projects/allstartracker-stress-20260821
 - State backend: isolated Netlify Blobs test data
-- Current release-candidate validation deploy: `6a8c2de20407f6aeefea4523`
+- Current release-candidate validation deploy: `6a8fa9d51cfd58881108cd7b`
 
-Do not use `allstartracker-stress-20260821.netlify.app` with staff. It is an
-isolated load-test deployment and is not Git-linked.
+Use `allstartracker-stress-20260821.netlify.app` only for the scheduled dress
+rehearsal and test data. It is isolated, is not Git-linked, and must never be
+treated as the live staff system.
 
 ## Verified launch baseline — August 24, 2026
 
-- 56 automated tests pass and the production build completes.
+- 85 automated tests pass and the production build completes.
 - The production dependency audit reports zero known vulnerabilities.
 - The testing clone passes the public readiness check after the React Router
   7.18.2 security update: application and assets load, anonymous API requests
@@ -73,30 +74,33 @@ Then complete one manual Liz check without entering test attendance:
 1. Sign in with Liz's assigned production PIN.
 2. Confirm the header shows Liz's name and `Administrator`.
 3. Confirm the shared-data indicator is green and reads `Shared`.
-4. Confirm `All Star Performance Tracker` and `Professional Standards` are visible and show `Setup pending · Liz only`.
-5. Open Employee Records, verify the expected roster is present, and confirm the T-shirt-size field is visible on an employee card. A blank size is expected until Liz supplies the values.
-6. Open one school and confirm its staff list loads.
-7. Log out and confirm the PIN screen returns.
+4. Open `All-Stars`, confirm the district-wide recognition page loads, and verify the building filter, recognition form, star levels, monthly drawing, and annual award categories are visible.
+5. Confirm `Professional Standards` is visible and shows `Setup pending · Liz only`.
+6. Open Employee Records, verify the expected roster is present, and confirm the T-shirt-size field is visible on an employee card. A blank size is expected until Liz supplies the values.
+7. Open one school and confirm its staff list loads.
+8. Log out and confirm the PIN screen returns.
 
 Complete one school-manager check with a school PIN:
 
 1. Confirm the account opens only its assigned school.
 2. Confirm another school's URL redirects back to the assigned school.
 3. Confirm the `Blackout Calendar` is view-only and roster-management/blackout controls are not available.
-4. Confirm `All Star Performance Tracker` and `Professional Standards` are not visible.
-5. Open an employee card and confirm no T-shirt size label or value is visible.
-6. Log out.
+4. Open `All-Stars`, confirm only the assigned building's roster and recognition history appear, and do not finalize a monthly winner during a smoke test.
+5. Confirm `Professional Standards` is not visible.
+6. Open an employee card and confirm the employee's All-Star summary appears but no T-shirt size label or value is visible.
+7. Log out.
 
 Complete one restricted-district check with the Marlene/Reese or Jayden/Jess PIN:
 
 1. Confirm the district dashboard and attendance workflows are available.
 2. Confirm `Blackout Calendar` is not in navigation and `/calendar` redirects to the dashboard.
 3. Confirm employee-card edit, add, reactivate, and roster-management controls are not available.
-4. Confirm T-shirt size, `All Star Performance Tracker`, and `Professional Standards` are not visible.
-5. Confirm birthday and anniversary dashboard totals are populated from the district roster.
-6. Open an employee card, update the shared HR note, and confirm the note is visible from a second restricted-district login.
-7. Confirm a qualifying employee shows the same HR occurrence alert for the restricted manager and Liz.
-8. Log out.
+4. Confirm T-shirt size and `Professional Standards` are not visible.
+5. Open `All-Stars` and confirm the district-wide recognition workspace is available for entry.
+6. Confirm birthday and anniversary dashboard totals are populated from the district roster.
+7. Open an employee card, update the shared HR note, and confirm the note is visible from a second restricted-district login.
+8. Confirm a qualifying employee shows the same HR occurrence alert for the restricted manager and Liz.
+9. Log out.
 
 ## Staff guidance
 
