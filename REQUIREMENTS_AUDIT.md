@@ -1,6 +1,6 @@
 # Liz Requirements Audit
 
-Audit date: 2026-08-24
+Audit date: 2026-08-27
 
 This is a traceability review of the written requirements currently available
 in the repository, its GitHub pull-request history, and the replacement PLAUD
@@ -16,6 +16,8 @@ remaining access interpretation and authenticated production smoke tests in
 - PLAUD recording `ccb70394de72ba41d380d3fd085b154c`, **08-20 Meeting:
   System Access Levels and Feature Development** (59 transcript segments). The
   earlier shared PLAUD link was explicitly withdrawn and was not used.
+- Liz's `All-Star Recognition Program` handout supplied August 26, including
+  the daily, monthly, bonus, level, manager, and annual recognition rules.
 - The current application, Netlify Functions, Supabase migrations, automated
   tests, production build, Netlify configuration, and public production checks.
 
@@ -47,7 +49,8 @@ authentication were superseded by Liz's later Warren-specific requirements.
 | Alphabetized dashboard schools | The dashboard location cards are sorted alphabetically by school name, matching the PLAUD action item. |
 | School isolation | School sessions receive only their assigned roster and attendance state, redirect away from other school URLs, and cannot write another school's records. |
 | Liz and restricted admins | The code supports the PLAUD access tiers: building-scoped managers; restricted district users who can edit attendance, update district-wide shared HR notes, and see real-time occurrence alerts but cannot access the blackout calendar, edit protected employee-card fields, or add/remove employees; Liz full administration with the same alerts; and read-only review. Marlene/Reese and Jayden/Jess have the same restricted capabilities, and Chef is intended to receive another credential at that level. |
-| Future tracker access | All Star Performance Tracker and Professional Standards appear only for Liz's full-admin access, following the later clarification. They remain disabled placeholders until Liz supplies the behavior and layout described as open in PLAUD. |
+| All-Star Recognition | The handout-driven All-Star workspace is available to every authenticated manager. School sessions see and write only their building roster; district admins can work across buildings; review accounts are read-only. Only Star of the Day advances the July-June leaderboard and supplies weighted monthly drawing entries. Shooting Star nominations, Warren Star Shout-Outs, monthly winners, and Employee of the Month remain separately visible without inflating that count. The workspace preserves the approved criteria, calculates all five levels, shows employee recognition history, and keeps server-owned actor attribution. ACE Bucks and annual prize selection remain informational because the source does not define point values or a selection formula. |
+| Future tool access | Professional Standards remains visible only to Liz's full-admin access and stays disabled until its separate behavior or approved URL is supplied. |
 | Read-only review | Plain and Localis-watermarked review modes can navigate but cannot change attendance, roster, notes, or blackouts. |
 | Shared persistence | PIN authentication and attendance state are server-side; production uses tenant-scoped Supabase storage with atomic state mutations. |
 | Privacy | Payroll amount, weekly hours, department, and other unused source fields are excluded from authenticated roster responses and the public browser bundle. |
@@ -58,9 +61,11 @@ authentication were superseded by Liz's later Warren-specific requirements.
 1. **Quick Mark:** the former duplicate Quick Mark screen was intentionally
    replaced by the consolidated Employee Records and weekly school workflows.
    Confirm from PLAUD/Liz that the replacement is accepted.
-2. **All Star and Professional Standards parameters:** Liz can see both buttons,
-   but they remain disabled until their separate specifications or approved URLs
-   are supplied.
+2. **Remaining recognition parameters:** confirm ACE Buck denominations and
+   redemption values, the annual-award decision process, and whether Warren
+   wants a separate public shout-out intake form outside the PIN-protected
+   manager portal. Professional Standards still needs its separate specification
+   or approved URL.
 3. **End-of-day email activation:** the privacy-limited weekday report engine is
    implemented and tested. Initial live delivery is routed to Jon for review
    and manual forwarding to Liz; direct delivery to Liz remains deferred.
@@ -83,15 +88,15 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 51 passed, 0 failed on the end-of-day-report and targeted
-  Liz PIN-rotation candidate.
+- Automated tests: 85 passed, 0 failed, including recognition rules, monthly
+  weighting, role permissions, and school isolation.
 - Production build: passed.
 - Production dependency audit: zero known vulnerabilities after validating the
   React Router 7.18.2 security update on the isolated testing clone.
-- Production state integrity: 19 attendance records; zero malformed dates,
-  embedded-date mismatches, unknown codes, or invalid JSON shapes.
+- Production content was not modified during the release split. A fresh Liz
+  backup and authenticated production smoke test remain required immediately
+  before the September 2 launch.
 - Recovery: Supabase Pro daily physical backups are active; point-in-time
   recovery is not enabled.
-- The current live release and isolated testing candidate both passed their
-  public security/readiness checks on August 24, 2026.
-
+- The current live release passed its public security/readiness check, and the
+  isolated candidate passed all 15 NFC leaderboard checks, on August 27, 2026.
