@@ -9,6 +9,7 @@ import LedgerView from './pages/LedgerView.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
+import PublicSchoolLeaderboard from './pages/PublicSchoolLeaderboard.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
@@ -18,6 +19,14 @@ import localisLogo from './assets/localis-logo.png'
 const TEST_ENVIRONMENT_LABEL = String(import.meta.env.VITE_TEST_ENVIRONMENT_LABEL || '').trim()
 
 export default function App() {
+  const location = useLocation()
+  if (location.pathname.startsWith('/school-stars/')) {
+    return (
+      <Routes>
+        <Route path="/school-stars/:token" element={<PublicSchoolLeaderboard />} />
+      </Routes>
+    )
+  }
   return (
     <PinGate>
       <AppShell />
@@ -32,6 +41,7 @@ function AppShell() {
     locationId,
     displayName,
     canEditAttendance,
+    canEditRecognition,
     recognitionOnly,
     canManageRoster,
     canManageBlackouts,
