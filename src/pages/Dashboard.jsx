@@ -141,6 +141,18 @@ export default function Dashboard() {
               <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
             </span>
           </Link>
+          {lizAdminAccess && (
+            <Link
+              to="/backup-recovery"
+              className="inline-flex items-center gap-3 rounded-xl border border-emerald-400/60 bg-emerald-700 px-4 py-3 text-white shadow-sm transition-colors hover:bg-emerald-600"
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10 text-lg" aria-hidden="true">↻</span>
+              <span>
+                <span className="block text-sm font-bold">Backup & Recovery</span>
+                <span className="mt-0.5 block text-[11px] text-emerald-100">Liz self-service protection</span>
+              </span>
+            </Link>
+          )}
           {showLizFutureTools && (
             <>
               <FutureToolButton
