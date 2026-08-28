@@ -14,6 +14,9 @@ const AuthContext = createContext({
   displayName: null,
   employeeId: null,
   canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRecognitionAwards: true,
+  recognitionOnly: false,
   canWriteEmployeeNotes: true,
   canManageRoster: true,
   canManageBlackouts: true,
@@ -136,7 +139,12 @@ export default function PinGate({ children }) {
         displayName: authed.displayName || null,
         employeeId: authed.employeeId || null,
         canEditAttendance: (authed.role === 'admin' || authed.role === 'school') && authed.canEditAttendance !== false,
-        canWriteEmployeeNotes: authed.role === 'admin' && authed.canEditAttendance !== false,
+        canEditRecognition: (authed.role === 'admin' || authed.role === 'school')
+          && authed.canEditRecognition === true,
+        canManageRecognitionAwards: authed.role === 'admin'
+          && authed.canManageRecognitionAwards === true,
+        recognitionOnly: authed.recognitionOnly === true,
+        canWriteEmployeeNotes: authed.canWriteEmployeeNotes === true,
         canManageRoster: authed.role === 'admin' && authed.canManageRoster !== false,
         canManageBlackouts: authed.role === 'admin' && authed.canManageBlackouts !== false,
         watermark: authed.watermark === 'localis' ? 'localis' : null,

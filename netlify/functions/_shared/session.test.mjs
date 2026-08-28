@@ -141,6 +141,7 @@ test('active sessions immediately inherit safer capability changes for the same 
     assert.equal(response.status, 200)
     assert.equal(body.access.canManageRoster, false)
     assert.equal(body.access.canManageBlackouts, false)
+    assert.equal(body.access.canManageRecognitionAwards, false)
   } finally {
     if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
     else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
