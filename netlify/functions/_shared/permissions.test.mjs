@@ -154,6 +154,42 @@ test('additive Chef PIN receives restricted district access without replacing ex
   }
 })
 
+test('targeted PIN replacements preserve access and fail closed on conflicts', () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  const previousReplacements = process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON
+  // Synthetic values only; never mirror deployed credentials in source control.
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    100000: {
+      role: 'school',
+      displayName: 'Synthetic School A',
+      locationId: 'WarrenCnHS',
+    },
+    200000: {
+      role: 'school',
+      displayName: 'Synthetic School B',
+      locationId: 'CrestonMS',
+    },
+  })
+
+  try {
+    process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON = JSON.stringify({ 100000: '100001' })
+    assert.equal(accessForPin('100000'), null)
+    const replacement = accessForPin('100001')
+    assert.equal(replacement.displayName, 'Synthetic School A')
+    assert.equal(replacement.locationId, 'WarrenCnHS')
+    assert.equal(replacement.role, 'school')
+
+    process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON = JSON.stringify({ 100000: '200000' })
+    assert.equal(accessForPin('100000').displayName, 'Synthetic School A')
+    assert.equal(accessForPin('200000').displayName, 'Synthetic School B')
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+    if (previousReplacements === undefined) delete process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON
+    else process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON = previousReplacements
+  }
+})
+
 test('all school identifiers, names, short names, case, and spacing normalize to one canonical building ID', () => {
   const schools = LOCATIONS.filter(location => location.id !== 'Admin')
 

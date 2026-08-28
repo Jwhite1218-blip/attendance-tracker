@@ -88,9 +88,10 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 99 passed, 0 failed, verified on this branch after
+- Automated tests: 101 passed, 0 failed, verified on this branch after
   rebasing onto `main`. Coverage includes recognition rules, monthly weighting,
-  role permissions, school isolation, the PIN-profile matrix, and
+  role permissions, school isolation, collision-safe targeted PIN replacement,
+  the PIN-profile matrix, and
   `state-key-parity.test.mjs`, which fails if the SQL allowlist, the server key
   list, and the client `FIXED_STORAGE_KEYS` ever disagree. (Earlier revisions
   recorded 51 and 85 against narrower suites.)

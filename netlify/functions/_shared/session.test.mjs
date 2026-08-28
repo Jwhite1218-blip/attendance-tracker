@@ -106,6 +106,49 @@ test('replacing Liz PIN revokes her existing session without logging out other s
   }
 })
 
+test('replacing a school PIN revokes its existing session and preserves school access', async () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  const previousReplacements = process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON
+  // Synthetic values only; never mirror deployed credentials in source control.
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    100000: {
+      role: 'school',
+      displayName: 'Synthetic School A',
+      locationId: 'WarrenCnHS',
+    },
+  })
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  delete process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON
+
+  try {
+    const stores = { rate: createMemoryBlobStore(), sessions: createMemoryBlobStore() }
+    const login = await handleSessionRequest(loginRequest('100000'), { ip: '203.0.113.24' }, stores)
+    assert.equal(login.status, 200)
+    const cookie = login.headers.get('set-cookie').split(';')[0]
+
+    process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON = JSON.stringify({ 100000: '100001' })
+
+    const oldSession = new Request('https://example.test/api/session', { headers: { cookie } })
+    assert.equal((await handleSessionRequest(oldSession, {}, stores)).status, 401)
+    assert.equal((await handleSessionRequest(loginRequest('100000'), { ip: '203.0.113.25' }, stores)).status, 401)
+
+    const replacementLogin = await handleSessionRequest(loginRequest('100001'), { ip: '203.0.113.26' }, stores)
+    assert.equal(replacementLogin.status, 200)
+    const body = await replacementLogin.json()
+    assert.equal(body.access.role, 'school')
+    assert.equal(body.access.locationId, 'WarrenCnHS')
+    assert.equal(body.access.canEditRecognition, false)
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+    if (previousReplacements === undefined) delete process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON
+    else process.env.ATTENDANCE_PIN_REPLACEMENTS_JSON = previousReplacements
+  }
+})
+
 test('active sessions immediately inherit safer capability changes for the same PIN', async () => {
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET

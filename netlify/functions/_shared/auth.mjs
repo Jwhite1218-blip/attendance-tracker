@@ -182,6 +182,54 @@ function withChefAccess(codes) {
   return { codes: { ...codes, [chefPin]: CHEF_ACCESS }, chefApplied: true }
 }
 
+function withPinReplacements(codes) {
+  const rawReplacements = environmentValue('ATTENDANCE_PIN_REPLACEMENTS_JSON').trim()
+  if (!rawReplacements) return { codes, pinReplacementsApplied: 0 }
+
+  let replacements
+  try {
+    replacements = JSON.parse(rawReplacements)
+  } catch {
+    console.error(JSON.stringify({ event: 'pin-replacements-skipped', reason: 'invalid-json' }))
+    return { codes, pinReplacementsApplied: 0 }
+  }
+  if (!replacements || typeof replacements !== 'object' || Array.isArray(replacements)) {
+    console.error(JSON.stringify({ event: 'pin-replacements-skipped', reason: 'invalid-shape' }))
+    return { codes, pinReplacementsApplied: 0 }
+  }
+
+  const replacedCodes = { ...codes }
+  let pinReplacementsApplied = 0
+  for (const [currentPin, rawReplacementPin] of Object.entries(replacements)) {
+    const replacementPin = String(rawReplacementPin || '').trim()
+    let problem = ''
+    if (!/^\d{4,8}$/.test(currentPin) || !/^\d{4,8}$/.test(replacementPin)) problem = 'invalid-format'
+    if (currentPin === replacementPin) problem = 'unchanged-pin'
+    if (!replacedCodes[currentPin]) problem = 'missing-current-pin'
+    if (replacedCodes[replacementPin] && currentPin !== replacementPin) problem = 'pin-conflict'
+
+    if (problem) {
+      console.error(JSON.stringify({ event: 'pin-replacement-skipped', reason: problem }))
+      continue
+    }
+
+    replacedCodes[replacementPin] = replacedCodes[currentPin]
+    delete replacedCodes[currentPin]
+    pinReplacementsApplied += 1
+  }
+  return { codes: replacedCodes, pinReplacementsApplied }
+}
+
+function withConfiguredAccess(codes) {
+  const replacements = withPinReplacements(codes)
+  const chef = withChefAccess(replacements.codes)
+  return withPresentationPilotAccess({
+    codes: chef.codes,
+    chefApplied: chef.chefApplied,
+    pinReplacementsApplied: replacements.pinReplacementsApplied,
+  })
+}
+
 function withPresentationPilotAccess(configuration) {
   const rawPilots = environmentValue('ATTENDANCE_RECOGNITION_PILOT_PINS_JSON').trim()
   if (!rawPilots) return { ...configuration, presentationPilotsApplied: 0 }
@@ -226,7 +274,7 @@ function accessCodeConfiguration() {
   }
   const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
   if (!replacementPin) {
-    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
+    return { ...withConfiguredAccess(codes), replacementApplied: false }
   }
   let problem = ''
   if (!/^\d{4,8}$/.test(replacementPin)) {
@@ -246,13 +294,13 @@ function accessCodeConfiguration() {
   // health check remains observable without locking every other user out.
   if (problem) {
     console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
-    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
+    return { ...withConfiguredAccess(codes), replacementApplied: false }
   }
 
   const replacedCodes = { ...codes }
   delete replacedCodes[currentPin]
   replacedCodes[replacementPin] = lizAccess
-  return { ...withPresentationPilotAccess(withChefAccess(replacedCodes)), replacementApplied: true }
+  return { ...withConfiguredAccess(replacedCodes), replacementApplied: true }
 }
 
 export function getAccessCodes() {
@@ -295,6 +343,7 @@ export function sessionFromRequest(request, now = Date.now()) {
     const pinConfigurationChanged = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
       || environmentValue('ATTENDANCE_CHEF_PIN')
       || environmentValue('ATTENDANCE_RECOGNITION_PILOT_PINS_JSON')
+      || environmentValue('ATTENDANCE_PIN_REPLACEMENTS_JSON')
     const configuration = session.credentialFingerprint || pinConfigurationChanged
       ? accessCodeConfiguration()
       : null
