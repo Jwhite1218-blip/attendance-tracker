@@ -15,6 +15,7 @@ function stateStore(entries) {
   return {
     async list() { return { blobs: [...values.keys()].map(key => ({ key })) } },
     async get(key) { return values.has(key) ? structuredClone(values.get(key)) : null },
+    async setJSON(key, value) { values.set(key, structuredClone(value)) },
     async updateJSON(key, mutation) {
       const { applyStateMutation } = await import('../../../src/data/stateMutations.js')
       const value = applyStateMutation(key, values.get(key) ?? null, mutation)
@@ -30,6 +31,23 @@ async function authenticatedRequest(access, sessions) {
   const request = new Request('https://example.test/api/state', { headers: { cookie } })
   await registerServerSession(sessionFromRequest(request), sessions)
   return request
+}
+
+function recognitionFor(employee, suffix) {
+  const employeeId = String(employee.kronos_id || employee.id)
+  return {
+    id: `star-${suffix}`,
+    employeeId,
+    locationId: employee.location,
+    type: 'star-of-day',
+    date: '2026-08-27',
+    monthKey: null,
+    criteria: ['Service'],
+    note: '',
+    sourceName: '',
+    recognizedBy: 'Matrix Test',
+    createdAt: '2026-08-27T12:00:00.000Z',
+  }
 }
 
 test('every school PIN variation logs in with its canonical building and safe capabilities', async () => {
@@ -66,7 +84,8 @@ test('every school PIN variation logs in with its canonical building and safe ca
       assert.equal(body.access.role, 'school')
       assert.equal(body.access.locationId, school.id)
       assert.equal(body.access.canEditAttendance, true)
-      assert.equal(body.access.canWriteEmployeeNotes, false)
+      assert.equal(body.access.canEditRecognition, true)
+      assert.equal(body.access.canManageRecognitionAwards, false)
       assert.equal(body.access.canManageRoster, false)
       assert.equal(body.access.canManageBlackouts, false)
     }
@@ -107,7 +126,7 @@ test('invalid school and role PIN profiles are rejected instead of opening a bro
   }
 })
 
-test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only intended controls', async () => {
+test('district, restricted, read-only, pilot, and 4-to-8 digit PIN shapes expose only intended controls', async () => {
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   const profiles = [
@@ -116,7 +135,8 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
       access: { role: 'admin', displayName: 'Liz Admin' },
       expected: {
         canEditAttendance: true,
-        canWriteEmployeeNotes: true,
+        canEditRecognition: true,
+        canManageRecognitionAwards: true,
         canManageRoster: true,
         canManageBlackouts: true,
       },
@@ -131,7 +151,8 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
       },
       expected: {
         canEditAttendance: true,
-        canWriteEmployeeNotes: true,
+        canEditRecognition: true,
+        canManageRecognitionAwards: false,
         canManageRoster: false,
         canManageBlackouts: false,
       },
@@ -141,17 +162,24 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
       access: { role: 'admin', displayName: 'Read-only Review', canEditAttendance: false },
       expected: {
         canEditAttendance: false,
-        canWriteEmployeeNotes: false,
+        canEditRecognition: false,
+        canManageRecognitionAwards: false,
         canManageRoster: false,
         canManageBlackouts: false,
       },
     },
     {
       pin: '7301234',
-      access: { role: 'school', displayName: 'School Manager', locationId: 'Sunny Heights' },
+      access: {
+        role: 'admin',
+        displayName: 'Recognition Pilot',
+        recognitionOnly: true,
+        canEditRecognition: true,
+      },
       expected: {
-        canEditAttendance: true,
-        canWriteEmployeeNotes: false,
+        canEditAttendance: false,
+        canEditRecognition: true,
+        canManageRecognitionAwards: false,
         canManageRoster: false,
         canManageBlackouts: false,
       },
@@ -160,13 +188,15 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
       pin: '73012345',
       access: {
         role: 'admin',
-        displayName: 'Explicitly Restricted Administrator',
+        displayName: 'Authorized Award Pilot',
         canManageRoster: false,
         canManageBlackouts: false,
+        canManageRecognitionAwards: true,
       },
       expected: {
         canEditAttendance: true,
-        canWriteEmployeeNotes: true,
+        canEditRecognition: true,
+        canManageRecognitionAwards: true,
         canManageRoster: false,
         canManageBlackouts: false,
       },
@@ -187,6 +217,7 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
       }), { ip: `192.0.2.${index + 1}` }, stores)
       const body = await response.json()
       assert.equal(response.status, 200)
+      assert.equal(body.access.role, 'admin')
       for (const [capability, expected] of Object.entries(profile.expected)) {
         assert.equal(body.access[capability], expected, `${profile.access.displayName}: ${capability}`)
       }
@@ -199,13 +230,22 @@ test('district, restricted, read-only, and 4-to-8 digit PIN shapes expose only i
   }
 })
 
-test('all 15 building sessions receive only their own roster', async () => {
+test('all 15 building sessions receive only their roster and their recognition records', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
   delete process.env.ATTENDANCE_ACCESS_CODES_JSON
 
-  const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+  const recognitions = Object.fromEntries(SCHOOLS.map((school, index) => {
+    const employee = employees.find(row => row.location === school.id)
+    assert.ok(employee, `${school.name} needs at least one roster employee`)
+    const recognition = recognitionFor(employee, index)
+    return [recognition.id, recognition]
+  }))
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': recognitions,
+  })
 
   try {
     for (const school of SCHOOLS) {
@@ -223,7 +263,58 @@ test('all 15 building sessions receive only their own roster', async () => {
       assert.equal(response.status, 200)
       assert.equal(body.roster.length, expectedRosterCount, `${school.name} roster count`)
       assert.ok(body.roster.every(employee => employee.location === school.id))
+      assert.equal(Object.keys(body.entries['all-star-recognition-v1']).length, 1)
+      assert.ok(Object.values(body.entries['all-star-recognition-v1'])
+        .every(recognition => recognition.locationId === school.id))
     }
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+  }
+})
+
+test('recognition-only school sessions remain building-scoped', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
+  delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+
+  const targetSchool = SCHOOLS[0]
+  const otherSchool = SCHOOLS[1]
+  const targetRecognition = recognitionFor(
+    employees.find(employee => employee.location === targetSchool.id),
+    'target'
+  )
+  const otherRecognition = recognitionFor(
+    employees.find(employee => employee.location === otherSchool.id),
+    'other'
+  )
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': {
+      [targetRecognition.id]: targetRecognition,
+      [otherRecognition.id]: otherRecognition,
+    },
+  })
+
+  try {
+    const sessions = createMemoryBlobStore()
+    const request = await authenticatedRequest({
+      role: 'school',
+      locationId: targetSchool.id,
+      recognitionOnly: true,
+      canEditRecognition: true,
+      displayName: 'Recognition-only School Manager',
+    }, sessions)
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.deepEqual(Object.keys(body.entries), ['all-star-recognition-v1'])
+    assert.deepEqual(Object.keys(body.entries['all-star-recognition-v1']), [targetRecognition.id])
+    assert.ok(body.roster.every(employee => employee.location === targetSchool.id))
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

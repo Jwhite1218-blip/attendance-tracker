@@ -6,6 +6,7 @@ const FIXED_STORAGE_KEYS = new Set([
   'employee-record-overrides',
   'employee-manager-notes-v1',
   'employee-custom-records',
+  'all-star-recognition-v1',
   'hr-attendance-progress-v2',
   'hr-flags',
 ])
@@ -34,6 +35,10 @@ function canWriteManagedKey(key) {
   if (!clientAccess) return false
   if (ATTENDANCE_KEY_PATTERN.test(key) || key === 'hr-attendance-progress-v2' || key === 'hr-flags') {
     return clientAccess.canEditAttendance !== false
+  }
+  if (key === 'all-star-recognition-v1') {
+    return (clientAccess.role === 'admin' || clientAccess.role === 'school')
+      && clientAccess.canEditRecognition === true
   }
   if (key === 'attendance-blackout-dates') return clientAccess.canManageBlackouts === true
   if (key === 'employee-location-overrides') return clientAccess.canManageRoster === true

@@ -8,12 +8,15 @@ import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
+import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import localisLogo from './assets/localis-logo.png'
+
+const TEST_ENVIRONMENT_LABEL = String(import.meta.env.VITE_TEST_ENVIRONMENT_LABEL || '').trim()
 
 export default function App() {
   return (
@@ -25,10 +28,22 @@ export default function App() {
 
 function AppShell() {
   const location = useLocation()
-  const { role, locationId, displayName, canEditAttendance, canManageRoster, canManageBlackouts, watermark, syncStatus } = useAuth()
+  const {
+    role,
+    locationId,
+    displayName,
+    canEditAttendance,
+    recognitionOnly,
+    canManageRoster,
+    canManageBlackouts,
+    watermark,
+    syncStatus,
+  } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const accessLabel = !canEditAttendance
+  const accessLabel = recognitionOnly
+    ? 'Recognition Pilot'
+    : !canEditAttendance
     ? 'Read-only review'
     : role === 'school'
       ? 'School Manager'
@@ -36,16 +51,21 @@ function AppShell() {
         ? 'Administrator'
         : 'Administrator · Limited editing'
 
-  const homePath = role === 'school' ? `/location/${locationId}` : '/'
+  const homePath = recognitionOnly ? '/recognition' : role === 'school' ? `/location/${locationId}` : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
-  const navItems = [
+  const standardNavItems = [
     { path: homePath, label: 'Dashboard' },
+    { path: '/recognition', label: 'All-Stars' },
     { path: '/ledger', label: 'Employee Records' },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
+    ...(lizAdminAccess ? [{ path: '/backup-recovery', label: 'Backup & Recovery' }] : []),
   ]
+  const navItems = recognitionOnly
+    ? [{ path: '/recognition', label: 'All-Stars' }]
+    : standardNavItems
 
   const schoolName = role === 'school' ? LOCATION_MAP[locationId]?.name : null
   const navItemIsActive = item => (
@@ -80,7 +100,7 @@ function AppShell() {
             </Link>
 
             {/* Desktop nav */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden xl:flex items-center gap-1">
               {navItems.map(item => (
                 <Link
                   key={item.path}
@@ -97,7 +117,7 @@ function AppShell() {
             </div>
 
             {/* Right side - Localis product mark + logout (desktop) */}
-            <div className="hidden md:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
+            <div className="hidden xl:flex items-center gap-3 pl-4 border-l border-charcoal-600 ml-2">
               <span
                 className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
                   syncStatus === 'pending' ? 'text-red-300' : syncStatus === 'saving' ? 'text-amber-200' : 'text-emerald-300'
@@ -129,7 +149,7 @@ function AppShell() {
             </div>
 
             {/* Mobile menu button */}
-            <div className="flex md:hidden items-center gap-2">
+            <div className="flex xl:hidden items-center gap-2">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
                   syncStatus === 'pending' ? 'bg-red-400' : syncStatus === 'saving' ? 'bg-amber-300' : 'bg-emerald-400'
@@ -174,7 +194,7 @@ function AppShell() {
 
           {/* Mobile dropdown menu */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t border-charcoal-600 pb-3 pt-2 space-y-1">
+            <div className="xl:hidden border-t border-charcoal-600 pb-3 pt-2 space-y-1">
               {navItems.map(item => (
                 <Link
                   key={item.path}
@@ -198,7 +218,17 @@ function AppShell() {
         </div>
       </nav>
 
-      {!canEditAttendance && (
+      {TEST_ENVIRONMENT_LABEL && (
+        <div className="print:hidden border-b border-fuchsia-300 bg-fuchsia-700 px-4 py-2 text-center text-xs font-black uppercase tracking-[0.16em] text-white shadow-sm">
+          {TEST_ENVIRONMENT_LABEL} · Isolated test data · Nothing entered here affects production
+        </div>
+      )}
+
+      {recognitionOnly ? (
+        <div className="print:hidden sticky top-16 z-40 border-b border-fuchsia-200 bg-fuchsia-50/95 px-4 py-2 text-center text-xs font-semibold text-fuchsia-950 backdrop-blur">
+          Recognition pilot · Entries save only to the isolated clone · Attendance and HR tools are unavailable
+        </div>
+      ) : !canEditAttendance && (
         <div className="print:hidden sticky top-16 z-40 border-b border-cyan-200 bg-cyan-50/95 px-4 py-2 text-center text-xs font-semibold text-cyan-900 backdrop-blur">
           Read-only access · Navigation is enabled · All changes are disabled
         </div>
@@ -206,15 +236,16 @@ function AppShell() {
 
       <main id="main-content">
         <Routes>
-          <Route path="/" element={role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
-          <Route path="/location/:id" element={<LocationView />} />
-          <Route path="/employee/:employeeId" element={<EmployeeRecordPage />} />
+          <Route path="/" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
+          <Route path="/location/:id" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LocationView />} />
+          <Route path="/recognition" element={<RecognitionProgram />} />
+          <Route path="/employee/:employeeId" element={recognitionOnly ? <Navigate to={homePath} replace /> : <EmployeeRecordPage />} />
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
           <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />
-          <Route path="/ledger" element={<LedgerView />} />
-          <Route path="/reports/daily" element={role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
-          <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
-          <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
+          <Route path="/ledger" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LedgerView />} />
+          <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
+          <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
+          <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
           <Route path="/backup-recovery" element={lizAdminAccess ? <BackupRecovery /> : <Navigate to={homePath} replace />} />
         </Routes>
       </main>

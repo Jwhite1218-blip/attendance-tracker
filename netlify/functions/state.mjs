@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
+import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
@@ -13,6 +14,7 @@ import {
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
   LOCATION_OVERRIDES_KEY,
+  RECOGNITION_KEY,
   RECORD_OVERRIDES_KEY,
   attendanceEmployeeId,
   canWriteStateKey,
@@ -78,6 +80,7 @@ function publicEmployee(employee, session) {
     birthdate: employee.birthdate || '',
   }
 
+  if (session.recognitionOnly === true) return shared
   if (!hasLizAdminAccess(session)) return { ...shared, ...milestones }
   return {
     ...shared,
@@ -174,7 +177,33 @@ function filterRecordMap(records, allowedEmployeeIds) {
   )
 }
 
+function filterRecognitions(records, allowedEmployeeIds, locationId) {
+  return Object.fromEntries(
+    Object.entries(records || {}).filter(([, recognition]) =>
+      allowedEmployeeIds.has(String(recognition?.employeeId))
+      && recognition?.locationId === locationId
+    )
+  )
+}
+
 function filterEntriesForSession(entries, session) {
+  if (session.recognitionOnly === true) {
+    if (session.role === 'school') {
+      const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
+      return entries[RECOGNITION_KEY]
+        ? {
+            [RECOGNITION_KEY]: filterRecognitions(
+              entries[RECOGNITION_KEY],
+              allowedEmployeeIds,
+              session.locationId
+            ),
+          }
+        : {}
+    }
+    return entries[RECOGNITION_KEY]
+      ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] }
+      : {}
+  }
   if (hasLizAdminAccess(session)) return entries
   if (session.role === 'admin') return redactLizOnlyEmployeeEntries(entries)
 
@@ -194,6 +223,13 @@ function filterEntriesForSession(entries, session) {
     filtered[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(
       entries[CUSTOM_EMPLOYEES_KEY]
         .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+    )
+  }
+  if (entries[RECOGNITION_KEY]) {
+    filtered[RECOGNITION_KEY] = filterRecognitions(
+      entries[RECOGNITION_KEY],
+      allowedEmployeeIds,
+      session.locationId
     )
   }
   // Manager HR notes are district-administrator records. School sessions do
@@ -235,6 +271,40 @@ function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
   return { type: 'object-patch', set, remove }
 }
 
+function schoolRecognitionMutation(mutation, currentValue, allowedEmployeeIds, locationId) {
+  if (mutation?.type !== 'object-patch') throw new Error('School recognition changes must be an object patch.')
+
+  const set = Object.fromEntries(
+    Object.entries(mutation.set || {}).filter(([, recognition]) =>
+      allowedEmployeeIds.has(String(recognition?.employeeId))
+      && recognition?.locationId === locationId
+    )
+  )
+  const remove = (Array.isArray(mutation.remove) ? mutation.remove : [])
+    .map(String)
+    .filter(recognitionId => {
+      const current = currentValue?.[recognitionId]
+      return allowedEmployeeIds.has(String(current?.employeeId)) && current?.locationId === locationId
+    })
+  return { type: 'object-patch', set, remove }
+}
+
+function recognitionMutationForSession(mutation, session) {
+  if (mutation?.type !== 'object-patch') return mutation
+  return {
+    ...mutation,
+    set: Object.fromEntries(
+      Object.entries(mutation.set || {}).map(([recognitionId, recognition]) => [
+        recognitionId,
+        {
+          ...recognition,
+          recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
+        },
+      ])
+    ),
+  }
+}
+
 function isSameOriginRequest(request) {
   const origin = request.headers.get('origin')
   return !origin || origin === new URL(request.url).origin
@@ -258,6 +328,73 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
           throw new Error('Employee note changes contain an invalid entry.')
         }
       }
+    }
+    return
+  }
+  if (key === RECOGNITION_KEY) {
+    if (mutation.type !== 'object-patch') throw new Error('Recognition changes must be an object patch.')
+    const validTypes = new Set([
+      'star-of-day',
+      'shooting-star',
+      'star-shout-out',
+      'warren-employee-month',
+      'all-star-of-month',
+    ])
+    const validDate = dateKey => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return false
+      const date = new Date(`${dateKey}T00:00:00Z`)
+      return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === dateKey
+    }
+
+    for (const [recognitionId, recognition] of Object.entries(mutation.set || {})) {
+      if (!recognitionId || recognitionId.length > 200 || recognition?.id !== recognitionId) {
+        throw new Error('Recognition changes contain an invalid identity.')
+      }
+      if (
+        !recognition
+        || typeof recognition !== 'object'
+        || Array.isArray(recognition)
+        || !validTypes.has(recognition.type)
+        || !validDate(recognition.date)
+        || !String(recognition.employeeId || '').trim()
+        || String(recognition.employeeId).length > 200
+        || !String(recognition.locationId || '').trim()
+        || String(recognition.locationId).length > 200
+      ) {
+        throw new Error('Recognition changes contain an invalid record.')
+      }
+      if (
+        !Array.isArray(recognition.criteria)
+        || recognition.criteria.length > 12
+        || recognition.criteria.some(value => typeof value !== 'string' || value.length > 300)
+      ) {
+        throw new Error('Recognition changes contain invalid criteria.')
+      }
+      if (
+        typeof recognition.note !== 'string'
+        || recognition.note.length > 1000
+        || typeof recognition.sourceName !== 'string'
+        || recognition.sourceName.length > 200
+        || typeof recognition.recognizedBy !== 'string'
+        || recognition.recognizedBy.length > 200
+        || typeof recognition.createdAt !== 'string'
+        || Number.isNaN(Date.parse(recognition.createdAt))
+      ) {
+        throw new Error('Recognition changes contain invalid supporting details.')
+      }
+      if (recognition.type === 'all-star-of-month') {
+        if (!/^\d{4}-\d{2}$/.test(String(recognition.monthKey || ''))) {
+          throw new Error('Monthly All-Star changes require a valid month.')
+        }
+        if (!monthlyDrawingStatus(recognition.monthKey).isOpen) {
+          throw new Error('The monthly drawing is not open yet.')
+        }
+      } else if (recognition.monthKey !== null) {
+        throw new Error('Only monthly All-Star records may contain a drawing month.')
+      }
+    }
+    if ((mutation.remove || []).some(value => !String(value || '').trim() || String(value).length > 200)) {
+      throw new Error('Recognition changes contain an invalid removal identity.')
     }
     return
   }
@@ -353,6 +490,20 @@ export async function handleMutate(store, session, body) {
   }
 
   let mutation = body.mutation
+  if (
+    key === RECOGNITION_KEY
+    && mutation?.type === 'object-patch'
+    && Object.values(mutation.set || {}).some(recognition => (
+      !recognitionTypeAllowedForRole(
+        session.role,
+        recognition?.type,
+        session.canManageRecognitionAwards !== false && session.recognitionOnly !== true
+      )
+    ))
+  ) {
+    return jsonResponse({ error: 'Only a district administrator can record Warren Food Services Employee of the Month.' }, 403)
+  }
+  if (key === RECOGNITION_KEY) mutation = recognitionMutationForSession(mutation, session)
   try {
     validateMutation(key, mutation)
   } catch {
@@ -363,11 +514,18 @@ export async function handleMutate(store, session, body) {
     const currentValue = await store.get(key, { type: 'json' })
     mutation = schoolStatusMutation(mutation, currentValue, allowedEmployeeIds)
   }
+  if (session.role === 'school' && key === RECOGNITION_KEY) {
+    const currentValue = await store.get(key, { type: 'json' })
+    mutation = schoolRecognitionMutation(mutation, currentValue, allowedEmployeeIds, session.locationId)
+  }
 
   const value = await store.updateJSON(key, mutation, session.displayName || 'authenticated user')
   let publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
     ? filterStatusesForEmployees(value, allowedEmployeeIds)
     : value
+  if (session.role === 'school' && key === RECOGNITION_KEY) {
+    publicValue = filterRecognitions(value, allowedEmployeeIds, session.locationId)
+  }
   if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
     publicValue = redactRecordOverrides(publicValue)
   }

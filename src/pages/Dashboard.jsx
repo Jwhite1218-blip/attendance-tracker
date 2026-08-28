@@ -11,7 +11,6 @@ import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
-const ALL_STAR_TRACKER_URL = String(import.meta.env.VITE_ALL_STAR_TRACKER_URL || '').trim()
 const PROFESSIONAL_STANDARDS_URL = String(import.meta.env.VITE_PROFESSIONAL_STANDARDS_URL || '').trim()
 
 export default function Dashboard() {
@@ -141,6 +140,16 @@ export default function Dashboard() {
               <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
             </span>
           </Link>
+          <Link
+            to="/recognition"
+            className="inline-flex items-center gap-3 rounded-xl border border-[#d9b03f]/70 bg-[#9b651a] px-4 py-3 text-white shadow-sm transition-colors hover:bg-[#b47b23]"
+          >
+            <span className="w-9 h-9 rounded-lg bg-black/20 flex items-center justify-center text-xl text-[#ffe177]" aria-hidden="true">★</span>
+            <span>
+              <span className="block text-sm font-bold">All-Star Recognition</span>
+              <span className="block text-[11px] text-amber-100 mt-0.5">Catch someone shining</span>
+            </span>
+          </Link>
           {lizAdminAccess && (
             <Link
               to="/backup-recovery"
@@ -154,18 +163,11 @@ export default function Dashboard() {
             </Link>
           )}
           {showLizFutureTools && (
-            <>
-              <FutureToolButton
-                symbol="★"
-                title="All Star Performance Tracker"
-                url={ALL_STAR_TRACKER_URL}
-              />
-              <FutureToolButton
-                symbol="✓"
-                title="Professional Standards"
-                url={PROFESSIONAL_STANDARDS_URL}
-              />
-            </>
+            <FutureToolButton
+              symbol="✓"
+              title="Professional Standards"
+              url={PROFESSIONAL_STANDARDS_URL}
+            />
           )}
         </div>
       </div>
