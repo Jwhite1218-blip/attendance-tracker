@@ -1,10 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
+  canAccessRecognitionProgram,
   canSeeLizFutureTools,
   canViewBlackoutCalendar,
   hasLizAdminAccess,
 } from './futureTools.js'
+
+test('recognition program is limited to administrator authority', () => {
+  assert.equal(canAccessRecognitionProgram({ role: 'admin' }), true)
+  assert.equal(canAccessRecognitionProgram({ role: 'school' }), false)
+  assert.equal(canAccessRecognitionProgram({ role: 'viewer' }), false)
+  assert.equal(canAccessRecognitionProgram({}), false)
+})
 
 test('future-tool buttons are limited to Liz full-admin access', () => {
   assert.equal(canSeeLizFutureTools({

@@ -9,7 +9,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
-import { hasLizAdminAccess } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import {
   RECOGNITION_TYPE_MAP,
   getAllRecognitions,
@@ -55,6 +55,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const access = useAuth()
   const { role, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
+  const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
   const [attendance, setAttendance] = useState({})
@@ -296,7 +297,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-xl border border-[#d7b44b]/70 bg-[#17130d] text-white shadow-sm">
+      {recognitionAdminAccess && (
+        <section className="overflow-hidden rounded-xl border border-[#d7b44b]/70 bg-[#17130d] text-white shadow-sm">
         <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
           <div className="flex items-center gap-4">
             <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-[#e8c65c]/50 bg-[#e8c65c]/10 text-2xl text-[#ffd75c]" aria-hidden="true">★</span>
@@ -326,7 +328,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             ))}
           </div>
         )}
-      </section>
+        </section>
+      )}
 
       {lizAdminAccess && showEditEmployee && (
         <EmployeeEditForm
