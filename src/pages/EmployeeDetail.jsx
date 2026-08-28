@@ -10,6 +10,15 @@ import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import {
+  RECOGNITION_TYPE_MAP,
+  getAllRecognitions,
+  getEmployeeStarCount,
+  getNextStarLevel,
+  getStarLevel,
+  schoolYearStartFor,
+} from '../data/recognitionStore.js'
+import { Link } from 'react-router-dom'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -67,6 +76,14 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   const empKey = employee?.kronos_id || employee?.id
   const attendanceStatus = getEmployeeAttendanceStatus(empKey)
+  const recognitionRecords = useMemo(
+    () => getAllRecognitions().filter(record => String(record.employeeId) === String(empKey)),
+    [empKey, dataVersion]
+  )
+  const recognitionSchoolYear = schoolYearStartFor(new Date())
+  const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
+  const starLevel = getStarLevel(starCount)
+  const nextStarLevel = getNextStarLevel(starCount)
 
   const setCalendarMode = nextMode => {
     setMode(nextMode)
@@ -278,6 +295,38 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           )}
         </div>
       </div>
+
+      <section className="overflow-hidden rounded-xl border border-[#d7b44b]/70 bg-[#17130d] text-white shadow-sm">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="flex items-center gap-4">
+            <span className="flex h-12 w-12 flex-none items-center justify-center rounded-full border border-[#e8c65c]/50 bg-[#e8c65c]/10 text-2xl text-[#ffd75c]" aria-hidden="true">★</span>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8c65c]">All-Star recognition</p>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <p className="text-2xl font-black">{starCount} earned star{starCount === 1 ? '' : 's'}</p>
+                <p className="text-xs font-semibold text-white/60">{recognitionSchoolYear}-{recognitionSchoolYear + 1}</p>
+              </div>
+              <p className="mt-1 text-xs text-amber-100/75">
+                {starLevel ? `${starLevel.symbol} ${starLevel.name}` : 'Building toward Bronze Star'}
+                {nextStarLevel ? ` - ${nextStarLevel.minimum - starCount} more to ${nextStarLevel.name}` : ' - Highest published level'}
+              </p>
+            </div>
+          </div>
+          <Link to="/recognition" className="self-start rounded-lg border border-[#e8c65c]/40 bg-[#e8c65c]/10 px-3 py-2 text-xs font-bold text-[#f4d87d] hover:bg-[#e8c65c]/20 sm:self-auto">
+            Open All-Star board
+          </Link>
+        </div>
+        {recognitionRecords.length > 0 && (
+          <div className="grid gap-px border-t border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
+            {recognitionRecords.slice(0, 4).map(record => (
+              <div key={record.id} className="bg-[#211c14] px-4 py-3">
+                <p className="text-xs font-bold text-white">{RECOGNITION_TYPE_MAP[record.type]?.label || record.type}</p>
+                <p className="mt-1 text-[10px] text-white/45">{record.date}{record.criteria?.[0] ? ` - ${record.criteria[0]}` : ''}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       {lizAdminAccess && showEditEmployee && (
         <EmployeeEditForm

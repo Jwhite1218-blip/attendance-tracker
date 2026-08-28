@@ -87,7 +87,7 @@ export default function BackupRecovery() {
           <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-xl text-brand-700" aria-hidden="true">↓</div>
           <h2 className="mt-4 text-lg font-bold text-gray-900">1. Download a complete backup</h2>
           <p className="mt-2 text-sm leading-relaxed text-gray-500">
-            Save this private JSON file somewhere Liz controls. It contains attendance, HR notes, roster changes, and blackout dates.
+            Save this private JSON file somewhere Liz controls. It contains attendance, HR notes, roster changes, blackout dates, and All-Star recognition records.
           </p>
           <button type="button" onClick={handleDownload} disabled={busy} className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-brand-600 px-4 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-wait disabled:opacity-60">
             {busy ? 'Working…' : 'Download complete backup'}

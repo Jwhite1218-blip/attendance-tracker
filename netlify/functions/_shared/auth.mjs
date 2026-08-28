@@ -10,6 +10,16 @@ const CHEF_ACCESS = Object.freeze({
   canManageRoster: false,
   canManageBlackouts: false,
 })
+const PRESENTATION_PILOT_ACCESS = Object.freeze({
+  role: 'admin',
+  canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRecognitionAwards: true,
+  recognitionOnly: false,
+  canManageRoster: false,
+  canManageBlackouts: false,
+  watermark: 'localis',
+})
 const SCHOOL_LOCATIONS = LOCATIONS.filter(location => location.id !== 'Admin')
 
 function locationLookupKey(value) {
@@ -50,18 +60,34 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     : null
   if (rawAccess.role === 'school' && !locationId) return null
 
-  const canEditAttendance = rawAccess.canEditAttendance !== false
+  const recognitionOnly = rawAccess.recognitionOnly === true
+  const canEditAttendance = !recognitionOnly && rawAccess.canEditAttendance !== false
+  const canEditRecognition = rawAccess.canEditRecognition === true
+    || (rawAccess.canEditRecognition !== false && canEditAttendance)
   const canManageRoster = rawAccess.role === 'admin'
+    && !recognitionOnly
     && canEditAttendance
     && (
       rawAccess.canManageRoster === true
       || (defaultAdminManagement && rawAccess.canManageRoster !== false)
     )
   const canManageBlackouts = rawAccess.role === 'admin'
+    && !recognitionOnly
     && canEditAttendance
     && (
       rawAccess.canManageBlackouts === true
       || (defaultAdminManagement && rawAccess.canManageBlackouts !== false)
+    )
+  const canManageRecognitionAwards = rawAccess.role === 'admin'
+    && canEditRecognition
+    && !recognitionOnly
+    && (
+      rawAccess.canManageRecognitionAwards === true
+      || (
+        rawAccess.canManageRecognitionAwards !== false
+        && canManageRoster
+        && canManageBlackouts
+      )
     )
 
   return {
@@ -70,7 +96,10 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     displayName: String(rawAccess.displayName || '').trim().slice(0, 80) || null,
     employeeId: String(rawAccess.employeeId || '').trim().slice(0, 80) || null,
     canEditAttendance,
-    canWriteEmployeeNotes: rawAccess.role === 'admin' && canEditAttendance,
+    canEditRecognition,
+    canManageRecognitionAwards,
+    recognitionOnly,
+    canWriteEmployeeNotes: rawAccess.role === 'admin' && canEditAttendance && !recognitionOnly,
     canManageRoster,
     canManageBlackouts,
     watermark: rawAccess.watermark === 'localis' ? 'localis' : null,
@@ -150,6 +179,40 @@ function withChefAccess(codes) {
   return { codes: { ...codes, [chefPin]: CHEF_ACCESS }, chefApplied: true }
 }
 
+function withPresentationPilotAccess(configuration) {
+  const rawPilots = environmentValue('ATTENDANCE_RECOGNITION_PILOT_PINS_JSON').trim()
+  if (!rawPilots) return { ...configuration, presentationPilotsApplied: 0 }
+
+  let pilots
+  try {
+    pilots = JSON.parse(rawPilots)
+  } catch {
+    console.error(JSON.stringify({ event: 'recognition-pilot-pins-skipped', reason: 'invalid-json' }))
+    return { ...configuration, presentationPilotsApplied: 0 }
+  }
+  if (!pilots || typeof pilots !== 'object' || Array.isArray(pilots)) {
+    console.error(JSON.stringify({ event: 'recognition-pilot-pins-skipped', reason: 'invalid-shape' }))
+    return { ...configuration, presentationPilotsApplied: 0 }
+  }
+
+  const codes = { ...configuration.codes }
+  let presentationPilotsApplied = 0
+  for (const [pin, rawDisplayName] of Object.entries(pilots)) {
+    const displayName = String(rawDisplayName || '').trim().slice(0, 80)
+    let problem = ''
+    if (!/^\d{4,8}$/.test(pin)) problem = 'invalid-format'
+    if (!displayName) problem = 'missing-display-name'
+    if (codes[pin]) problem = 'pin-conflict'
+    if (problem) {
+      console.error(JSON.stringify({ event: 'recognition-pilot-pin-skipped', reason: problem }))
+      continue
+    }
+    codes[pin] = { ...PRESENTATION_PILOT_ACCESS, displayName }
+    presentationPilotsApplied += 1
+  }
+  return { ...configuration, codes, presentationPilotsApplied }
+}
+
 function accessCodeConfiguration() {
   const rawCodes = environmentValue('ATTENDANCE_ACCESS_CODES_JSON')
   if (!rawCodes) throw new Error('Attendance access codes are not configured.')
@@ -159,7 +222,9 @@ function accessCodeConfiguration() {
     throw new Error('Attendance access codes are invalid.')
   }
   const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
-  if (!replacementPin) return { ...withChefAccess(codes), replacementApplied: false }
+  if (!replacementPin) {
+    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
+  }
   let problem = ''
   if (!/^\d{4,8}$/.test(replacementPin)) {
     problem = 'invalid-format'
@@ -178,13 +243,13 @@ function accessCodeConfiguration() {
   // health check remains observable without locking every other user out.
   if (problem) {
     console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
-    return { ...withChefAccess(codes), replacementApplied: false }
+    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
   }
 
   const replacedCodes = { ...codes }
   delete replacedCodes[currentPin]
   replacedCodes[replacementPin] = lizAccess
-  return { ...withChefAccess(replacedCodes), replacementApplied: true }
+  return { ...withPresentationPilotAccess(withChefAccess(replacedCodes)), replacementApplied: true }
 }
 
 export function getAccessCodes() {
@@ -226,6 +291,7 @@ export function sessionFromRequest(request, now = Date.now()) {
     if (!session.expiresAt || session.expiresAt <= now) return null
     const pinConfigurationChanged = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
       || environmentValue('ATTENDANCE_CHEF_PIN')
+      || environmentValue('ATTENDANCE_RECOGNITION_PILOT_PINS_JSON')
     const configuration = session.credentialFingerprint || pinConfigurationChanged
       ? accessCodeConfiguration()
       : null
@@ -241,8 +307,8 @@ export function sessionFromRequest(request, now = Date.now()) {
       if (isLizAdministrator(session, configuredEmployeeId)) return null
     }
     // Older signed sessions did not carry explicit management flags. Treat
-    // missing values as restricted. Current fingerprinted PIN sessions were
-    // refreshed above and already have explicit booleans.
+    // those missing values as restricted; a current fingerprinted PIN was
+    // refreshed above and therefore already has explicit booleans.
     const normalizedAccess = normalizeAccessProfile(session, { defaultAdminManagement: false })
     return normalizedAccess ? { ...session, ...normalizedAccess } : null
   } catch {

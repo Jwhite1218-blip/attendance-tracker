@@ -77,7 +77,6 @@ test('school state filters roster and location overrides to that school', async 
   try {
     const sessions = createMemoryBlobStore()
     const schoolEmployee = employees.find(employee => employee.location !== 'Admin')
-    assert.ok(schoolEmployee)
     const outsider = employees.find(employee => employee.location !== schoolEmployee.location)
     assert.ok(outsider)
     const schoolId = employee => String(employee.kronos_id || employee.id)
@@ -97,6 +96,34 @@ test('school state filters roster and location overrides to that school', async 
       'employee-manager-notes-v1': {
         [schoolId(schoolEmployee)]: 'District HR note',
         [schoolId(outsider)]: 'Other district HR note',
+      },
+      'all-star-recognition-v1': {
+        'school-star': {
+          id: 'school-star',
+          employeeId: schoolId(schoolEmployee),
+          locationId: schoolEmployee.location,
+          type: 'star-of-day',
+          date: '2026-08-20',
+          monthKey: null,
+          criteria: ['Outstanding customer service'],
+          note: 'Great work',
+          sourceName: '',
+          recognizedBy: 'School Manager',
+          createdAt: '2026-08-20T12:00:00.000Z',
+        },
+        'other-school-star': {
+          id: 'other-school-star',
+          employeeId: schoolId(outsider),
+          locationId: outsider.location,
+          type: 'star-of-day',
+          date: '2026-08-20',
+          monthKey: null,
+          criteria: ['Outstanding customer service'],
+          note: 'Great work',
+          sourceName: '',
+          recognizedBy: 'Other Manager',
+          createdAt: '2026-08-20T12:00:00.000Z',
+        },
       },
       'employee-custom-records': [
         {
@@ -133,6 +160,7 @@ test('school state filters roster and location overrides to that school', async 
     assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
     assert.equal(Object.hasOwn(body.entries['employee-record-overrides'][schoolId(schoolEmployee)], 't_shirt_size'), false)
     assert.equal(Object.hasOwn(body.entries, 'employee-manager-notes-v1'), false)
+    assert.deepEqual(Object.keys(body.entries['all-star-recognition-v1']), ['school-star'])
     assert.equal(Object.hasOwn(body.entries['employee-custom-records'][0], 't_shirt_size'), false)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
@@ -241,6 +269,199 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
   }
 })
 
+test('recognition pilots receive only recognition data and cannot alter attendance or district awards', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const employee = employees[0]
+    const employeeId = String(employee.kronos_id || employee.id)
+    const existing = {
+      id: 'existing-star',
+      employeeId,
+      locationId: employee.location,
+      type: 'star-of-day',
+      date: '2026-08-25',
+      monthKey: null,
+      criteria: ['Service'],
+      note: '',
+      sourceName: '',
+      recognizedBy: 'Existing Manager',
+      createdAt: '2026-08-25T12:00:00.000Z',
+    }
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': { [existing.id]: existing },
+      'employee-manager-notes-v1': { [employeeId]: 'Private HR note' },
+      [`att-emp-${employeeId}-2026`]: {
+        '2026-08-25': { date: '2026-08-25', code: 'UNEX', note: '' },
+      },
+    })
+    const pilot = {
+      role: 'admin',
+      displayName: 'Pilot Manager 1',
+      canEditAttendance: false,
+      canEditRecognition: true,
+      canManageRecognitionAwards: false,
+      recognitionOnly: true,
+      canManageRoster: false,
+      canManageBlackouts: false,
+    }
+
+    const readRequest = await authenticatedRequest(pilot, sessions)
+    const readResponse = await handleStateRequest(readRequest, { stateStore: store, sessionStore: sessions })
+    const readBody = await readResponse.json()
+    assert.equal(readResponse.status, 200)
+    assert.deepEqual(Object.keys(readBody.entries), ['all-star-recognition-v1'])
+    assert.equal(readBody.roster[0].birthdate, undefined)
+    assert.equal(readBody.roster[0].hire_date, undefined)
+    assert.equal(readBody.roster[0].t_shirt_size, undefined)
+
+    const attendanceRequest = await authenticatedRequest(pilot, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: `att-emp-${employeeId}-2026`,
+        mutation: { type: 'object-patch', set: {}, remove: [] },
+      }),
+    })
+    assert.equal((await handleStateRequest(attendanceRequest, { stateStore: store, sessionStore: sessions })).status, 403)
+
+    const pilotStar = { ...existing, id: 'pilot-star', recognizedBy: 'Spoofed Actor' }
+    const pilotStarRequest = await authenticatedRequest(pilot, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [pilotStar.id]: pilotStar }, remove: [] },
+      }),
+    })
+    const pilotStarResponse = await handleStateRequest(pilotStarRequest, { stateStore: store, sessionStore: sessions })
+    const pilotStarBody = await pilotStarResponse.json()
+    assert.equal(pilotStarResponse.status, 200)
+    assert.equal(pilotStarBody.value[pilotStar.id].recognizedBy, 'Pilot Manager 1')
+
+    const districtAward = {
+      ...existing,
+      id: 'pilot-eom',
+      type: 'warren-employee-month',
+      criteria: ['Qualified through All-Star of the Month'],
+    }
+    const districtAwardRequest = await authenticatedRequest(pilot, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [districtAward.id]: districtAward }, remove: [] },
+      }),
+    })
+    assert.equal((await handleStateRequest(districtAwardRequest, { stateStore: store, sessionStore: sessions })).status, 403)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('school managers can record recognition only for their scoped roster and actor is server-owned', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const schoolEmployee = employees.find(employee => employee.location !== 'Admin')
+    const employeeId = String(schoolEmployee.kronos_id || schoolEmployee.id)
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {},
+    })
+    const record = {
+      id: 'new-school-star',
+      employeeId,
+      locationId: schoolEmployee.location,
+      type: 'star-of-day',
+      date: '2026-08-25',
+      monthKey: null,
+      criteria: ['Outstanding customer service'],
+      note: 'Great lunch service',
+      sourceName: '',
+      recognizedBy: 'Spoofed Actor',
+      createdAt: '2026-08-25T12:00:00.000Z',
+    }
+    const request = await authenticatedRequest({
+      role: 'school',
+      locationId: schoolEmployee.location,
+      displayName: 'Test School Manager',
+      canEditAttendance: true,
+    }, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [record.id]: record }, remove: [] },
+      }),
+    })
+
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    const body = await response.json()
+    assert.equal(response.status, 200)
+    assert.equal(body.value[record.id].employeeId, employeeId)
+    assert.equal(body.value[record.id].recognizedBy, 'Test School Manager')
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('school managers cannot create district Employee of the Month records', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const schoolEmployee = employees.find(employee => employee.location !== 'Admin')
+    const employeeId = String(schoolEmployee.kronos_id || schoolEmployee.id)
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {},
+    })
+    const record = {
+      id: 'restricted-district-award',
+      employeeId,
+      locationId: schoolEmployee.location,
+      type: 'warren-employee-month',
+      date: '2026-08-25',
+      monthKey: null,
+      criteria: ['Qualified through All-Star of the Month'],
+      note: '',
+      sourceName: '',
+      recognizedBy: 'School Manager',
+      createdAt: '2026-08-25T12:00:00.000Z',
+    }
+    const request = await authenticatedRequest({
+      role: 'school',
+      locationId: schoolEmployee.location,
+      displayName: 'Test School Manager',
+      canEditAttendance: true,
+    }, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [record.id]: record }, remove: [] },
+      }),
+    })
+
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    assert.equal(response.status, 403)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
 test('Liz can download and restore a full backup while restricted administrators are blocked', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
@@ -251,6 +472,7 @@ test('Liz can download and restore a full backup while restricted administrators
       __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
       'attendance-blackout-dates': [{ date: '2026-09-07', label: 'Labor Day' }],
       'employee-manager-notes-v1': { [employeeId]: 'Original note' },
+      'all-star-recognition-v1': {},
     })
     const lizAccess = {
       role: 'admin',
