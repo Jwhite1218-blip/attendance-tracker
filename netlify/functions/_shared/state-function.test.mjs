@@ -72,7 +72,8 @@ test('school state filters roster and location overrides to that school', async 
   process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
   try {
     const sessions = createMemoryBlobStore()
-    const schoolEmployee = employees[0]
+    const schoolEmployee = employees.find(employee => employee.location !== 'Admin')
+    assert.ok(schoolEmployee)
     const outsider = employees.find(employee => employee.location !== schoolEmployee.location)
     assert.ok(outsider)
     const schoolId = employee => String(employee.kronos_id || employee.id)
