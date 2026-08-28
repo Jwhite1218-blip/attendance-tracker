@@ -11,6 +11,9 @@ function stateStore(entries) {
   return {
     async list() { return { blobs: [...values.keys()].map(key => ({ key })) } },
     async get(key) { return values.has(key) ? structuredClone(values.get(key)) : null },
+    async setJSON(key, value) {
+      values.set(key, structuredClone(value))
+    },
     async updateJSON(key, mutation) {
       const { applyStateMutation } = await import('../../../src/data/stateMutations.js')
       const value = applyStateMutation(key, values.get(key) ?? null, mutation)
@@ -23,9 +26,10 @@ function stateStore(entries) {
 async function authenticatedRequest(access, sessions, options = {}) {
   const token = createSessionToken(access)
   const cookie = `attendance-session=${encodeURIComponent(token)}`
-  const request = new Request('https://example.test/api/state', {
-    ...options,
-    headers: { cookie, ...(options.headers || {}) },
+  const { url = 'https://example.test/api/state', ...requestOptions } = options
+  const request = new Request(url, {
+    ...requestOptions,
+    headers: { cookie, ...(requestOptions.headers || {}) },
   })
   await registerServerSession(sessionFromRequest(request), sessions)
   return request
@@ -237,6 +241,72 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
       }
     )
     assert.equal((await handleStateRequest(limitedWriteRequest, { stateStore: store, sessionStore: sessions })).status, 403)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('Liz can download and restore a full backup while restricted administrators are blocked', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const employeeId = String(employees[0].kronos_id || employees[0].id)
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'attendance-blackout-dates': [{ date: '2026-09-07', label: 'Labor Day' }],
+      'employee-manager-notes-v1': { [employeeId]: 'Original note' },
+    })
+    const lizAccess = {
+      role: 'admin',
+      displayName: 'Liz',
+      canEditAttendance: true,
+      canManageRoster: true,
+      canManageBlackouts: true,
+    }
+
+    const backupRequest = await authenticatedRequest(lizAccess, sessions, {
+      url: 'https://example.test/api/state?action=backup',
+    })
+    const backupResponse = await handleStateRequest(backupRequest, { stateStore: store, sessionStore: sessions })
+    const backup = await backupResponse.json()
+    assert.equal(backupResponse.status, 200)
+    assert.match(backupResponse.headers.get('content-disposition'), /warren-attendance-backup-/)
+    assert.equal(backup.format, 'warren-attendance-backup')
+    assert.equal(backup.version, 1)
+    assert.equal(backup.entries['employee-manager-notes-v1'][employeeId], 'Original note')
+
+    const limitedRequest = await authenticatedRequest({
+      role: 'admin',
+      displayName: 'Restricted Manager',
+      canEditAttendance: true,
+      canManageRoster: false,
+      canManageBlackouts: false,
+    }, sessions, { url: 'https://example.test/api/state?action=backup' })
+    assert.equal((await handleStateRequest(limitedRequest, { stateStore: store, sessionStore: sessions })).status, 403)
+
+    await store.setJSON('employee-manager-notes-v1', {
+      [employeeId]: 'Changed after backup',
+      temporary: 'Remove during restore',
+    })
+    await store.setJSON(`att-emp-${employeeId}-2026`, {
+      '2026-08-26': { date: '2026-08-26', code: 'UNEX', note: 'Created after backup' },
+    })
+
+    const restoreRequest = await authenticatedRequest(lizAccess, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({ action: 'restore-backup', confirmation: 'RESTORE', backup }),
+    })
+    const restoreResponse = await handleStateRequest(restoreRequest, { stateStore: store, sessionStore: sessions })
+    assert.equal(restoreResponse.status, 200)
+
+    const verifyRequest = await authenticatedRequest(lizAccess, sessions)
+    const verifyResponse = await handleStateRequest(verifyRequest, { stateStore: store, sessionStore: sessions })
+    const verified = await verifyResponse.json()
+    assert.deepEqual(verified.entries['employee-manager-notes-v1'], { [employeeId]: 'Original note' })
+    assert.deepEqual(verified.entries[`att-emp-${employeeId}-2026`], {})
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

@@ -8,8 +8,9 @@ import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
+import BackupRecovery from './pages/BackupRecovery.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
-import { canViewBlackoutCalendar } from './data/futureTools.js'
+import { canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import localisLogo from './assets/localis-logo.png'
@@ -37,6 +38,7 @@ function AppShell() {
 
   const homePath = role === 'school' ? `/location/${locationId}` : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
+  const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   const navItems = [
     { path: homePath, label: 'Dashboard' },
     { path: '/ledger', label: 'Employee Records' },
@@ -213,6 +215,7 @@ function AppShell() {
           <Route path="/reports/daily" element={role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
+          <Route path="/backup-recovery" element={lizAdminAccess ? <BackupRecovery /> : <Navigate to={homePath} replace />} />
         </Routes>
       </main>
     </div>
