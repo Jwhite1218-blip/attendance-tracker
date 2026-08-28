@@ -47,11 +47,11 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
     || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
 
   if (isAttendanceState && session.canEditAttendance === false) return false
-  if (isRecognitionState && !canEditRecognition) return false
+  if (isRecognitionState && (session.role !== 'admin' || !canEditRecognition)) return false
 
   if (session.role === 'school') {
     if (attendanceId) return allowedEmployeeIds.has(String(attendanceId))
-    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY || isRecognitionState
+    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY
   }
 
   if (session.role !== 'admin') return false

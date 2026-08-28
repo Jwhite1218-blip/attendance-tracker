@@ -177,29 +177,8 @@ function filterRecordMap(records, allowedEmployeeIds) {
   )
 }
 
-function filterRecognitions(records, allowedEmployeeIds, locationId) {
-  return Object.fromEntries(
-    Object.entries(records || {}).filter(([, recognition]) =>
-      allowedEmployeeIds.has(String(recognition?.employeeId))
-      && recognition?.locationId === locationId
-    )
-  )
-}
-
 function filterEntriesForSession(entries, session) {
   if (session.recognitionOnly === true) {
-    if (session.role === 'school') {
-      const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
-      return entries[RECOGNITION_KEY]
-        ? {
-            [RECOGNITION_KEY]: filterRecognitions(
-              entries[RECOGNITION_KEY],
-              allowedEmployeeIds,
-              session.locationId
-            ),
-          }
-        : {}
-    }
     return entries[RECOGNITION_KEY]
       ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] }
       : {}
@@ -223,13 +202,6 @@ function filterEntriesForSession(entries, session) {
     filtered[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(
       entries[CUSTOM_EMPLOYEES_KEY]
         .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
-    )
-  }
-  if (entries[RECOGNITION_KEY]) {
-    filtered[RECOGNITION_KEY] = filterRecognitions(
-      entries[RECOGNITION_KEY],
-      allowedEmployeeIds,
-      session.locationId
     )
   }
   // Manager HR notes are district-administrator records. School sessions do
@@ -268,24 +240,6 @@ function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
   const remove = (Array.isArray(mutation.remove) ? mutation.remove : [])
     .map(String)
     .filter(statusKey => allowedEmployeeIds.has(String(currentValue?.[statusKey]?.empId)))
-  return { type: 'object-patch', set, remove }
-}
-
-function schoolRecognitionMutation(mutation, currentValue, allowedEmployeeIds, locationId) {
-  if (mutation?.type !== 'object-patch') throw new Error('School recognition changes must be an object patch.')
-
-  const set = Object.fromEntries(
-    Object.entries(mutation.set || {}).filter(([, recognition]) =>
-      allowedEmployeeIds.has(String(recognition?.employeeId))
-      && recognition?.locationId === locationId
-    )
-  )
-  const remove = (Array.isArray(mutation.remove) ? mutation.remove : [])
-    .map(String)
-    .filter(recognitionId => {
-      const current = currentValue?.[recognitionId]
-      return allowedEmployeeIds.has(String(current?.employeeId)) && current?.locationId === locationId
-    })
   return { type: 'object-patch', set, remove }
 }
 
@@ -514,18 +468,11 @@ export async function handleMutate(store, session, body) {
     const currentValue = await store.get(key, { type: 'json' })
     mutation = schoolStatusMutation(mutation, currentValue, allowedEmployeeIds)
   }
-  if (session.role === 'school' && key === RECOGNITION_KEY) {
-    const currentValue = await store.get(key, { type: 'json' })
-    mutation = schoolRecognitionMutation(mutation, currentValue, allowedEmployeeIds, session.locationId)
-  }
 
   const value = await store.updateJSON(key, mutation, session.displayName || 'authenticated user')
   let publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
     ? filterStatusesForEmployees(value, allowedEmployeeIds)
     : value
-  if (session.role === 'school' && key === RECOGNITION_KEY) {
-    publicValue = filterRecognitions(value, allowedEmployeeIds, session.locationId)
-  }
   if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
     publicValue = redactRecordOverrides(publicValue)
   }

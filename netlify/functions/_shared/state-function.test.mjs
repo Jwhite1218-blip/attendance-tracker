@@ -160,7 +160,7 @@ test('school state filters roster and location overrides to that school', async 
     assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
     assert.equal(Object.hasOwn(body.entries['employee-record-overrides'][schoolId(schoolEmployee)], 't_shirt_size'), false)
     assert.equal(Object.hasOwn(body.entries, 'employee-manager-notes-v1'), false)
-    assert.deepEqual(Object.keys(body.entries['all-star-recognition-v1']), ['school-star'])
+    assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
     assert.equal(Object.hasOwn(body.entries['employee-custom-records'][0], 't_shirt_size'), false)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
@@ -371,7 +371,7 @@ test('recognition pilots receive only recognition data and cannot alter attendan
   }
 })
 
-test('school managers can record recognition only for their scoped roster and actor is server-owned', async () => {
+test('school managers cannot write recognition records', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
   try {
@@ -411,10 +411,8 @@ test('school managers can record recognition only for their scoped roster and ac
     })
 
     const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
-    const body = await response.json()
-    assert.equal(response.status, 200)
-    assert.equal(body.value[record.id].employeeId, employeeId)
-    assert.equal(body.value[record.id].recognizedBy, 'Test School Manager')
+    assert.equal(response.status, 403)
+    assert.deepEqual(await store.get('all-star-recognition-v1'), {})
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

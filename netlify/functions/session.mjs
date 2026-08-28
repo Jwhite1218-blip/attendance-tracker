@@ -22,8 +22,7 @@ const MAX_IP_ATTEMPTS = 100
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 
 function publicAccess(session) {
-  const eligibleManager = session.role === 'admin' || session.role === 'school'
-  const canEditRecognition = eligibleManager && (
+  const canEditRecognition = session.role === 'admin' && (
     session.canEditRecognition === true
     || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
   )
