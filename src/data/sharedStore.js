@@ -37,8 +37,7 @@ function canWriteManagedKey(key) {
     return clientAccess.canEditAttendance !== false
   }
   if (key === 'all-star-recognition-v1') {
-    return (clientAccess.role === 'admin' || clientAccess.role === 'school')
-      && clientAccess.canEditRecognition === true
+    return clientAccess.role === 'admin' && clientAccess.canEditRecognition === true
   }
   if (key === 'attendance-blackout-dates') return clientAccess.canManageBlackouts === true
   if (key === 'employee-location-overrides') return clientAccess.canManageRoster === true
@@ -165,6 +164,14 @@ async function performPendingFlush() {
   if (!entries.length) return
 
   for (const [key, rawPending] of entries) {
+    if (key === 'all-star-recognition-v1' && !canWriteManagedKey(key)) {
+      const latestPending = readPendingWrites()
+      if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
+        delete latestPending[key]
+        writePendingWrites(latestPending)
+      }
+      continue
+    }
     if (rawPending?.version !== 2) {
       const latestPending = readPendingWrites()
       if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {

@@ -31,11 +31,8 @@ export function monthlyDrawingStatus(monthKey, dateValue = new Date()) {
 }
 
 export function recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards = role === 'admin') {
-  if (role === 'admin') {
-    return type !== 'warren-employee-month' || canManageRecognitionAwards === true
-  }
-  if (role !== 'school') return false
-  return type !== 'warren-employee-month'
+  if (role !== 'admin') return false
+  return type !== 'warren-employee-month' || canManageRecognitionAwards === true
 }
 
 export function quarterWindowFor(dateValue = new Date()) {

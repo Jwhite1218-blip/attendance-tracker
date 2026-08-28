@@ -59,11 +59,14 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     ? normalizeSchoolLocationId(rawAccess.locationId)
     : null
   if (rawAccess.role === 'school' && !locationId) return null
+  if (rawAccess.role === 'school' && rawAccess.recognitionOnly === true) return null
 
-  const recognitionOnly = rawAccess.recognitionOnly === true
+  const recognitionOnly = rawAccess.role === 'admin' && rawAccess.recognitionOnly === true
   const canEditAttendance = !recognitionOnly && rawAccess.canEditAttendance !== false
-  const canEditRecognition = rawAccess.canEditRecognition === true
+  const canEditRecognition = rawAccess.role === 'admin' && (
+    rawAccess.canEditRecognition === true
     || (rawAccess.canEditRecognition !== false && canEditAttendance)
+  )
   const canManageRoster = rawAccess.role === 'admin'
     && !recognitionOnly
     && canEditAttendance

@@ -84,7 +84,7 @@ test('every school PIN variation logs in with its canonical building and safe ca
       assert.equal(body.access.role, 'school')
       assert.equal(body.access.locationId, school.id)
       assert.equal(body.access.canEditAttendance, true)
-      assert.equal(body.access.canEditRecognition, true)
+      assert.equal(body.access.canEditRecognition, false)
       assert.equal(body.access.canManageRecognitionAwards, false)
       assert.equal(body.access.canManageRoster, false)
       assert.equal(body.access.canManageBlackouts, false)
@@ -105,12 +105,13 @@ test('invalid school and role PIN profiles are rejected instead of opening a bro
     6202: { role: 'school', locationId: 'Admin' },
     6203: { role: 'school', locationId: 'Unknown Building' },
     6204: { role: 'viewer' },
+    6205: { role: 'school', locationId: 'Creston', recognitionOnly: true, canEditRecognition: true },
   })
   process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
 
   try {
     const stores = { rate: createMemoryBlobStore(), sessions: createMemoryBlobStore() }
-    for (const [index, pin] of ['6201', '6202', '6203', '6204'].entries()) {
+    for (const [index, pin] of ['6201', '6202', '6203', '6204', '6205'].entries()) {
       const response = await handleSessionRequest(new Request('https://example.test/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -230,7 +231,7 @@ test('district, restricted, read-only, pilot, and 4-to-8 digit PIN shapes expose
   }
 })
 
-test('all 15 building sessions receive only their roster and their recognition records', async () => {
+test('all 15 building sessions receive only their roster and no recognition records', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
@@ -263,9 +264,7 @@ test('all 15 building sessions receive only their roster and their recognition r
       assert.equal(response.status, 200)
       assert.equal(body.roster.length, expectedRosterCount, `${school.name} roster count`)
       assert.ok(body.roster.every(employee => employee.location === school.id))
-      assert.equal(Object.keys(body.entries['all-star-recognition-v1']).length, 1)
-      assert.ok(Object.values(body.entries['all-star-recognition-v1'])
-        .every(recognition => recognition.locationId === school.id))
+      assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
     }
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
@@ -275,7 +274,7 @@ test('all 15 building sessions receive only their roster and their recognition r
   }
 })
 
-test('recognition-only school sessions remain building-scoped', async () => {
+test('legacy school sessions cannot receive recognition data even if they request the capability', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
@@ -304,16 +303,14 @@ test('recognition-only school sessions remain building-scoped', async () => {
     const request = await authenticatedRequest({
       role: 'school',
       locationId: targetSchool.id,
-      recognitionOnly: true,
       canEditRecognition: true,
-      displayName: 'Recognition-only School Manager',
+      displayName: 'Legacy School Manager',
     }, sessions)
     const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
     const body = await response.json()
 
     assert.equal(response.status, 200)
-    assert.deepEqual(Object.keys(body.entries), ['all-star-recognition-v1'])
-    assert.deepEqual(Object.keys(body.entries['all-star-recognition-v1']), [targetRecognition.id])
+    assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
     assert.ok(body.roster.every(employee => employee.location === targetSchool.id))
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET

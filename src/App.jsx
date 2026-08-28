@@ -10,7 +10,7 @@ import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
-import { canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
+import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import localisLogo from './assets/localis-logo.png'
@@ -53,9 +53,10 @@ function AppShell() {
   const homePath = recognitionOnly ? '/recognition' : role === 'school' ? `/location/${locationId}` : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
+  const recognitionAdminAccess = canAccessRecognitionProgram({ role })
   const standardNavItems = [
     ...(role === 'admin' ? [{ path: '/', label: 'Dashboard' }] : []),
-    { path: '/recognition', label: 'All-Stars' },
+    ...(recognitionAdminAccess ? [{ path: '/recognition', label: 'All-Stars' }] : []),
     { path: '/ledger', label: 'Employee Records' },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
@@ -237,7 +238,7 @@ function AppShell() {
         <Routes>
           <Route path="/" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
           <Route path="/location/:id" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LocationView />} />
-          <Route path="/recognition" element={<RecognitionProgram />} />
+          <Route path="/recognition" element={recognitionAdminAccess ? <RecognitionProgram /> : <Navigate to={homePath} replace />} />
           <Route path="/employee/:employeeId" element={recognitionOnly ? <Navigate to={homePath} replace /> : <EmployeeRecordPage />} />
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
           <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />

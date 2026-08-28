@@ -6,7 +6,7 @@ import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/a
 import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
-import { canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
@@ -16,6 +16,7 @@ export default function Dashboard() {
   const access = useAuth()
   const showLizFutureTools = canSeeLizFutureTools(access)
   const lizAdminAccess = hasLizAdminAccess(access)
+  const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const [, setDirectoryVersion] = useState(0)
   const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
@@ -119,16 +120,18 @@ export default function Dashboard() {
               <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
             </span>
           </Link>
-          <Link
-            to="/recognition"
-            className="inline-flex items-center gap-3 rounded-xl border border-[#d9b03f]/70 bg-[#9b651a] px-4 py-3 text-white shadow-sm transition-colors hover:bg-[#b47b23]"
-          >
-            <span className="w-9 h-9 rounded-lg bg-black/20 flex items-center justify-center text-xl text-[#ffe177]" aria-hidden="true">★</span>
-            <span>
-              <span className="block text-sm font-bold">All-Star Recognition</span>
-              <span className="block text-[11px] text-amber-100 mt-0.5">Catch someone shining</span>
-            </span>
-          </Link>
+          {recognitionAdminAccess && (
+            <Link
+              to="/recognition"
+              className="inline-flex items-center gap-3 rounded-xl border border-[#d9b03f]/70 bg-[#9b651a] px-4 py-3 text-white shadow-sm transition-colors hover:bg-[#b47b23]"
+            >
+              <span className="w-9 h-9 rounded-lg bg-black/20 flex items-center justify-center text-xl text-[#ffe177]" aria-hidden="true">★</span>
+              <span>
+                <span className="block text-sm font-bold">All-Star Recognition</span>
+                <span className="block text-[11px] text-amber-100 mt-0.5">Catch someone shining</span>
+              </span>
+            </Link>
+          )}
           {lizAdminAccess && (
             <Link
               to="/backup-recovery"

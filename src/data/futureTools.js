@@ -8,6 +8,10 @@ export function canSeeLizFutureTools(access = {}) {
   return hasLizAdminAccess(access)
 }
 
+export function canAccessRecognitionProgram(access = {}) {
+  return access.role === 'admin'
+}
+
 export function canViewBlackoutCalendar(access = {}) {
   if (access.role === 'school') return true
   if (access.role !== 'admin') return false
