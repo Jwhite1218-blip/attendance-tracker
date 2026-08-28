@@ -372,7 +372,10 @@ export default function LocationView() {
       <div className="hidden md:block overflow-x-auto">
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <table className="w-full">
-            <thead className="sticky top-16 z-20 shadow-sm">
+            {/* Keep the header in normal table flow. A sticky <thead> inside
+                the horizontal overflow container was shifting over row one,
+                which made each building's first employee appear missing. */}
+            <thead className="relative z-20 shadow-sm">
               <tr className="border-b border-gray-200 bg-gray-50">
                 <th className="sticky left-0 bg-gray-50 z-30 text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3" style={{ minWidth: '220px' }}>Employee</th>
                 {dates.map(d => {
