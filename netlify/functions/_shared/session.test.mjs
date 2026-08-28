@@ -105,3 +105,46 @@ test('replacing Liz PIN revokes her existing session without logging out other s
     else process.env.ATTENDANCE_LIZ_EMPLOYEE_ID = previousLizEmployeeId
   }
 })
+
+test('active sessions immediately inherit safer capability changes for the same PIN', async () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    7101: {
+      role: 'admin',
+      displayName: 'Capability Test',
+      canManageRoster: true,
+      canManageBlackouts: true,
+    },
+  })
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+
+  try {
+    const stores = { rate: createMemoryBlobStore(), sessions: createMemoryBlobStore() }
+    const login = await handleSessionRequest(loginRequest('7101'), { ip: '203.0.113.31' }, stores)
+    assert.equal(login.status, 200)
+    assert.equal((await login.clone().json()).access.canManageRoster, true)
+    const cookie = login.headers.get('set-cookie').split(';')[0]
+
+    process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+      7101: {
+        role: 'admin',
+        displayName: 'Capability Test',
+        canManageRoster: false,
+        canManageBlackouts: false,
+      },
+    })
+
+    const authenticated = new Request('https://example.test/api/session', { headers: { cookie } })
+    const response = await handleSessionRequest(authenticated, {}, stores)
+    const body = await response.json()
+    assert.equal(response.status, 200)
+    assert.equal(body.access.canManageRoster, false)
+    assert.equal(body.access.canManageBlackouts, false)
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
