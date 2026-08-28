@@ -15,7 +15,7 @@ Rollout window: August 24–28, 2026
 - Application: https://allstartracker-stress-20260821.netlify.app
 - Netlify admin: https://app.netlify.com/projects/allstartracker-stress-20260821
 - State backend: isolated Netlify Blobs test data
-- Current release-candidate validation deploy: `6a8fa9d51cfd58881108cd7b`
+- Current release-candidate validation deploy: `6a90e6b41bbd188ac306a359`
 
 Use `allstartracker-stress-20260821.netlify.app` only for the scheduled dress
 rehearsal and test data. It is isolated, is not Git-linked, and must never be

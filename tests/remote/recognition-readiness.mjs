@@ -17,6 +17,7 @@ const FORBIDDEN_PUBLIC_FIELDS = [
   'sourceName',
 ]
 const EXPECTED_LEADER_FIELDS = [
+  'buildingAllStars',
   'dailyStars',
   'earnedStars',
   'employeeOfMonth',
@@ -85,7 +86,7 @@ const checks = await Promise.all(PUBLIC_LEADERBOARD_SCHOOLS.map(async entry => {
     assert.equal(leader.rank, index + 1)
     assert.equal(typeof leader.name, 'string')
     assert.ok(leader.name.trim(), `${location.name} exposed a blank employee name.`)
-    for (const field of ['earnedStars', 'dailyStars', 'shoutOuts', 'shootingNominations', 'employeeOfMonth']) {
+    for (const field of ['earnedStars', 'dailyStars', 'shoutOuts', 'shootingNominations', 'buildingAllStars', 'employeeOfMonth']) {
       assert.ok(Number.isInteger(leader[field]) && leader[field] >= 0, `${location.name} has an invalid ${field}.`)
     }
     assert.equal(leader.earnedStars, leader.dailyStars, 'Only Daily Stars may count as earned stars.')
