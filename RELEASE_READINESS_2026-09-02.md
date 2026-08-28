@@ -25,7 +25,7 @@ Production launch: Wednesday, September 2, 2026
 
 ## Verified August 27
 
-- 85 automated tests pass.
+- 86 automated tests pass, including the administrator-only recognition boundary.
 - The Vite production bundle builds successfully.
 - The production dependency audit reports zero known vulnerabilities.
 - The current production homepage, immutable assets, anonymous API denial, and
@@ -69,7 +69,7 @@ tenant; do not improvise that change during training.
 
 ### Recognition script
 
-1. Sign in to the lab and open **All-Stars**.
+1. Sign in to the lab with an administrator-role PIN and open **All-Stars**.
 2. Record one **Star of the Day** with an approved reason. Refresh, navigate
    away and back, and confirm the employee earned-star total increases by one.
 3. Record one **Shooting Star nomination**. Confirm its quarterly total changes
@@ -78,8 +78,10 @@ tenant; do not improvise that change during training.
    the earned-star total does not.
 5. Switch the building filter and confirm only the selected school's employees
    and recognition history appear.
-6. Confirm a building manager cannot record Warren Food Services Employee of
-   the Month; Liz administrator access retains that control.
+6. Sign in with a representative building PIN. Confirm **All-Stars** is absent,
+   `/recognition` redirects to the assigned school, no recognition state is
+   delivered, and recognition writes are denied. Return to administrator access
+   before continuing.
 7. Open the matching crowd URL and wait up to 60 seconds for its automatic
    refresh. Confirm only the public counts and names appear.
 
@@ -100,6 +102,7 @@ tenant; do not improvise that change during training.
 - Daily Star changes earned stars and drawing entries exactly once.
 - Shooting Star and Shout-Out totals remain separate.
 - School filters and public URLs resolve to the correct buildings.
+- Building PINs cannot see, open, read, or write the recognition program.
 - Data remains after refresh and sign-out/sign-in.
 - Liz successfully downloads a full backup without technical assistance.
 - Attendees understand that the public page is read-only and the lab permits
@@ -134,8 +137,8 @@ Do not launch unless every item is true:
 6. Run `npm run test:production:public`.
 7. Sign in as Liz and verify **Shared**, All-Stars, the district compilation,
    Backup & Recovery, one school roster, and sign-out.
-8. Sign in with one building-manager PIN and verify school scoping plus a
-   non-destructive recognition form check.
+8. Sign in with one building-manager PIN and verify school scoping, the absence
+   of **All-Stars**, and the `/recognition` redirect.
 9. Open one populated and one empty production NFC URL on a phone.
 10. Activate or distribute the NFC cards only after those checks pass.
 11. Monitor Netlify function errors and manager feedback for at least 60 minutes.
