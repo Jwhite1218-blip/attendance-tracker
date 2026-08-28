@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
-import { applyStateMutation } from '../../src/data/stateMutations.js'
+import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
 import { getStateStore } from './_shared/state-store.mjs'
@@ -21,6 +21,12 @@ import {
 } from './_shared/permissions.mjs'
 
 const META_KEY = '__state_meta__'
+const PRE_RESTORE_BACKUP_KEY = '__state_backup_before_restore__'
+const BACKUP_FORMAT = 'warren-attendance-backup'
+const BACKUP_VERSION = 1
+const BACKUP_MAX_BYTES = 25 * 1024 * 1024
+const BACKUP_MAX_KEYS = 5000
+const RESTORE_CONFIRMATION = 'RESTORE'
 
 function employeeKey(employee) {
   return String(employee?.kronos_id || employee?.id || '')
@@ -88,6 +94,51 @@ async function loadEntries(store) {
       .map(async blob => [blob.key, await store.get(blob.key, { type: 'json' })])
   )
   return Object.fromEntries(rows.filter(([, value]) => value !== null))
+}
+
+function createBackupPayload(entries, session, now = new Date()) {
+  return {
+    format: BACKUP_FORMAT,
+    version: BACKUP_VERSION,
+    exportedAt: now.toISOString(),
+    exportedBy: String(session.displayName || 'Liz administrator').slice(0, 200),
+    entries,
+  }
+}
+
+function emptyManagedValue(key) {
+  return key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY ? [] : {}
+}
+
+function backupEntriesFromPayload(backup) {
+  if (
+    !backup
+    || typeof backup !== 'object'
+    || Array.isArray(backup)
+    || backup.format !== BACKUP_FORMAT
+    || backup.version !== BACKUP_VERSION
+    || !backup.entries
+    || typeof backup.entries !== 'object'
+    || Array.isArray(backup.entries)
+  ) {
+    throw new Error('The selected file is not a supported Warren attendance backup.')
+  }
+
+  const serialized = JSON.stringify(backup)
+  if (serialized.length > BACKUP_MAX_BYTES) throw new Error('The selected backup is too large.')
+
+  const entries = backup.entries
+  const keys = Object.keys(entries)
+  if (keys.length > BACKUP_MAX_KEYS) throw new Error('The selected backup contains too many data sections.')
+  for (const key of keys) {
+    if (!isManagedStateKey(key)) throw new Error('The selected backup contains an unsupported data section.')
+    const value = entries[key]
+    const requiresArray = key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY
+    if (requiresArray ? !Array.isArray(value) : (!value || typeof value !== 'object' || Array.isArray(value))) {
+      throw new Error('The selected backup contains an invalid data section.')
+    }
+  }
+  return entries
 }
 
 async function loadSchoolRosterEntries(store) {
@@ -189,10 +240,10 @@ function isSameOriginRequest(request) {
   return !origin || origin === new URL(request.url).origin
 }
 
-function validateMutation(key, mutation) {
+function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } = {}) {
   applyStateMutation(key, null, mutation)
   if (key === EMPLOYEE_NOTES_KEY) {
-    if (mutation.type !== 'object-patch' || (mutation.remove || []).length > 0) {
+    if (mutation.type !== 'object-patch' || (!allowEmployeeNoteRemovals && (mutation.remove || []).length > 0)) {
       throw new Error('Employee note changes must be an object patch without deletions.')
     }
     for (const [employeeId, note] of Object.entries(mutation.set || {})) {
@@ -226,6 +277,57 @@ function validateMutation(key, mutation) {
   if (!(mutation.remove || []).every(validDate)) {
     throw new Error('Attendance patch contains an invalid removal date.')
   }
+}
+
+export async function handleBackupRestore(store, session, body) {
+  if (!hasLizAdminAccess(session)) {
+    return jsonResponse({ error: 'Only Liz administrator access can restore a full backup.' }, 403)
+  }
+  if (String(body.confirmation || '') !== RESTORE_CONFIRMATION) {
+    return jsonResponse({ error: 'Type RESTORE to confirm the recovery operation.' }, 400)
+  }
+
+  let backupEntries
+  let currentEntries
+  let targetEntries
+  try {
+    backupEntries = backupEntriesFromPayload(body.backup)
+    currentEntries = await loadEntries(store)
+    const keys = new Set([...Object.keys(currentEntries), ...Object.keys(backupEntries)])
+    targetEntries = Object.fromEntries([...keys].map(key => [
+      key,
+      Object.hasOwn(backupEntries, key) ? backupEntries[key] : emptyManagedValue(key),
+    ]))
+
+    for (const [key, value] of Object.entries(targetEntries)) {
+      const mutation = createStateMutation(key, currentEntries[key] ?? null, value)
+      validateMutation(key, mutation, { allowEmployeeNoteRemovals: true })
+    }
+  } catch (error) {
+    return jsonResponse({ error: error.message || 'The selected backup is invalid.' }, 400)
+  }
+
+  const actor = String(session.displayName || 'Liz administrator').slice(0, 200)
+  await store.setJSON(PRE_RESTORE_BACKUP_KEY, createBackupPayload(currentEntries, session), actor)
+
+  const writtenKeys = []
+  try {
+    for (const [key, value] of Object.entries(targetEntries)) {
+      await store.setJSON(key, value, actor)
+      writtenKeys.push(key)
+    }
+  } catch (error) {
+    await Promise.allSettled(writtenKeys.map(key => (
+      store.setJSON(key, currentEntries[key] ?? emptyManagedValue(key), `${actor} automatic rollback`)
+    )))
+    throw error
+  }
+
+  return jsonResponse({
+    ok: true,
+    restoredAt: new Date().toISOString(),
+    restoredSections: Object.keys(targetEntries).length,
+  })
 }
 
 export async function handleMutate(store, session, body) {
@@ -277,6 +379,15 @@ export async function handleStateRequest(request, { stateStore, sessionStore } =
       loadEntries(store),
       store.get(META_KEY, { type: 'json' }),
     ])
+    if (new URL(request.url).searchParams.get('action') === 'backup') {
+      if (!hasLizAdminAccess(session)) {
+        return jsonResponse({ error: 'Only Liz administrator access can download a full backup.' }, 403)
+      }
+      const dateKey = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+      return jsonResponse(createBackupPayload(entries, session), 200, {
+        'Content-Disposition': `attachment; filename="warren-attendance-backup-${dateKey}.json"`,
+      })
+    }
     return jsonResponse({
       initialized: Boolean(meta),
       entries: filterEntriesForSession(entries, session),
@@ -289,6 +400,7 @@ export async function handleStateRequest(request, { stateStore, sessionStore } =
     const parsedBody = await request.json().catch(() => null)
     const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
     if (body.action === 'mutate') return handleMutate(store, session, body)
+    if (body.action === 'restore-backup') return handleBackupRestore(store, session, body)
     return jsonResponse({ error: 'Unsupported state action.' }, 400)
   }
 
