@@ -195,9 +195,17 @@ function validateMutation(key, mutation) {
     if (mutation.type !== 'object-patch' || (mutation.remove || []).length > 0) {
       throw new Error('Employee note changes must be an object patch without deletions.')
     }
-    for (const [employeeId, note] of Object.entries(mutation.set || {})) {
-      if (!employeeId || employeeId.length > 200 || typeof note !== 'string' || note.length > 4000) {
+    for (const [employeeId, entries] of Object.entries(mutation.set || {})) {
+      if (!employeeId || employeeId.length > 200 || !Array.isArray(entries)) {
         throw new Error('Employee note changes contain an invalid entry.')
+      }
+      for (const entry of entries) {
+        const validText = entry && typeof entry.text === 'string' && entry.text.length > 0 && entry.text.length <= 4000
+        const validAuthor = typeof entry?.author === 'string' && entry.author.length <= 200
+        const validAt = entry?.at === null || (typeof entry?.at === 'string' && !Number.isNaN(Date.parse(entry.at)))
+        if (!validText || !validAuthor || !validAt) {
+          throw new Error('Employee note changes contain an invalid entry.')
+        }
       }
     }
     return

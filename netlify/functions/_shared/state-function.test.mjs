@@ -90,8 +90,8 @@ test('school state filters roster and location overrides to that school', async 
         [schoolId(outsider)]: { notes: 'Other school note', t_shirt_size: 'S' },
       },
       'employee-manager-notes-v1': {
-        [schoolId(schoolEmployee)]: 'District HR note',
-        [schoolId(outsider)]: 'Other district HR note',
+        [schoolId(schoolEmployee)]: [{ text: 'District HR note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }],
+        [schoolId(outsider)]: [{ text: 'Other district HR note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }],
       },
       'employee-custom-records': [
         {
@@ -147,7 +147,7 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
         [employeeId]: { notes: 'Administrative note', t_shirt_size: '2XL' },
       },
       'employee-manager-notes-v1': {
-        [employeeId]: 'Shared HR note',
+        [employeeId]: [{ text: 'Shared HR note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }],
       },
     })
 
@@ -178,8 +178,12 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
     assert.equal(limitedBody.roster[0].birthdate, employees[0].birthdate || '')
     assert.equal(limitedBody.entries['employee-record-overrides'][employeeId].notes, 'Administrative note')
     assert.equal(Object.hasOwn(limitedBody.entries['employee-record-overrides'][employeeId], 't_shirt_size'), false)
-    assert.equal(limitedBody.entries['employee-manager-notes-v1'][employeeId], 'Shared HR note')
+    assert.deepEqual(limitedBody.entries['employee-manager-notes-v1'][employeeId], [{ text: 'Shared HR note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }])
 
+    const appendedNotes = [
+      { text: 'Shared HR note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' },
+      { text: 'Added by restricted manager', author: 'Restricted Manager', at: '2026-08-21T09:00:00.000Z' },
+    ]
     const limitedNoteRequest = await authenticatedRequest(
       {
         role: 'admin',
@@ -197,7 +201,7 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
           key: 'employee-manager-notes-v1',
           mutation: {
             type: 'object-patch',
-            set: { [employeeId]: 'Updated by restricted manager' },
+            set: { [employeeId]: appendedNotes },
             remove: [],
           },
         }),
@@ -205,7 +209,9 @@ test('T-shirt sizes are returned only to Liz full-admin access', async () => {
     )
     const limitedNoteResponse = await handleStateRequest(limitedNoteRequest, { stateStore: store, sessionStore: sessions })
     assert.equal(limitedNoteResponse.status, 200)
-    assert.equal((await limitedNoteResponse.json()).value[employeeId], 'Updated by restricted manager')
+    // A restricted admin can append a new entry but the earlier one — added by
+    // someone else — is still there, not overwritten.
+    assert.deepEqual((await limitedNoteResponse.json()).value[employeeId], appendedNotes)
 
     const limitedWriteRequest = await authenticatedRequest(
       {

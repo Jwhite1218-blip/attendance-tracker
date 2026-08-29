@@ -35,7 +35,7 @@ export default function EmployeeRecordPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8">
-      <div className="sticky top-16 z-40 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 mb-4 bg-charcoal-700/95 backdrop-blur-sm border-b border-charcoal-600 flex items-center justify-between gap-2">
+      <div className="print:hidden sticky top-16 z-40 -mx-3 sm:-mx-6 lg:-mx-8 px-3 sm:px-6 lg:px-8 py-2 mb-4 bg-charcoal-700/95 backdrop-blur-sm border-b border-charcoal-600 flex items-center justify-between gap-2">
         <Link
           to={backPath}
           className="flex items-center gap-2 text-sm font-medium text-brand-300 hover:text-brand-200 transition-colors py-1.5 px-3 rounded-lg hover:bg-charcoal-600"

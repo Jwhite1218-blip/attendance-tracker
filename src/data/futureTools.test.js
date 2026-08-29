@@ -46,7 +46,7 @@ test('Liz-only employee fields use the same full-admin boundary', () => {
   }), false)
 })
 
-test('blackout calendar is hidden only from editable restricted-district access', () => {
+test('blackout calendar is hidden from editable restricted-district access and from school-level navigation', () => {
   assert.equal(canViewBlackoutCalendar({
     role: 'admin',
     canEditAttendance: true,
@@ -65,9 +65,12 @@ test('blackout calendar is hidden only from editable restricted-district access'
     canManageBlackouts: false,
   }), true)
 
+  // Removed from school-level navigation per Liz's 2026-08-29 request — the
+  // dashboard tab is the return path now, and blackout dates already block
+  // attendance entry regardless of whether this page is reachable.
   assert.equal(canViewBlackoutCalendar({
     role: 'school',
     canEditAttendance: true,
     canManageBlackouts: false,
-  }), true)
+  }), false)
 })

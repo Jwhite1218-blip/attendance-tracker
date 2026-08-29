@@ -1,13 +1,14 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { getAllFlaggedEmployees, getAttendanceStageLabel } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
+import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
 const ALL_STAR_TRACKER_URL = String(import.meta.env.VITE_ALL_STAR_TRACKER_URL || '').trim()
@@ -15,6 +16,7 @@ const PROFESSIONAL_STANDARDS_URL = String(import.meta.env.VITE_PROFESSIONAL_STAN
 
 export default function Dashboard() {
   const access = useAuth()
+  const navigate = useNavigate()
   const showLizFutureTools = canSeeLizFutureTools(access)
   const lizAdminAccess = hasLizAdminAccess(access)
   const [, setDirectoryVersion] = useState(0)
@@ -29,6 +31,11 @@ export default function Dashboard() {
   const flaggedEmployees = getAllFlaggedEmployees()
     .map(flag => ({ ...flag, employee: allEmployees.find(e => String(e.kronos_id || e.id) === String(flag.empId)) }))
     .filter(f => f.employee)
+
+  const openEmployeeRecord = employee => {
+    const employeeId = employee.kronos_id || employee.id
+    navigate(`/employee/${encodeURIComponent(employeeId)}`)
+  }
 
   const refreshDirectory = () => setDirectoryVersion(version => version + 1)
 
@@ -106,6 +113,20 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="self-start sm:self-auto flex flex-wrap items-stretch gap-3">
+          <Link
+            to="/reports/daily"
+            className="inline-flex items-center gap-3 rounded-xl border border-charcoal-500 bg-charcoal-700 px-4 py-3 text-white shadow-sm hover:bg-charcoal-600 transition-colors"
+          >
+            <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center" aria-hidden="true">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </span>
+            <span>
+              <span className="block text-sm font-bold">Daily Report</span>
+              <span className="block text-[11px] text-charcoal-200 mt-0.5">Today's exceptions, printable</span>
+            </span>
+          </Link>
           <Link
             to="/reports/custom"
             className="inline-flex items-center gap-3 rounded-xl border border-charcoal-500 bg-charcoal-700 px-4 py-3 text-white shadow-sm hover:bg-charcoal-600 transition-colors"
@@ -195,39 +216,7 @@ export default function Dashboard() {
       </div>
 
       {/* HR Attendance Flags */}
-      {flaggedEmployees.length > 0 && (
-        <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
-          <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
-          <p className="text-xs text-gray-400 mb-3">
-            The third qualifying occurrence starts formal tracking, the fourth requires a verbal warning, and two consecutive UNEX workdays reset union seniority.
-          </p>
-          <div className="divide-y divide-gray-100">
-            {flaggedEmployees.map(f => (
-              <div key={`${f.empId}-${f.schoolYearStart}`} className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-red-600">{f.employee.first_name} {f.employee.last_name}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    {LOCATION_MAP[f.employee.location]?.name || f.employee.location} · {f.employee.position}
-                  </p>
-                  <p className={`text-xs font-semibold mt-1.5 ${f.seniorityReset ? 'text-red-700' : 'text-amber-700'}`}>
-                    {getAttendanceStageLabel(f)} · {f.occurrenceCount} occurrence{f.occurrenceCount === 1 ? '' : 's'} · {f.schoolYearStart}–{f.schoolYearStart + 1}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {f.triggers.map((t, i) => (
-                      <span key={i} className="text-[10px] font-medium bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5">
-                        {t.date} · {CODE_MAP[t.code]?.shortLabel}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-400 whitespace-nowrap sm:text-right">
-                  Updated {new Date(f.updatedAt).toLocaleDateString()}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <HrFollowUpPanel flaggedEmployees={flaggedEmployees} onEmployeeSelect={openEmployeeRecord} />
 
       {/* Quick Code Summary */}
       {totalMarked > 0 && (
@@ -278,13 +267,14 @@ export default function Dashboard() {
                 const empKey = employee.kronos_id || employee.id
                 return (
                   <div key={empKey} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-gray-800">{employee.first_name} {employee.last_name}</p>
+                    <button type="button" onClick={() => openEmployeeRecord(employee)} className="text-left group">
+                      <p className="text-sm font-semibold text-gray-800 group-hover:text-brand-700 transition-colors">{employee.first_name} {employee.last_name}</p>
                       <p className="text-xs text-gray-400">
                         ID: {employee.kronos_id} · {LOCATION_MAP[employee.location]?.name || employee.location}
                         {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
+                        {' · View history'}
                       </p>
-                    </div>
+                    </button>
                     {lizAdminAccess && (
                       <button
                         type="button"

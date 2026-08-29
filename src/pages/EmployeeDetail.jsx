@@ -2,9 +2,10 @@ import { useState, useMemo, useEffect } from 'react'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
 import { getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
-import { getEmployeeByKey, saveEmployeeNotes, setEmployeeActive } from '../data/employeeLocations.js'
+import { addEmployeeNote, getEmployeeByKey, setEmployeeActive } from '../data/employeeLocations.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
+import { LOCATION_MAP } from '../data/locations.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
@@ -44,7 +45,7 @@ function getMonthStats(attendance, year, monthIdx) {
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
   const access = useAuth()
-  const { role, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
+  const { role, displayName, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
@@ -53,9 +54,9 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [paintMode, setPaintMode] = useState(false)
   const [isPainting, setIsPainting] = useState(false)
   const [picker, setPicker] = useState(null)
-  const [notesDraft, setNotesDraft] = useState(employee?.notes || '')
+  const [noteDraft, setNoteDraft] = useState('')
   const [inactiveReason, setInactiveReason] = useState('')
-  const [notesSaved, setNotesSaved] = useState(false)
+  const [noteAdded, setNoteAdded] = useState(false)
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
   const [visibleMonths, setVisibleMonths] = useState(() => {
@@ -89,12 +90,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   useEffect(() => {
     const currentEmployee = getEmployeeByKey(empKey)
-    setNotesDraft(currentEmployee?.notes || '')
+    setNoteDraft('')
     setInactiveReason(currentEmployee?.inactive_reason || '')
-    setNotesSaved(false)
+    setNoteAdded(false)
     setConfirmInactive(false)
     setShowEditEmployee(false)
-  }, [empKey, employee?.notes, employee?.inactive_reason])
+  }, [empKey, employee?.inactive_reason])
 
   const applyYearSnapshot = (dateKey, yearData) => {
     const changedYear = Number(dateKey.slice(0, 4))
@@ -171,6 +172,9 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      <PrintableAttendanceLedger employee={employee} attendance={attendance} yearLabel={formatYearLabel(year, mode)} />
+
+      <div className="print:hidden space-y-4 sm:space-y-6">
       {/* Employee Header */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
@@ -203,8 +207,18 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             </div>
           </div>
 
-          <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto">
+          <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto print:hidden">
             <div className="flex items-center gap-2">
+              {role === 'admin' && (
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  title={`Print the ${formatYearLabel(year, mode)} attendance ledger for the paper employee file`}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
+                >
+                  Print ledger
+                </button>
+              )}
               {lizAdminAccess && (
                 <button
                   type="button"
@@ -297,40 +311,61 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               <label htmlFor="employee-admin-notes" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Employee notes
               </label>
-              <p className="text-[11px] text-gray-400 mt-1">Shared HR notes are saved across district-manager logins and recorded in the audit history.</p>
+              <p className="text-[11px] text-gray-400 mt-1">Shared HR notes are saved across district-manager logins. Each entry is dated and attributed, and earlier entries are never edited or replaced.</p>
               {attendanceStatus && isFlagged(empKey) && (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
                   <span className="font-bold">HR occurrence alert:</span> {getAttendanceStageLabel(attendanceStatus)}
                 </div>
               )}
-              <textarea
-                id="employee-admin-notes"
-                value={notesDraft}
-                onChange={event => {
-                  setNotesDraft(event.target.value)
-                  setNotesSaved(false)
-                }}
-                rows={3}
-                placeholder="Add an employee note…"
-                disabled={!canWriteEmployeeNotes}
-                className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 disabled:bg-gray-50 disabled:text-gray-500"
-              />
-              {canWriteEmployeeNotes ? (
-                <div className="mt-2 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      saveEmployeeNotes(empKey, notesDraft)
-                      setNotesSaved(true)
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700"
-                  >
-                    Save HR notes
-                  </button>
-                  {notesSaved && <span className="text-xs font-medium text-emerald-600">Saved</span>}
-                </div>
+
+              {employee?.notes?.length > 0 ? (
+                <ul className="mt-2 space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {[...employee.notes].reverse().map((entry, index) => (
+                    <li key={index} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap">{entry.text}</p>
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {entry.author ? `${entry.author} · ` : ''}
+                        {entry.at ? new Date(entry.at).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'Date not recorded'}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <p className="mt-2 text-xs font-medium text-gray-400">Read-only HR notes</p>
+                <p className="mt-2 text-sm text-gray-400">No notes yet.</p>
+              )}
+
+              {canWriteEmployeeNotes ? (
+                <>
+                  <textarea
+                    id="employee-admin-notes"
+                    value={noteDraft}
+                    onChange={event => {
+                      setNoteDraft(event.target.value)
+                      setNoteAdded(false)
+                    }}
+                    rows={2}
+                    placeholder="Add a new note…"
+                    className="mt-3 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={!noteDraft.trim()}
+                      onClick={() => {
+                        const updatedEmployee = addEmployeeNote(empKey, noteDraft, displayName)
+                        setNoteDraft('')
+                        setNoteAdded(true)
+                        onEmployeeUpdate?.(updatedEmployee)
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-xs font-semibold hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      Add note
+                    </button>
+                    {noteAdded && <span className="text-xs font-medium text-emerald-600">Added</span>}
+                  </div>
+                </>
+              ) : (
+                <p className="mt-3 text-xs font-medium text-gray-400">Read-only HR notes</p>
               )}
             </div>
 
@@ -668,6 +703,52 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           setPicker(null)
         }}
       />
+      </div>
+    </div>
+  )
+}
+
+// Screen-hidden, print-only view. A separate flat list rather than trying to
+// print the interactive calendar grid — easier to read on paper and includes
+// every comment, which is the point of putting this in a personnel file.
+function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
+  const rows = Object.values(attendance)
+    .filter(record => record?.code)
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  return (
+    <div className="hidden print:block text-black">
+      <h1 className="text-xl font-bold">Attendance Ledger — {yearLabel}</h1>
+      <div className="mt-2 text-sm">
+        <p className="font-semibold">{employee?.first_name} {employee?.last_name} · ID: {employee?.kronos_id}</p>
+        <p>{employee?.position} · {LOCATION_MAP[employee?.location]?.name || employee?.location || 'Unassigned'}</p>
+        <p className="text-gray-600">Printed {new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}</p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="mt-4 text-sm">No attendance exceptions recorded for this range.</p>
+      ) : (
+        <table className="mt-4 w-full text-sm border-collapse">
+          <thead>
+            <tr className="border-b-2 border-black">
+              <th className="text-left py-1 pr-3">Date</th>
+              <th className="text-left py-1 pr-3">Code</th>
+              <th className="text-left py-1 pr-3">Description</th>
+              <th className="text-left py-1">Comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(record => (
+              <tr key={record.date} className="border-b border-gray-300">
+                <td className="py-1 pr-3 whitespace-nowrap align-top">{record.date}</td>
+                <td className="py-1 pr-3 align-top">{record.code}</td>
+                <td className="py-1 pr-3 align-top">{CODE_MAP[record.code]?.label || record.code}</td>
+                <td className="py-1 align-top">{record.note || ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
