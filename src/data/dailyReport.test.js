@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { installTestBrowserStorage } from './testBrowserStorage.js'
-import { buildDailyReportRows, getTodayDateKey } from './dailyReport.js'
+import { buildDailyReportRows, buildDailyReportSheetRows, getTodayDateKey } from './dailyReport.js'
 
 installTestBrowserStorage()
 
@@ -50,4 +50,18 @@ test('buildDailyReportRows sorts by school sort order, then employee name', () =
   const rows = buildDailyReportRows(employees, '2026-08-29')
 
   assert.deepEqual(rows.map(row => row.employeeName), ['Amy Adams', 'Zed Zephyr'])
+})
+
+test('buildDailyReportSheetRows shapes rows for a spreadsheet', () => {
+  const sheetRows = buildDailyReportSheetRows([
+    { locationName: 'Warren Central HS', employeeName: 'Amanda Allen', code: 'UNEX', codeLabel: 'UNEXCUSED ABSENCE, CALL IN', note: 'Called in sick' },
+  ])
+
+  assert.deepEqual(sheetRows, [{
+    Location: 'Warren Central HS',
+    Employee: 'Amanda Allen',
+    Code: 'UNEX',
+    Description: 'UNEXCUSED ABSENCE, CALL IN',
+    Comment: 'Called in sick',
+  }])
 })
