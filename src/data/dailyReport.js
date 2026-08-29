@@ -37,3 +37,13 @@ export function buildDailyReportRows(employees, dateKey) {
         || left.employeeName.localeCompare(right.employeeName)
     })
 }
+
+export function buildDailyReportSheetRows(rows) {
+  return rows.map(row => ({
+    Location: row.locationName,
+    Employee: row.employeeName,
+    Code: row.code,
+    Description: row.codeLabel,
+    Comment: row.note,
+  }))
+}

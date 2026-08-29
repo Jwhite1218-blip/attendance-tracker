@@ -11,6 +11,13 @@ import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import {
+  buildEmployeeHistoryRows,
+  buildEmployeeHistorySheetRows,
+  buildEmployeeHistoryHeaderRows,
+  buildEmployeeHistoryFilename,
+} from '../data/employeeHistoryExport.js'
+import { downloadWorkbook } from '../lib/exportWorkbook.js'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -59,6 +66,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [noteAdded, setNoteAdded] = useState(false)
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
+  const [exportingHistory, setExportingHistory] = useState(false)
   const [visibleMonths, setVisibleMonths] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       return new Set([new Date().getMonth()])
@@ -170,6 +178,23 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const showAllMonths = () => setVisibleMonths(null)
   const showCurrentMonthOnly = () => setVisibleMonths(new Set([new Date().getMonth()]))
 
+  const exportHistory = async () => {
+    setExportingHistory(true)
+    try {
+      const yearLabel = formatYearLabel(year, mode)
+      const historyRows = buildEmployeeHistoryRows(attendance)
+      await downloadWorkbook(buildEmployeeHistoryFilename(employee, yearLabel), [{
+        name: 'Attendance History',
+        headerRows: buildEmployeeHistoryHeaderRows(employee, yearLabel),
+        rows: buildEmployeeHistorySheetRows(historyRows),
+      }])
+    } catch {
+      window.alert('Could not build the export. Please try again.')
+    } finally {
+      setExportingHistory(false)
+    }
+  }
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <PrintableAttendanceLedger employee={employee} attendance={attendance} yearLabel={formatYearLabel(year, mode)} />
@@ -210,14 +235,25 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto print:hidden">
             <div className="flex items-center gap-2">
               {role === 'admin' && (
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  title={`Print the ${formatYearLabel(year, mode)} attendance ledger for the paper employee file`}
-                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
-                >
-                  Print ledger
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={exportHistory}
+                    disabled={exportingHistory}
+                    title={`Export the ${formatYearLabel(year, mode)} attendance ledger as a spreadsheet`}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Export history (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    title={`Print the ${formatYearLabel(year, mode)} attendance ledger for the paper employee file`}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
+                  >
+                    Print ledger
+                  </button>
+                </>
               )}
               {lizAdminAccess && (
                 <button
@@ -712,9 +748,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 // print the interactive calendar grid — easier to read on paper and includes
 // every comment, which is the point of putting this in a personnel file.
 function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
-  const rows = Object.values(attendance)
-    .filter(record => record?.code)
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const rows = buildEmployeeHistoryRows(attendance)
 
   return (
     <div className="hidden print:block text-black">

@@ -11,13 +11,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:production:public": "node tests/remote/public-readiness.mjs https://allstartracker.netlify.app",
-    "test": "node --test netlify/functions/_shared/daily-report.test.mjs netlify/functions/_shared/permissions.test.mjs netlify/functions/_shared/session.test.mjs netlify/functions/_shared/state-function.test.mjs netlify/functions/_shared/state-store.test.mjs src/data/attendanceStore.test.js src/data/blackoutDates.test.js src/data/stateMutations.test.js src/data/dailyReport.test.js src/data/dashboardInsights.test.js src/data/customReports.test.js src/data/fiscalCalendar.test.js src/data/futureTools.test.js src/data/hrFlags.test.js src/data/rosterIntegrity.test.js src/data/weekDates.test.js"
+    "test": "node --test netlify/functions/_shared/daily-report.test.mjs netlify/functions/_shared/permissions.test.mjs netlify/functions/_shared/session.test.mjs netlify/functions/_shared/state-function.test.mjs netlify/functions/_shared/state-store.test.mjs src/data/attendanceStore.test.js src/data/blackoutDates.test.js src/data/stateMutations.test.js src/data/dailyReport.test.js src/data/employeeHistoryExport.test.js src/data/dashboardInsights.test.js src/data/customReports.test.js src/data/fiscalCalendar.test.js src/data/futureTools.test.js src/data/hrFlags.test.js src/data/rosterIntegrity.test.js src/data/weekDates.test.js"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "7.18.2"
+    "react-router-dom": "7.18.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

@@ -1,16 +1,32 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
-import { buildDailyReportRows, getTodayDateKey } from '../data/dailyReport.js'
+import { buildDailyReportRows, buildDailyReportSheetRows, getTodayDateKey } from '../data/dailyReport.js'
+import { downloadWorkbook } from '../lib/exportWorkbook.js'
 import { useAuth } from '../components/PinGate.jsx'
 
 export default function DailyReport() {
   const { dataVersion } = useAuth()
+  const [exporting, setExporting] = useState(false)
   const today = useMemo(() => new Date(), [])
   const dateKey = getTodayDateKey(today)
   const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [dataVersion])
   const rows = useMemo(() => buildDailyReportRows(employees, dateKey), [employees, dateKey])
   const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const locationCount = new Set(rows.map(row => row.locationId)).size
+
+  const exportReport = async () => {
+    setExporting(true)
+    try {
+      await downloadWorkbook(`attendance-daily-${dateKey}.xlsx`, [{
+        name: 'Daily Report',
+        rows: buildDailyReportSheetRows(rows),
+      }])
+    } catch {
+      window.alert('Could not build the export. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -19,13 +35,23 @@ export default function DailyReport() {
           <h1 className="text-2xl font-bold text-white">Daily Attendance Report</h1>
           <p className="text-sm text-charcoal-200 mt-1">{dateLabel} · Same content as the automated 5pm email.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="self-start px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
-        >
-          Print report
-        </button>
+        <div className="flex flex-wrap gap-2 self-start">
+          <button
+            type="button"
+            onClick={exportReport}
+            disabled={exporting || rows.length === 0}
+            className="px-4 py-2.5 rounded-lg border border-charcoal-500 bg-charcoal-700 text-white text-sm font-semibold hover:bg-charcoal-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Export (.xlsx)
+          </button>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
+          >
+            Print report
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 print:border-0 print:rounded-none print:p-0 print:text-black">
