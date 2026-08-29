@@ -5,11 +5,12 @@ import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
-import { isFlagged } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees, isFlagged } from '../data/hrFlags.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getWeekDates } from '../data/weekDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
+import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 
@@ -48,6 +49,14 @@ export default function LocationView() {
     const employeeId = employee.kronos_id || employee.id
     navigate(`/employee/${encodeURIComponent(employeeId)}`)
   }
+
+  const flaggedEmployees = useMemo(() => {
+    const rosterIds = new Set(roster.map(employee => String(employee.kronos_id || employee.id)))
+    return getAllFlaggedEmployees()
+      .filter(flag => rosterIds.has(String(flag.empId)))
+      .map(flag => ({ ...flag, employee: roster.find(employee => String(employee.kronos_id || employee.id) === String(flag.empId)) }))
+      .filter(flag => flag.employee)
+  }, [roster, dataVersion])
 
   // Load this week's attendance for the roster from the shared store
   useEffect(() => {
@@ -482,6 +491,11 @@ export default function LocationView() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* HR Attendance Follow-Up — this building's roster only */}
+      <div className="mt-4">
+        <HrFollowUpPanel flaggedEmployees={flaggedEmployees} onEmployeeSelect={openEmployeeRecord} showLocation={false} />
       </div>
 
       {/* Footer actions */}

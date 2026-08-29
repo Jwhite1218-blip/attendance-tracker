@@ -64,6 +64,18 @@ function getSourceEmployees() {
   return [...sourceEmployees, ...getCustomEmployees()]
 }
 
+// A single legacy overwritable string is migrated into a one-entry timestamped
+// list on first read so older records still display under the new format.
+function normalizeNoteEntries(rawNotes) {
+  if (Array.isArray(rawNotes)) {
+    return rawNotes.filter(entry => entry && typeof entry.text === 'string' && entry.text.trim())
+  }
+  if (typeof rawNotes === 'string' && rawNotes.trim()) {
+    return [{ text: rawNotes.trim(), author: '', at: null }]
+  }
+  return []
+}
+
 function buildEmployee(employee, locationOverrides, recordOverrides, managerNotes) {
   const key = employeeKey(employee)
   const override = recordOverrides[key] || {}
@@ -73,7 +85,7 @@ function buildEmployee(employee, locationOverrides, recordOverrides, managerNote
     ...override,
     location: locationOverrides[key] || override.location || employee.location,
     active: override.active !== false,
-    notes: hasManagerNote ? managerNotes[key] : (override.notes || ''),
+    notes: normalizeNoteEntries(hasManagerNote ? managerNotes[key] : override.notes),
     inactive_reason: override.inactive_reason || '',
     inactive_at: override.inactive_at || null,
   }
@@ -125,10 +137,17 @@ export function updateEmployeeRecord(empId, updates) {
   return getEmployeeByKey(key)
 }
 
-export function saveEmployeeNotes(empId, notes) {
+// Appends a new timestamped, attributed note. Existing entries are never
+// edited or removed here, so a manager's earlier note can't be overwritten by
+// the next person who opens the record.
+export function addEmployeeNote(empId, text, author) {
+  const trimmedText = String(text || '').trim()
+  if (!trimmedText) return getEmployeeByKey(String(empId))
+
   const key = String(empId)
   const managerNotes = getEmployeeManagerNotes()
-  managerNotes[key] = String(notes || '').trim()
+  const existing = normalizeNoteEntries(managerNotes[key])
+  managerNotes[key] = [...existing, { text: trimmedText, author: String(author || '').trim(), at: new Date().toISOString() }]
   writeStorage(EMPLOYEE_NOTES_KEY, managerNotes)
   return getEmployeeByKey(key)
 }

@@ -9,7 +9,6 @@ export function canSeeLizFutureTools(access = {}) {
 }
 
 export function canViewBlackoutCalendar(access = {}) {
-  if (access.role === 'school') return true
   if (access.role !== 'admin') return false
   return access.canManageBlackouts === true || access.canEditAttendance === false
 }
