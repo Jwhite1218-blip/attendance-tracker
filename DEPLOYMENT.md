@@ -47,6 +47,39 @@ reseed, clear, or replace `legacy_state_entries`. `.env.example` keeps local
 development on `blobs`, which is appropriate for local work and the isolated
 stress site; it does not need to match production.
 
+**This variable has no default and must be set on every site.** It previously
+fell back to `blobs` when unset, which meant a site missing the variable would
+boot healthy and serve an empty, isolated Blobs store instead of the district
+database — indistinguishable from total data loss, while every write landed
+somewhere nobody was watching. `getStateStore()` now throws instead. If you
+create a new site or clear the variable, set it deliberately.
+
+### The Blobs/Supabase parity trap
+
+The two backends do not enforce the same rules, so **a green run on a
+Blobs-backed site does not mean the same change works in production.**
+
+Supabase routes every write through `public.mutate_legacy_state_entry`, which
+rejects any state key absent from a hardcoded SQL allowlist. The Blobs store has
+no such allowlist and accepts any key. A feature can therefore pass every test
+on the stress site and fail for all users in production with
+`Unsupported state key.`
+
+This is not hypothetical. `employee-manager-notes-v1` shipped fully wired
+through the client and server but missing from the SQL allowlist, so every
+shared HR note was rejected in production while the stress site showed no
+problem. The client commits to `localStorage` before the server responds, so the
+author saw their own note persist locally and never saw an error — the write
+simply never arrived. It was caught before launch by database inspection, not by
+testing.
+
+The guard against recurrence is
+`netlify/functions/_shared/state-key-parity.test.mjs`, which fails if the SQL
+allowlist, the server key list in `permissions.mjs`, and the client
+`FIXED_STORAGE_KEYS` ever disagree. **When you add a state key, add it to the
+SQL allowlist in a migration as well**, or that test will fail — which is the
+point. Do not silence it by trimming the key lists.
+
 ## End-of-day email report
 
 The scheduled report is a Localis-owned reporting module with a replaceable
