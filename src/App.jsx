@@ -66,7 +66,9 @@ function AppShell() {
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
   const standardNavItems = [
-    { path: homePath, label: 'Dashboard' },
+    // Administrators only. School managers reach their own location dashboard
+    // through the always-visible logo link, which also points at homePath.
+    ...(role === 'admin' ? [{ path: homePath, label: 'Dashboard' }] : []),
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: 'All-Stars' }] : []),
     { path: '/ledger', label: 'Employee Records' },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
