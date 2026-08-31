@@ -203,11 +203,27 @@ export function createBlobsStateStore({
   }
 }
 
+export const STATE_BACKENDS = Object.freeze(['supabase', 'blobs'])
+
 export function getStateStore() {
-  const backend = environmentValue('ATTENDANCE_STATE_BACKEND') || 'blobs'
+  // Deliberately no default. This used to fall back to 'blobs' when unset,
+  // which meant a site missing this variable would come up healthy while
+  // reading and writing an entirely separate, empty Netlify Blobs store --
+  // indistinguishable from total data loss to anyone looking at the app.
+  // Failing to boot is far easier to diagnose than an empty roster.
+  const backend = environmentValue('ATTENDANCE_STATE_BACKEND').trim()
+  if (!backend) {
+    throw new Error(
+      'ATTENDANCE_STATE_BACKEND is not set. Use "supabase" for any site backed by the shared '
+      + 'district database, or "blobs" for an isolated test site. There is no default, because '
+      + 'defaulting to blobs makes a misconfigured production site look like it lost all of its data.'
+    )
+  }
   if (backend === 'blobs') return createBlobsStateStore()
   if (backend !== 'supabase') {
-    throw new Error(`Unsupported attendance state backend: ${backend}`)
+    throw new Error(
+      `Unsupported attendance state backend: ${backend}. Expected one of: ${STATE_BACKENDS.join(', ')}.`
+    )
   }
 
   return createSupabaseStateStore({

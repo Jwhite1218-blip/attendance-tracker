@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createBlobsStateStore, createSupabaseStateStore } from './state-store.mjs'
+import { createBlobsStateStore, createSupabaseStateStore, getStateStore } from './state-store.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
 
 function jsonResponse(value, status = 200) {
@@ -172,4 +172,44 @@ test('Blob mutations preserve all 30 concurrent same-key attendance edits', asyn
   )
 
   assert.equal(Object.keys(await store.get('att-emp-123-2026', { type: 'json' })).length, 30)
+})
+
+test('the state backend must be configured explicitly', async () => {
+  const previous = process.env.ATTENDANCE_STATE_BACKEND
+  try {
+    delete process.env.ATTENDANCE_STATE_BACKEND
+    assert.throws(() => getStateStore(), /ATTENDANCE_STATE_BACKEND is not set/)
+
+    process.env.ATTENDANCE_STATE_BACKEND = '   '
+    assert.throws(() => getStateStore(), /ATTENDANCE_STATE_BACKEND is not set/)
+
+    process.env.ATTENDANCE_STATE_BACKEND = 'postgres'
+    assert.throws(() => getStateStore(), /Unsupported attendance state backend: postgres/)
+  } finally {
+    if (previous === undefined) delete process.env.ATTENDANCE_STATE_BACKEND
+    else process.env.ATTENDANCE_STATE_BACKEND = previous
+  }
+})
+
+test('an explicit supabase backend still requires its connection settings', async () => {
+  const previous = {
+    backend: process.env.ATTENDANCE_STATE_BACKEND,
+    url: process.env.SUPABASE_URL,
+    key: process.env.SUPABASE_SECRET_KEY,
+  }
+  try {
+    process.env.ATTENDANCE_STATE_BACKEND = 'supabase'
+    delete process.env.SUPABASE_URL
+    delete process.env.SUPABASE_SECRET_KEY
+    assert.throws(() => getStateStore(), /SUPABASE_URL/)
+  } finally {
+    for (const [name, value] of [
+      ['ATTENDANCE_STATE_BACKEND', previous.backend],
+      ['SUPABASE_URL', previous.url],
+      ['SUPABASE_SECRET_KEY', previous.key],
+    ]) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
+  }
 })
