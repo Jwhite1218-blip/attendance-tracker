@@ -12,18 +12,29 @@ export const ROSTER_KEYS = new Set([
   CUSTOM_EMPLOYEES_KEY,
 ])
 
+// Canonical list of every non-attendance state key the application is allowed
+// to write. This is the single source of truth for the server; the client list
+// in src/data/sharedStore.js and the SQL allowlist inside
+// public.mutate_legacy_state_entry must both stay in step with it.
+// state-key-parity.test.mjs enforces that.
+export const MANAGED_FIXED_STATE_KEYS = Object.freeze([
+  BLACKOUTS_KEY,
+  LOCATION_OVERRIDES_KEY,
+  RECORD_OVERRIDES_KEY,
+  CUSTOM_EMPLOYEES_KEY,
+  EMPLOYEE_NOTES_KEY,
+  HR_STATUS_KEY,
+  LEGACY_HR_STATUS_KEY,
+])
+
+export const ATTENDANCE_STATE_KEY_PATTERN = /^att-emp-.+-\d{4}$/
+
 export function attendanceEmployeeId(key) {
   return String(key || '').match(/^att-emp-(.+)-\d{4}$/)?.[1] || null
 }
 
 export function isManagedStateKey(key) {
-  return Boolean(attendanceEmployeeId(key)) || [
-    BLACKOUTS_KEY,
-    ...ROSTER_KEYS,
-    EMPLOYEE_NOTES_KEY,
-    HR_STATUS_KEY,
-    LEGACY_HR_STATUS_KEY,
-  ].includes(key)
+  return Boolean(attendanceEmployeeId(key)) || MANAGED_FIXED_STATE_KEYS.includes(key)
 }
 
 export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
