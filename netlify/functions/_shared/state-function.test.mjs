@@ -475,7 +475,9 @@ test('Liz can download and restore a full backup while restricted administrators
     const store = stateStore({
       __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
       'attendance-blackout-dates': [{ date: '2026-09-07', label: 'Labor Day' }],
-      'employee-manager-notes-v1': { [employeeId]: 'Original note' },
+      'employee-manager-notes-v1': {
+        [employeeId]: [{ text: 'Original note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }],
+      },
       'all-star-recognition-v1': {},
     })
     const lizAccess = {
@@ -495,7 +497,10 @@ test('Liz can download and restore a full backup while restricted administrators
     assert.match(backupResponse.headers.get('content-disposition'), /warren-attendance-backup-/)
     assert.equal(backup.format, 'warren-attendance-backup')
     assert.equal(backup.version, 1)
-    assert.equal(backup.entries['employee-manager-notes-v1'][employeeId], 'Original note')
+    assert.deepEqual(
+      backup.entries['employee-manager-notes-v1'][employeeId],
+      [{ text: 'Original note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }]
+    )
 
     const limitedRequest = await authenticatedRequest({
       role: 'admin',
@@ -507,8 +512,8 @@ test('Liz can download and restore a full backup while restricted administrators
     assert.equal((await handleStateRequest(limitedRequest, { stateStore: store, sessionStore: sessions })).status, 403)
 
     await store.setJSON('employee-manager-notes-v1', {
-      [employeeId]: 'Changed after backup',
-      temporary: 'Remove during restore',
+      [employeeId]: [{ text: 'Changed after backup', author: 'Liz', at: '2026-08-27T12:00:00.000Z' }],
+      temporary: [{ text: 'Remove during restore', author: 'Liz', at: '2026-08-27T12:05:00.000Z' }],
     })
     await store.setJSON(`att-emp-${employeeId}-2026`, {
       '2026-08-26': { date: '2026-08-26', code: 'UNEX', note: 'Created after backup' },
@@ -525,7 +530,9 @@ test('Liz can download and restore a full backup while restricted administrators
     const verifyRequest = await authenticatedRequest(lizAccess, sessions)
     const verifyResponse = await handleStateRequest(verifyRequest, { stateStore: store, sessionStore: sessions })
     const verified = await verifyResponse.json()
-    assert.deepEqual(verified.entries['employee-manager-notes-v1'], { [employeeId]: 'Original note' })
+    assert.deepEqual(verified.entries['employee-manager-notes-v1'], {
+      [employeeId]: [{ text: 'Original note', author: 'Liz', at: '2026-08-20T12:00:00.000Z' }],
+    })
     assert.deepEqual(verified.entries[`att-emp-${employeeId}-2026`], {})
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
