@@ -83,15 +83,31 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 51 passed, 0 failed on the end-of-day-report and targeted
-  Liz PIN-rotation candidate.
+- Automated tests: 70 passed, 0 failed on `main` as of August 30, 2026. (An
+  earlier revision recorded 51, measured against the end-of-day-report and Liz
+  PIN-rotation candidate only.) The suite now includes
+  `state-key-parity.test.mjs`, which fails if the SQL allowlist, server key
+  list, and client `FIXED_STORAGE_KEYS` disagree.
 - Production build: passed.
 - Production dependency audit: zero known vulnerabilities after validating the
   React Router 7.18.2 security update on the isolated testing clone.
-- Production state integrity: 19 attendance records; zero malformed dates,
-  embedded-date mismatches, unknown codes, or invalid JSON shapes.
+- Production state integrity: **44 state keys, 38 of them per-employee
+  attendance records**, verified August 30, 2026; zero malformed dates,
+  embedded-date mismatches, unknown codes, or invalid JSON shapes. The earlier
+  figure of 19 predates the August 24 launch reset and the first week of real
+  use, and should not be used as a baseline.
+- Blackout calendar: 66 unique dates, earliest July 1, 2026. No dates fall
+  between September 1 and 4, so the September 2 launch day is clear.
+- Known gap — shared HR notes: `employee-manager-notes-v1` was wired end to end
+  but missing from the production SQL allowlist, so every write was rejected
+  with `Unsupported state key.` Fixed and applied to production on August 31,
+  2026 (migration `20260831003040_state_key_allowlist_parity`). The allowlist
+  now carries 8 keys plus the `att-emp-` pattern. **Still requires a live
+  owner smoke test** — the fix is verified at the definition and privilege
+  level, not yet by an actual note write from two different logins.
 - Recovery: Supabase Pro daily physical backups are active; point-in-time
-  recovery is not enabled.
+  recovery is **not** enabled, so the recovery floor is the last daily
+  snapshot — up to 24 hours of loss.
 - The current live release and isolated testing candidate both passed their
   public security/readiness checks on August 24, 2026.
 

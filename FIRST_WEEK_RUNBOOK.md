@@ -32,16 +32,30 @@ isolated load-test deployment and is not Git-linked.
 - All 146 T-shirt-size fields are blank by design until Liz supplies the Excel
   sheet. The previous single test value was removed on August 24.
 - Production attendance and HR progress were reset for launch on August 24,
-  2026. All 19 test attendance records, 3 current HR-progress records, and 2
-  legacy HR flags are now empty. The reset retained the existing state
-  containers and produced 14 database audit events.
-- The blackout calendar has 27 unique valid dates. The first date is Labor Day,
-  September 7, 2026; September 8 is also recorded as E Learning. There are no
-  blackout dates in the August 24–28 opening week.
-- Supabase is on the Pro plan and daily physical backups are active. The most
-  recent backup visible during this audit was August 23, 2026 at 08:10:38 UTC.
-  Point-in-time recovery is not enabled; daily restore points are the current
-  recovery method.
+  2026 (`updated_by = 'Localis launch reset 2026-08-24'`, 10 keys, 14 audit
+  events). **That reset is no longer the current state** — real usage began the
+  same day. As of August 30, 2026 `legacy_state_entries` holds 44 keys, 38 of
+  them per-employee attendance records. Do not treat this table as empty, and
+  do not re-run the reset without a fresh backup.
+- Week-one adoption was narrow: only 3 of 15 schools have written any data.
+  Warren Central HS (26 keys, Aug 24–28), Creston MS (2 keys, Aug 28) and
+  Stony Brook MS (2 keys, Aug 28), plus 4 keys written by Liz. The remaining
+  12 schools have never written. Verify this is a training gap and not a
+  login or permissions problem before drawing conclusions from the data.
+- The blackout calendar has **66** unique dates, each with a distinct
+  date/label pair. The earliest is July 1, 2026 — not Labor Day, as an earlier
+  revision of this runbook stated. Labor Day, September 7 and E Learning,
+  September 8 are both recorded. **There are no blackout dates between
+  September 1 and 4, so the September 2 launch day is clear.**
+- Supabase is on the Pro plan and daily physical backups are active.
+  Point-in-time recovery is **not** enabled, so the recovery floor is the last
+  daily snapshot — up to 24 hours of loss. Check the current backup timestamp
+  in the dashboard rather than trusting a figure recorded here; any date in
+  this document is stale the day after it is written.
+
+> Counts above were verified against production on August 30, 2026. Re-verify
+> before relying on them; earlier revisions of this file carried figures that
+> had silently gone stale.
 
 ## Opening check
 
