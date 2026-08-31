@@ -10,6 +10,65 @@ All Netlify Functions (`session`, `state`, and the disabled-by-default
 `end-of-day-report` schedule) deploy as part of that same build — there is no
 separate application deploy for them.
 
+## Deploy previews point at production by default
+
+**Verified August 30, 2026. Treat every `deploy-preview-*--allstartracker.netlify.app`
+URL as live production until the contextual values below are set.**
+
+Netlify deploy previews are enabled on the live site, so every pull request gets
+a public URL. By default [an environment variable has a single value shared
+across all deploy contexts](https://docs.netlify.com/build/environment-variables/overview/),
+and no contextual values were configured here. Deploy previews therefore
+inherit production's `ATTENDANCE_STATE_BACKEND=supabase`, `SUPABASE_URL` and
+`SUPABASE_SECRET_KEY`.
+
+The practical consequences:
+
+- A preview reads and writes the **live district database**.
+- It shows **no test banner**, because production has no
+  `VITE_TEST_ENVIRONMENT_LABEL`. Confirmed by reading the inlined build
+  constant out of PR #11's preview bundle: `"".trim()`, versus
+  `"Recognition Test Lab".trim()` on the stress site.
+- The preview URL is public and its functions hold the production secret key.
+
+**Never run a data reset or "clear everything" pass against a deploy preview.**
+It is production. The stress site is the only environment where that is safe,
+because it is a separate site backed by Netlify Blobs.
+
+### Making previews safe
+
+Set contextual values on the `allstartracker` site for the **Deploy Previews**
+context (and **Branch deploys**, if used). Leave Production alone.
+
+| Variable | Deploy Preview value | Required scope |
+| --- | --- | --- |
+| `ATTENDANCE_STATE_BACKEND` | `blobs` | **Functions** |
+| `VITE_TEST_ENVIRONMENT_LABEL` | `Preview — test data` | **Builds** |
+
+The scopes matter and differ. `ATTENDANCE_STATE_BACKEND` is read by a function
+at runtime, so it needs the Functions scope; `VITE_TEST_ENVIRONMENT_LABEL` is
+inlined by Vite during the build, so it needs Builds.
+
+**Do not put either key in `netlify.toml`.** Values there are build-only and
+never reach functions at runtime, and `netlify.toml` *overrides* UI values for
+the same key — so adding `ATTENDANCE_STATE_BACKEND` there would silently
+cancel the contextual value you just set. This must be configured through the
+Netlify UI, CLI, or API.
+
+Once set, previews become the natural review environment: automatic per pull
+request, isolated data, clearly labelled, safe to wipe, and no second site to
+maintain. Note that a Blobs-backed preview still cannot catch state-key
+allowlist problems — see the parity trap below.
+
+### Which environment for which job
+
+| Purpose | Environment |
+| --- | --- |
+| Reviewing look and behaviour with Liz | Deploy preview, once scoped to `blobs` |
+| Entering throwaway data, then clearing it | Stress site (isolated Blobs) |
+| Running the test suite | Any clean checkout — `npm test` |
+| Verifying Supabase allowlist behaviour | Production, or a dedicated Supabase test project |
+
 ## The retired site
 
 **https://localis-attendance-review.netlify.app** — an older, unrelated deploy. As of 2026-08-21 it has no functions and no environment variables, and its last deploy was a one-off manual `netlify deploy` from 2026-08-19 — it is **not** Git-linked and does **not** update automatically. It predates the current app and isn't used by anyone day-to-day. Safe to delete once you've confirmed nobody still has that URL bookmarked (in particular, double-check the district's read-only reviewer(s) — the "Localis" watermarked review role now lives on the real site's own PIN list, not a separate deployment).
