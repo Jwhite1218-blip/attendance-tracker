@@ -253,6 +253,9 @@ function recognitionMutationForSession(mutation, session) {
         {
           ...recognition,
           recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
+          // Stamped from the session, never from the client: this is what lets
+          // the district see which building handed out each star.
+          recognizedByLocationId: String(session.locationId || 'district').slice(0, 100),
         },
       ])
     ),
@@ -331,6 +334,10 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
         || recognition.sourceName.length > 200
         || typeof recognition.recognizedBy !== 'string'
         || recognition.recognizedBy.length > 200
+        // Optional so records written before submitter attribution stay valid.
+        || (recognition.recognizedByLocationId !== undefined
+          && (typeof recognition.recognizedByLocationId !== 'string'
+            || recognition.recognizedByLocationId.length > 100))
         || typeof recognition.createdAt !== 'string'
         || Number.isNaN(Date.parse(recognition.createdAt))
       ) {

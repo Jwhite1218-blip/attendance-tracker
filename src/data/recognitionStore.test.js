@@ -9,6 +9,9 @@ import {
   getNextStarLevel,
   getStarLevel,
   schoolYearStartFor,
+  requiresStarMessage,
+  submitterLocationLabel,
+  getSubmissionCountsByLocation,
 } from './recognitionStore.js'
 
 function recognition(overrides = {}) {
@@ -23,6 +26,7 @@ function recognition(overrides = {}) {
     note: '',
     sourceName: '',
     recognizedBy: 'Manager',
+    recognizedByLocationId: '',
     createdAt: '2026-08-20T12:00:00.000Z',
     ...overrides,
   }
@@ -101,4 +105,70 @@ test('monthly drawing gives one weighted entry per daily recognition', () => {
   assert.deepEqual(drawMonthlyAllStar(records, 'SchoolA', '2026-08', 0.99), {
     employeeId: '200', entryCount: 2, totalEntries: 3,
   })
+})
+
+test('a Star of the Day cannot be recorded without saying why they shine', () => {
+  const base = {
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'star-of-day',
+    date: '2026-08-20',
+    criteria: ['Service'],
+  }
+
+  assert.throws(() => createRecognitionRecord({ ...base, note: '' }), /why they shine/i)
+  assert.throws(() => createRecognitionRecord({ ...base, note: '   ' }), /why they shine/i)
+  assert.equal(
+    createRecognitionRecord({ ...base, note: 'Covered a line alone at lunch.' }).note,
+    'Covered a line alone at lunch.'
+  )
+})
+
+test('nominations and shout-outs stay lighter-weight than a daily star', () => {
+  assert.equal(requiresStarMessage('star-of-day'), true)
+  for (const type of ['shooting-star', 'star-shout-out', 'warren-employee-month', 'all-star-of-month']) {
+    assert.equal(requiresStarMessage(type), false)
+  }
+  // A nomination with no message still records.
+  assert.equal(createRecognitionRecord({
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'shooting-star',
+    date: '2026-08-20',
+    criteria: ['Taking initiative to learn new skills or tasks'],
+    note: '',
+  }).note, '')
+})
+
+test('submitting building is recorded so the district can see who is giving stars', () => {
+  const record = createRecognitionRecord({
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'star-of-day',
+    date: '2026-08-20',
+    criteria: ['Service'],
+    note: 'Great service.',
+    recognizedByLocationId: 'WarrenCnHS',
+  })
+  assert.equal(record.recognizedByLocationId, 'WarrenCnHS')
+
+  const locationMap = { WarrenCnHS: { name: 'Warren Central HS' } }
+  assert.equal(submitterLocationLabel(record, locationMap), 'Warren Central HS')
+  assert.equal(submitterLocationLabel({ recognizedByLocationId: 'district' }), 'District admin')
+  assert.equal(submitterLocationLabel({}), 'Not recorded')
+})
+
+test('submission counts group earned stars by the building that gave them', () => {
+  const records = [
+    { type: 'star-of-day', recognizedByLocationId: 'A' },
+    { type: 'star-of-day', recognizedByLocationId: 'A' },
+    { type: 'star-of-day', recognizedByLocationId: 'B' },
+    // Nominations are not earned stars, so they do not count here.
+    { type: 'shooting-star', recognizedByLocationId: 'B' },
+  ]
+
+  assert.deepEqual(getSubmissionCountsByLocation(records), [
+    { locationId: 'A', count: 2 },
+    { locationId: 'B', count: 1 },
+  ])
 })
