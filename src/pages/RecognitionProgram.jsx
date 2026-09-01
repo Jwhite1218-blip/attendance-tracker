@@ -9,7 +9,6 @@ import {
   RECOGNITION_CRITERIA,
   RECOGNITION_CRITERIA_DESCRIPTIONS,
   RECOGNITION_TYPE_MAP,
-  RECOGNITION_TYPES,
   STAR_LEVELS,
   addRecognition,
   drawMonthlyAllStar,
@@ -20,7 +19,11 @@ import {
   getNextStarLevel,
   getStarLevel,
   recognitionEarnsStar,
+  requiresStarMessage,
   schoolYearStartFor,
+  submitterLocationLabel,
+  getSubmissionCountsByLocation,
+  DISTRICT_SUBMITTER_ID,
 } from '../data/recognitionStore.js'
 import {
   monthlyDrawingStatus,
@@ -67,6 +70,14 @@ function formatDate(dateKey) {
   })
 }
 
+function emptyRecognitionForm(type) {
+  return { employeeId: '', type, date: localDateKey(), criteria: [], note: '', sourceName: '' }
+}
+
+// The extras a manager may record beyond the daily star. Employee of the Month
+// stays district-only, so it is filtered by role at render time.
+const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month']
+
 export default function RecognitionProgram() {
   const access = useAuth()
   const {
@@ -81,17 +92,14 @@ export default function RecognitionProgram() {
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
   const [drawingLocation, setDrawingLocation] = useState(role === 'school' ? locationId : '')
   const [drawingMonth, setDrawingMonth] = useState(localDateKey().slice(0, 7))
-  const [form, setForm] = useState({
-    employeeId: '',
-    type: 'star-of-day',
-    date: localDateKey(),
-    criteria: [],
-    note: '',
-    sourceName: '',
-  })
+  // Two separate entry surfaces. Star of the Day is the daily job and owns the
+  // main column; nominations and shout-outs are occasional extras and live in
+  // the side panel, so the two never compete for a manager's attention.
+  const [starForm, setStarForm] = useState(() => emptyRecognitionForm('star-of-day'))
+  const [bonusForm, setBonusForm] = useState(() => emptyRecognitionForm('shooting-star'))
   const [feedback, setFeedback] = useState(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [submissionConfirmation, setSubmissionConfirmation] = useState(null)
+  const [submittingSurface, setSubmittingSurface] = useState(null)
+  const [confirmations, setConfirmations] = useState({ star: null, bonus: null })
 
   const employees = useMemo(
     () => getEmployeesWithEffectiveLocations(),
@@ -140,8 +148,9 @@ export default function RecognitionProgram() {
     .filter(entry => entry.count > 0)
     .sort((left, right) => right.count - left.count || employeeName(left.employee).localeCompare(employeeName(right.employee)))
 
-  const currentType = RECOGNITION_TYPE_MAP[form.type]
-  const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
+  const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
+    recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
+  const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
   const drawingScope = role === 'school' ? locationId : (scopeLocation !== 'all' ? scopeLocation : drawingLocation)
   const drawingEntries = drawingScope ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth) : []
   const monthlyWinner = drawingScope ? existingMonthlyWinner(records, drawingScope, drawingMonth) : null
@@ -154,14 +163,21 @@ export default function RecognitionProgram() {
     && record.date <= nominationQuarter.end
   ))
 
-  const clearSubmissionConfirmation = () => setSubmissionConfirmation(null)
-  const setFormValue = (name, value) => {
-    clearSubmissionConfirmation()
-    setForm(current => ({ ...current, [name]: value }))
+  const surfaceSetters = { star: setStarForm, bonus: setBonusForm }
+  const clearConfirmation = surface => setConfirmations(current => ({ ...current, [surface]: null }))
+  const setFormValue = (surface, name, value) => {
+    clearConfirmation(surface)
+    surfaceSetters[surface](current => (
+      // Reasons are per-type, so switching type must drop the previous
+      // selections rather than silently carrying invalid ones forward.
+      name === 'type'
+        ? { ...current, type: value, criteria: [], sourceName: '' }
+        : { ...current, [name]: value }
+    ))
   }
-  const toggleCriterion = criterion => {
-    clearSubmissionConfirmation()
-    setForm(current => ({
+  const toggleCriterion = (surface, criterion) => {
+    clearConfirmation(surface)
+    surfaceSetters[surface](current => ({
       ...current,
       criteria: current.criteria.includes(criterion)
         ? current.criteria.filter(value => value !== criterion)
@@ -169,8 +185,8 @@ export default function RecognitionProgram() {
     }))
   }
 
-  const finishConfirmedSubmission = message => {
-    setForm(current => ({
+  const finishConfirmedSubmission = (surface, message) => {
+    surfaceSetters[surface](current => ({
       ...current,
       employeeId: '',
       criteria: [],
@@ -179,17 +195,17 @@ export default function RecognitionProgram() {
     }))
     setLocalVersion(version => version + 1)
     setFeedback({ type: 'success', message })
-    setSubmissionConfirmation({
-      type: 'saved',
-      message: `${message} The shared record is confirmed.`,
-    })
+    setConfirmations(current => ({
+      ...current,
+      [surface]: { type: 'saved', message: `${message} The shared record is confirmed.` },
+    }))
   }
 
-  const handleRecognitionSubmit = async event => {
+  const submitRecognition = async (surface, form, event) => {
     event.preventDefault()
     setFeedback(null)
-    setSubmissionConfirmation(null)
-    setIsSubmitting(true)
+    clearConfirmation(surface)
+    setSubmittingSurface(surface)
     let confirmationMessage = ''
     try {
       if (!recognitionTypeAllowedForRole(role, form.type, canManageRecognitionAwards)) {
@@ -197,49 +213,50 @@ export default function RecognitionProgram() {
       }
       const employee = employeeMap.get(String(form.employeeId))
       if (!employee) throw new Error('Choose an employee from your available roster.')
-      if (form.type === 'star-of-day' && form.criteria.includes('Other') && !form.note.trim()) {
-        throw new Error('Explain the Other reason in the Star Card message.')
-      }
       const record = addRecognition({
         ...form,
         locationId: employee.location,
         recognizedBy: displayName || 'Authenticated manager',
+        recognizedByLocationId: role === 'school' ? locationId : DISTRICT_SUBMITTER_ID,
       })
       confirmationMessage = record.type === 'shooting-star'
         ? `${employeeName(employee)} was added to the quarterly Shooting Star nominations.`
         : `${employeeName(employee)} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
       await flushPendingWrites()
-      finishConfirmedSubmission(confirmationMessage)
+      finishConfirmedSubmission(surface, confirmationMessage)
     } catch (error) {
       if (confirmationMessage) {
         const pendingMessage = 'The entry is saved on this device, but the shared record is not confirmed yet. Do not submit it again—use Retry confirmation below.'
         setFeedback({ type: 'error', message: pendingMessage })
-        setSubmissionConfirmation({
-          type: 'pending',
-          message: pendingMessage,
-          confirmationMessage,
-        })
+        setConfirmations(current => ({
+          ...current,
+          [surface]: { type: 'pending', message: pendingMessage, confirmationMessage },
+        }))
       } else {
         setFeedback({ type: 'error', message: error.message })
       }
     } finally {
-      setIsSubmitting(false)
+      setSubmittingSurface(null)
     }
   }
 
-  const handleRetryConfirmation = async () => {
-    if (submissionConfirmation?.type !== 'pending') return
-    setIsSubmitting(true)
+  const handleRetryConfirmation = async surface => {
+    const confirmation = confirmations[surface]
+    if (confirmation?.type !== 'pending') return
+    setSubmittingSurface(surface)
     setFeedback(null)
     try {
       await flushPendingWrites()
-      finishConfirmedSubmission(submissionConfirmation.confirmationMessage)
+      finishConfirmedSubmission(surface, confirmation.confirmationMessage)
     } catch {
       const pendingMessage = 'The shared record is still not confirmed. Keep this page open and try again when the connection is restored.'
       setFeedback({ type: 'error', message: pendingMessage })
-      setSubmissionConfirmation(current => ({ ...current, message: pendingMessage }))
+      setConfirmations(current => ({
+        ...current,
+        [surface]: { ...current[surface], message: pendingMessage },
+      }))
     } finally {
-      setIsSubmitting(false)
+      setSubmittingSurface(null)
     }
   }
 
@@ -300,21 +317,30 @@ export default function RecognitionProgram() {
             )}
           </div>
 
-          <div className="grid grid-cols-2 divide-x divide-y divide-amber-100 sm:grid-cols-4 sm:divide-y-0">
+          {/* Earned stars only. Every number here comes from Star of the Day so
+              two tiles can never disagree about how many stars exist. */}
+          <div className="grid grid-cols-3 divide-x divide-amber-100">
             <Metric label="Earned stars" value={earnedStars.length} detail={`${schoolYearStart}-${schoolYearStart + 1}`} />
-            <Metric label="Stars this month" value={thisMonthStars.length} detail={formatMonth(thisMonth)} />
-            <Metric label="Team members shining" value={recognizedPeople} detail="Unique employees" />
-            <Metric label="Monthly drawing entries" value={getMonthlyDrawingEntries(scopedRecords, scopeLocation === 'all' ? '' : scopeLocation, thisMonth).length || thisMonthStars.filter(record => record.type === 'star-of-day').length} detail="Daily stars this month" />
+            <Metric label="Stars this month" value={thisMonthStars.length} detail={`${formatMonth(thisMonth)} · also this month's drawing entries`} />
+            <Metric label="Team members shining" value={recognizedPeople} detail="Unique employees with a star" />
+          </div>
+
+          {/* Everything that is deliberately NOT an earned star, kept in the same
+              card so this stays one command center rather than two boards. */}
+          <div className="border-t border-amber-100 bg-[#fffdf7] px-5 py-3">
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-gray-400">
+              Tracked separately · not earned stars
+            </p>
+            <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
+              <SecondaryCount label="Shout-outs" value={compilation.shoutOuts} />
+              <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
+              <SecondaryCount label="Building All-Stars" value={compilation.buildingAllStars} />
+              {canManageRecognitionAwards && (
+                <SecondaryCount label="Employee of the Month" value={compilation.employeeOfMonth} />
+              )}
+            </div>
           </div>
         </div>
-
-        {canManageRecognitionAwards && (
-          <RecognitionCompilation
-            counts={compilation}
-            scopeLabel={scopeLocation === 'all' ? 'All Warren buildings' : (LOCATION_MAP[scopeLocation]?.name || scopeLocation)}
-            schoolYearStart={schoolYearStart}
-          />
-        )}
 
         {feedback && (
           <div
@@ -325,187 +351,46 @@ export default function RecognitionProgram() {
           </div>
         )}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-          <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            <div className="border-b border-gray-100 bg-gradient-to-r from-[#211b12] to-black px-5 py-5 text-white sm:px-6">
-              <div className="flex items-center gap-3">
-                <span className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#e8c65c]/60 bg-[#e8c65c]/15 text-2xl text-[#ffd75c]" aria-hidden="true">★</span>
-                <div>
-                  <h2 className="all-star-display text-2xl uppercase tracking-wide">Catch Someone Shining</h2>
-                  <p className="mt-1 text-xs text-amber-100/80">Record a daily star, nomination, shout-out, or approved district award.</p>
-                </div>
-              </div>
-            </div>
+        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+          <div className="space-y-6">
+            <RecognitionEntryForm
+              surface="star"
+              form={starForm}
+              lockedType="star-of-day"
+              title="Star of the Day"
+              subtitle="Catch someone shining. This is the daily award that earns stars."
+              employees={scopedEmployees}
+              canEdit={canEditRecognition}
+              isSubmitting={submittingSurface === 'star'}
+              confirmation={confirmations.star}
+              onFieldChange={setFormValue}
+              onToggleCriterion={toggleCriterion}
+              onSubmit={event => submitRecognition('star', starForm, event)}
+              onRetry={() => handleRetryConfirmation('star')}
+            />
 
-            <form onSubmit={handleRecognitionSubmit} className="space-y-5 p-5 sm:p-6">
-              <fieldset disabled={!canEditRecognition} className="space-y-5 disabled:opacity-65">
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Team member</span>
-                    <select
-                      required
-                      value={form.employeeId}
-                      onChange={event => setFormValue('employeeId', event.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
-                    >
-                      <option value="">Choose an employee</option>
-                      {scopedEmployees
-                        .slice()
-                        .sort((left, right) => employeeName(left).localeCompare(employeeName(right)))
-                        .map(employee => (
-                          <option key={employeeKey(employee)} value={employeeKey(employee)}>
-                            {employeeName(employee)}{role === 'admin' ? ` - ${LOCATION_MAP[employee.location]?.shortName || employee.location}` : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Recognition date</span>
-                    <input
-                      required
-                      type="date"
-                      value={form.date}
-                      onChange={event => setFormValue('date', event.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
-                    />
-                  </label>
-                </div>
-
-                <div>
-                  <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Recognition type</span>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {RECOGNITION_TYPES.filter(type => (
-                      type.id !== 'all-star-of-month'
-                      && recognitionTypeAllowedForRole(role, type.id, canManageRecognitionAwards)
-                    )).map(type => (
-                      <label
-                        key={type.id}
-                        className={`cursor-pointer rounded-xl border p-3 transition-colors ${form.type === type.id ? 'border-[#c28b24] bg-amber-50 ring-2 ring-amber-100' : 'border-gray-200 hover:border-amber-200'}`}
-                      >
-                        <input
-                          type="radio"
-                          name="recognition-type"
-                          value={type.id}
-                          checked={form.type === type.id}
-                          onChange={() => {
-                            clearSubmissionConfirmation()
-                            setForm(current => ({ ...current, type: type.id, criteria: [], sourceName: '' }))
-                          }}
-                          className="sr-only"
-                        />
-                        <span className="flex items-start justify-between gap-2 text-sm font-bold text-gray-900">
-                          <span>{type.label}</span>
-                          {type.id === 'shooting-star' && <span className="rounded-full bg-sky-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-sky-700">Nomination only</span>}
-                          {type.id === 'warren-employee-month' && <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-purple-700">Admin only</span>}
-                        </span>
-                        <span className="mt-1 block text-xs leading-relaxed text-gray-500">{type.description}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-end justify-between gap-3">
-                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
-                      {form.type === 'shooting-star' ? 'Why they are being nominated' : form.type === 'warren-employee-month' ? 'Why they were selected' : 'Why they shine'}
-                    </span>
-                    <span className="text-[11px] text-gray-400">Choose all that apply</span>
-                  </div>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    {criteriaOptions.map(criterion => {
-                      const selected = form.criteria.includes(criterion)
-                      return (
-                        <label key={criterion} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-sm ${selected ? 'border-[#d2a63f] bg-[#fff8df] text-gray-900' : 'border-gray-200 text-gray-600 hover:border-amber-200'}`}>
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleCriterion(criterion)}
-                            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400"
-                          />
-                          <span>
-                            <span className="block font-semibold text-gray-800">{criterion}</span>
-                            {RECOGNITION_CRITERIA_DESCRIPTIONS[criterion] && (
-                              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{RECOGNITION_CRITERIA_DESCRIPTIONS[criterion]}</span>
-                            )}
-                          </span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                {form.type === 'star-shout-out' && (
-                  <label className="block">
-                    <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Submitted by</span>
-                    <input
-                      type="text"
-                      maxLength={200}
-                      value={form.sourceName}
-                      onChange={event => setFormValue('sourceName', event.target.value)}
-                      placeholder="Student, teacher, staff member, or group"
-                      className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
-                    />
-                    <span className="mt-1 block text-[11px] text-gray-400">This records a shout-out received elsewhere; the attendance portal remains PIN-protected.</span>
-                  </label>
-                )}
-
-                <label className="block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Star card message</span>
-                  <textarea
-                    required={form.type === 'star-of-day' && form.criteria.includes('Other')}
-                    value={form.note}
-                    onChange={event => setFormValue('note', event.target.value)}
-                    maxLength={1000}
-                    rows={3}
-                    placeholder={`Describe what made this ${currentType?.shortLabel || 'recognition'} special...`}
-                    className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
-                  />
-                </label>
-
-                {canEditRecognition ? (
-                  <div>
-                    <button
-                      type="submit"
-                      disabled={isSubmitting || submissionConfirmation?.type === 'pending'}
-                      className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black uppercase tracking-wide text-white shadow-sm transition-colors disabled:cursor-wait sm:w-auto ${submissionConfirmation?.type === 'saved' ? 'bg-emerald-600 hover:bg-emerald-600' : submissionConfirmation?.type === 'pending' ? 'bg-amber-600' : 'bg-[#ad741e] hover:bg-[#8f5d16]'}`}
-                    >
-                      <span aria-hidden="true">{isSubmitting ? '…' : submissionConfirmation?.type === 'saved' ? '✓' : submissionConfirmation?.type === 'pending' ? '!' : '★'}</span>
-                      {isSubmitting
-                        ? 'Saving to shared data…'
-                        : submissionConfirmation?.type === 'saved'
-                          ? 'Saved to the All-Star Board'
-                          : submissionConfirmation?.type === 'pending'
-                            ? 'Shared save not confirmed'
-                            : (currentType?.actionLabel || 'Add to the All-Star board')}
-                    </button>
-                    {submissionConfirmation && (
-                      <div
-                        role="status"
-                        aria-live="polite"
-                        className={`mt-3 flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between ${submissionConfirmation.type === 'saved' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
-                      >
-                        <span><span className="mr-2" aria-hidden="true">{submissionConfirmation.type === 'saved' ? '✓' : '⚠'}</span>{submissionConfirmation.message}</span>
-                        {submissionConfirmation.type === 'pending' && (
-                          <button
-                            type="button"
-                            onClick={handleRetryConfirmation}
-                            disabled={isSubmitting}
-                            className="flex-none rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-900 hover:bg-amber-100 disabled:opacity-60"
-                          >
-                            Retry confirmation
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800">Recognition entry is read-only for this login.</p>
-                )}
-              </fieldset>
-            </form>
-          </section>
+            <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
+          </div>
 
           <div className="space-y-6">
+            {bonusTypes.length > 0 && (
+              <RecognitionEntryForm
+                surface="bonus"
+                form={bonusForm}
+                selectableTypes={bonusTypes}
+                compact
+                title="Bonus recognition"
+                subtitle="Nominations and shout-outs. These are tracked separately and do not earn stars."
+                employees={scopedEmployees}
+                canEdit={canEditRecognition}
+                isSubmitting={submittingSurface === 'bonus'}
+                confirmation={confirmations.bonus}
+                onFieldChange={setFormValue}
+                onToggleCriterion={toggleCriterion}
+                onSubmit={event => submitRecognition('bonus', bonusForm, event)}
+                onRetry={() => handleRetryConfirmation('bonus')}
+              />
+            )}
             <StarLevels />
             <MonthlyDrawing
               role={role}
@@ -531,63 +416,8 @@ export default function RecognitionProgram() {
           </div>
         </div>
 
-        <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
-              <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
-              <p className="mt-1 text-sm text-gray-500">Only Star of the Day advances employees through the published levels and adds monthly drawing entries.</p>
-              <p className="mt-1 text-xs font-semibold text-sky-700">Nominations, shout-outs, monthly winners, and Employee of the Month remain visible without inflating the star total.</p>
-            </div>
-            <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
-          </div>
 
-          {leaderboard.length ? (
-            <div className="mt-5 grid gap-3 lg:grid-cols-2">
-              {leaderboard.map((entry, index) => {
-                const progressTarget = entry.nextLevel?.minimum || entry.count
-                const progress = progressTarget ? Math.min(100, (entry.count / progressTarget) * 100) : 100
-                return (
-                  <Link
-                    key={employeeKey(entry.employee)}
-                    to={`/employee/${employeeKey(entry.employee)}`}
-                    className="group rounded-xl border border-gray-200 p-4 transition-all hover:border-amber-300 hover:shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#211b12] text-sm font-black text-[#ffd75c]">{index + 1}</span>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold text-gray-900 group-hover:text-[#9a651b]">{employeeName(entry.employee)}</p>
-                            <p className="truncate text-xs text-gray-400">{LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xl font-black text-[#ad741e]">{entry.count}</p>
-                            <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">stars</p>
-                          </div>
-                        </div>
-                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                          <div className="h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]" style={{ width: `${progress}%` }} />
-                        </div>
-                        <p className="mt-1.5 text-[11px] font-semibold text-gray-500">
-                          {entry.level ? `${entry.level.symbol} ${entry.level.name}` : 'Building toward Bronze Star'}
-                          {entry.nextLevel ? ` - ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ' - Highest published level'}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-5 py-8 text-center">
-              <p className="text-2xl" aria-hidden="true">☆</p>
-              <p className="mt-2 text-sm font-bold text-gray-800">The All-Star board is ready.</p>
-              <p className="mt-1 text-xs text-gray-500">Record the first recognition to begin this school year’s leaderboard.</p>
-            </div>
-          )}
-        </section>
-
+        <SubmissionsByBuilding counts={starSubmissionsByLocation} schoolYearStart={schoolYearStart} />
         <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <RecentRecognition records={scopedRecords} employeeMap={employeeMap} />
           <AnnualCelebration />
@@ -597,32 +427,312 @@ export default function RecognitionProgram() {
   )
 }
 
-function RecognitionCompilation({ counts, scopeLabel, schoolYearStart }) {
-  const items = [
-    { label: 'Daily Stars', value: counts.dailyStars, detail: 'Earned stars and monthly drawing entries', color: 'text-amber-700' },
-    { label: 'Star Shout-Outs', value: counts.shoutOuts, detail: 'Compiled separately for district review', color: 'text-purple-700' },
-    { label: 'Shooting Star nominations', value: counts.shootingNominations, detail: 'Quarterly pool; not an earned star', color: 'text-sky-700' },
-    { label: 'Employee of the Month', value: counts.employeeOfMonth, detail: 'District-admin selections', color: 'text-emerald-700' },
-    { label: 'Building All-Stars', value: counts.buildingAllStars, detail: 'Recorded monthly drawing winners', color: 'text-orange-700' },
-  ]
+// One entry form, used twice: the Star of the Day surface (type locked) and the
+// side-panel bonus surface (a small type picker). Keeping them separate is the
+// point — managers open this page to give a daily star, and nominations should
+// never sit in the way of that.
+function RecognitionEntryForm({
+  surface,
+  form,
+  selectableTypes,
+  compact = false,
+  title,
+  subtitle,
+  employees,
+  canEdit,
+  isSubmitting,
+  confirmation,
+  onFieldChange,
+  onToggleCriterion,
+  onSubmit,
+  onRetry,
+}) {
+  const currentType = RECOGNITION_TYPE_MAP[form.type]
+  const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
+  const messageRequired = requiresStarMessage(form.type)
+
   return (
-    <section className="mt-5 overflow-hidden rounded-2xl border border-purple-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-2 border-b border-purple-100 bg-purple-50/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-purple-700">Liz district compilation</p>
-          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Recognition Types Counted Separately</h2>
-          <p className="mt-1 text-xs text-gray-500">Every submission reaches this review while keeping each program category distinct.</p>
-        </div>
-        <span className="text-[11px] font-bold uppercase tracking-wide text-purple-700">{scopeLabel} · {schoolYearStart}-{schoolYearStart + 1}</span>
-      </div>
-      <div className="grid gap-px bg-purple-100 sm:grid-cols-2 xl:grid-cols-5">
-        {items.map(item => (
-          <div key={item.label} className="bg-white px-4 py-4">
-            <p className={`text-3xl font-black ${item.color}`}>{item.value}</p>
-            <p className="mt-1 text-xs font-black uppercase tracking-wide text-gray-800">{item.label}</p>
-            <p className="mt-1 text-[10px] leading-relaxed text-gray-400">{item.detail}</p>
+    <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className={`border-b border-gray-100 text-white ${compact ? 'bg-[#211b12] px-4 py-3.5' : 'bg-gradient-to-r from-[#211b12] to-black px-5 py-5 sm:px-6'}`}>
+        <div className="flex items-center gap-3">
+          <span
+            className={`flex flex-none items-center justify-center rounded-xl border border-[#e8c65c]/60 bg-[#e8c65c]/15 text-[#ffd75c] ${compact ? 'h-9 w-9 text-lg' : 'h-12 w-12 text-2xl'}`}
+            aria-hidden="true"
+          >★</span>
+          <div>
+            <h2 className={`all-star-display uppercase tracking-wide ${compact ? 'text-lg' : 'text-2xl'}`}>{title}</h2>
+            <p className={`mt-1 text-amber-100/80 ${compact ? 'text-[11px]' : 'text-xs'}`}>{subtitle}</p>
           </div>
-        ))}
+        </div>
+      </div>
+
+      <form onSubmit={onSubmit} className={compact ? 'space-y-4 p-4' : 'space-y-5 p-5 sm:p-6'}>
+        <fieldset disabled={!canEdit} className={compact ? 'space-y-4 disabled:opacity-65' : 'space-y-5 disabled:opacity-65'}>
+          {selectableTypes?.length > 0 && (
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Recognition type</span>
+              <div className="mt-2 space-y-2">
+                {selectableTypes.map(typeId => {
+                  const type = RECOGNITION_TYPE_MAP[typeId]
+                  if (!type) return null
+                  return (
+                    <label
+                      key={typeId}
+                      className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${form.type === typeId ? 'border-[#c28b24] bg-amber-50 ring-1 ring-amber-100' : 'border-gray-200 hover:border-amber-200'}`}
+                    >
+                      <input
+                        type="radio"
+                        name={`${surface}-recognition-type`}
+                        value={typeId}
+                        checked={form.type === typeId}
+                        onChange={() => onFieldChange(surface, 'type', typeId)}
+                        className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-400"
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-gray-900">{type.label}</span>
+                        <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500">{type.description}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className={compact ? 'space-y-4' : 'grid gap-4 md:grid-cols-2'}>
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Team member</span>
+              <select
+                required
+                value={form.employeeId}
+                onChange={event => onFieldChange(surface, 'employeeId', event.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
+              >
+                <option value="">Choose an employee</option>
+                {employees.map(employee => (
+                  <option key={employeeKey(employee)} value={employeeKey(employee)}>
+                    {employeeName(employee)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Date</span>
+              <input
+                type="date"
+                required
+                value={form.date}
+                max={localDateKey()}
+                onChange={event => onFieldChange(surface, 'date', event.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
+              />
+            </label>
+          </div>
+
+          <div>
+            <div className="flex items-end justify-between gap-3">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                {form.type === 'shooting-star'
+                  ? 'Why they are being nominated'
+                  : form.type === 'warren-employee-month' ? 'Why they were selected' : 'Why they shine'}
+              </span>
+              <span className="text-[11px] font-semibold text-[#9a651b]">Pick at least one</span>
+            </div>
+            <div className={`mt-2 grid gap-2 ${compact ? '' : 'sm:grid-cols-2'}`}>
+              {criteriaOptions.map(criterion => {
+                const selected = form.criteria.includes(criterion)
+                return (
+                  <label
+                    key={criterion}
+                    className={`flex cursor-pointer items-start gap-2.5 rounded-lg border p-3 text-sm ${selected ? 'border-[#d2a63f] bg-[#fff8df] text-gray-900' : 'border-gray-200 text-gray-600 hover:border-amber-200'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => onToggleCriterion(surface, criterion)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400"
+                    />
+                    <span>
+                      <span className="block font-semibold text-gray-800">{criterion}</span>
+                      {!compact && RECOGNITION_CRITERIA_DESCRIPTIONS[criterion] && (
+                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{RECOGNITION_CRITERIA_DESCRIPTIONS[criterion]}</span>
+                      )}
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+
+          {form.type === 'star-shout-out' && (
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Submitted by</span>
+              <input
+                type="text"
+                maxLength={200}
+                value={form.sourceName}
+                onChange={event => onFieldChange(surface, 'sourceName', event.target.value)}
+                placeholder="Student, teacher, staff member, or group"
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
+              />
+            </label>
+          )}
+
+          <label className="block">
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+              Star card message
+              {messageRequired && <span className="ml-1.5 text-[#b3261e]" aria-hidden="true">*</span>}
+            </span>
+            <textarea
+              required={messageRequired}
+              value={form.note}
+              onChange={event => onFieldChange(surface, 'note', event.target.value)}
+              maxLength={1000}
+              rows={compact ? 2 : 3}
+              placeholder={`Describe what made this ${currentType?.shortLabel || 'recognition'} special...`}
+              className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
+            />
+            {messageRequired && (
+              <span className="mt-1 block text-[11px] font-semibold text-[#9a651b]">
+                Required — say why they shine so the star means something.
+              </span>
+            )}
+          </label>
+
+          {canEdit ? (
+            <div>
+              <button
+                type="submit"
+                disabled={isSubmitting || confirmation?.type === 'pending'}
+                className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-black uppercase tracking-wide text-white shadow-sm transition-colors disabled:cursor-wait ${confirmation?.type === 'saved' ? 'bg-emerald-600 hover:bg-emerald-600' : confirmation?.type === 'pending' ? 'bg-amber-600' : 'bg-[#ad741e] hover:bg-[#8f5d16]'}`}
+              >
+                <span aria-hidden="true">{isSubmitting ? '…' : confirmation?.type === 'saved' ? '✓' : confirmation?.type === 'pending' ? '!' : '★'}</span>
+                {isSubmitting
+                  ? 'Saving…'
+                  : confirmation?.type === 'saved'
+                    ? 'Recorded'
+                    : confirmation?.type === 'pending'
+                      ? 'Awaiting confirmation'
+                      : (currentType?.actionLabel || 'Add to the All-Star board')}
+              </button>
+              {confirmation && (
+                <div
+                  role="status"
+                  className={`mt-3 flex flex-col gap-2 rounded-xl border px-4 py-3 text-sm font-semibold sm:flex-row sm:items-center sm:justify-between ${confirmation.type === 'saved' ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
+                >
+                  <span><span className="mr-2" aria-hidden="true">{confirmation.type === 'saved' ? '✓' : '⚠'}</span>{confirmation.message}</span>
+                  {confirmation.type === 'pending' && (
+                    <button
+                      type="button"
+                      onClick={onRetry}
+                      disabled={isSubmitting}
+                      className="flex-none rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      Retry confirmation
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800">Recognition entry is read-only for this login.</p>
+          )}
+        </fieldset>
+      </form>
+    </section>
+  )
+}
+
+// Sits directly under Star of the Day: the board only ever counts earned stars,
+// so the number a manager sees here always matches the award they just gave.
+function StarLeaderboard({ leaderboard, schoolYearStart }) {
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
+          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
+          <p className="mt-1 text-sm text-gray-500">Counts Star of the Day only. Nominations and shout-outs are tracked separately.</p>
+        </div>
+        <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
+      </div>
+
+      {leaderboard.length ? (
+        <div className="mt-5 grid gap-3">
+          {leaderboard.map((entry, index) => {
+            const progressTarget = entry.nextLevel?.minimum || entry.count
+            const progress = progressTarget ? Math.min(100, (entry.count / progressTarget) * 100) : 100
+            return (
+              <Link
+                key={employeeKey(entry.employee)}
+                to={`/employee/${employeeKey(entry.employee)}`}
+                className="group rounded-xl border border-gray-200 p-4 transition-all hover:border-amber-300 hover:shadow-sm"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#211b12] text-sm font-black text-[#ffd75c]">{index + 1}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-gray-900 group-hover:text-[#9a651b]">{employeeName(entry.employee)}</p>
+                        <p className="truncate text-xs text-gray-400">{LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xl font-black text-[#ad741e]">{entry.count}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">stars</p>
+                      </div>
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]" style={{ width: `${progress}%` }} />
+                    </div>
+                    <p className="mt-1.5 text-[11px] font-semibold text-gray-500">
+                      {entry.level ? `${entry.level.symbol} ${entry.level.name}` : 'Building toward Bronze Star'}
+                      {entry.nextLevel ? ` - ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ' - Highest published level'}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-5 py-8 text-center">
+          <p className="text-2xl" aria-hidden="true">☆</p>
+          <p className="mt-2 text-sm font-bold text-gray-800">The All-Star board is ready.</p>
+          <p className="mt-1 text-xs text-gray-500">Record the first Star of the Day to begin this school year.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Answers "which building is actually handing out stars" — Liz's ask to break
+// recognition down by the PIN that submitted it. The signed-in building stands
+// in for the PIN so no credential is ever stored on a record.
+function SubmissionsByBuilding({ counts, schoolYearStart }) {
+  if (!counts.length) return null
+  const total = counts.reduce((sum, entry) => sum + entry.count, 0)
+  return (
+    <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Who is giving stars</p>
+      <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Stars submitted by building</h2>
+      <p className="mt-1 text-sm text-gray-500">
+        {total} Star{total === 1 ? '' : 's'} of the Day recorded in {schoolYearStart}-{schoolYearStart + 1}, grouped by the building signed in when it was given.
+      </p>
+      <div className="mt-4 space-y-2">
+        {counts.map(entry => {
+          const share = total ? Math.round((entry.count / total) * 100) : 0
+          return (
+            <div key={entry.locationId} className="flex items-center gap-3">
+              <span className="w-44 flex-none truncate text-sm font-semibold text-gray-700">
+                {submitterLocationLabel({ recognizedByLocationId: entry.locationId }, LOCATION_MAP)}
+              </span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]" style={{ width: `${share}%` }} />
+              </div>
+              <span className="w-10 flex-none text-right text-sm font-black text-[#ad741e]">{entry.count}</span>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
@@ -672,6 +782,16 @@ function AllStarHero({ schoolYearStart }) {
         </div>
       </div>
     </header>
+  )
+}
+
+// A quiet counter for the categories that are tracked but do not earn stars.
+function SecondaryCount({ label, value }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span className="text-sm font-black text-gray-700">{value}</span>
+      <span className="text-xs text-gray-500">{label}</span>
+    </span>
   )
 }
 

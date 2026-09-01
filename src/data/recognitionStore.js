@@ -148,6 +148,14 @@ export function createRecognitionRecord(input, options = {}) {
     throw new Error('Choose at least one reason for the recognition.')
   }
 
+  const note = String(input.note || '').trim().slice(0, 1000)
+  // A Star of the Day has to say why the person shines. Without it managers can
+  // click names onto the board with no reason attached, which is the whole point
+  // of the award. The monthly draw writes its own note, so it is exempt.
+  if (requiresStarMessage(type) && !note) {
+    throw new Error('Add a star card message describing why they shine.')
+  }
+
   const createdAt = options.createdAt || new Date().toISOString()
   const id = options.id || `recognition-${Date.now()}-${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}`
   const monthKey = type === 'all-star-of-month'
@@ -162,11 +170,44 @@ export function createRecognitionRecord(input, options = {}) {
     date,
     monthKey,
     criteria,
-    note: String(input.note || '').trim().slice(0, 1000),
+    note,
     sourceName: String(input.sourceName || '').trim().slice(0, 200),
     recognizedBy: String(input.recognizedBy || '').trim().slice(0, 200),
+    // Which building submitted this, so the district can see where recognition
+    // is (and is not) happening. The server overwrites this from the session, so
+    // a client cannot claim to be another building. PINs themselves are never
+    // stored — the signed-in building is what answers "which school".
+    recognizedByLocationId: String(input.recognizedByLocationId || '').trim().slice(0, 100),
     createdAt,
   }
+}
+
+// Star of the Day is the award managers give daily, so it carries the message
+// requirement. Nominations and shout-outs stay lighter-weight on purpose.
+export function requiresStarMessage(type) {
+  return type === 'star-of-day'
+}
+
+export const DISTRICT_SUBMITTER_ID = 'district'
+
+export function submitterLocationLabel(record, locationMap = {}) {
+  const id = String(record?.recognizedByLocationId || '').trim()
+  if (!id) return 'Not recorded'
+  if (id === DISTRICT_SUBMITTER_ID) return 'District admin'
+  return locationMap[id]?.name || id
+}
+
+// Who is handing out recognition, grouped by the building that submitted it.
+export function getSubmissionCountsByLocation(records) {
+  const counts = new Map()
+  ;(records || []).forEach(record => {
+    if (!recognitionEarnsStar(record)) return
+    const id = String(record?.recognizedByLocationId || '').trim() || 'unknown'
+    counts.set(id, (counts.get(id) || 0) + 1)
+  })
+  return [...counts.entries()]
+    .map(([locationId, count]) => ({ locationId, count }))
+    .sort((left, right) => right.count - left.count || left.locationId.localeCompare(right.locationId))
 }
 
 export function addRecognition(input, options = {}) {
