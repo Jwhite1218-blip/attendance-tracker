@@ -158,9 +158,15 @@ test('school state filters roster and location overrides to that school', async 
     assert.equal(Object.hasOwn(body.roster[0], 'pay_amount'), false)
     assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
     assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
+    // School managers can read their own building's recognition board, but not
+    // another building's. Writing recognition stays refused for them entirely
+    // (see canWriteStateKey in permissions.test.mjs).
+    assert.deepEqual(
+      Object.keys(body.entries['all-star-recognition-v1'] || {}),
+      ['school-star']
+    )
     assert.equal(Object.hasOwn(body.entries['employee-record-overrides'][schoolId(schoolEmployee)], 't_shirt_size'), false)
     assert.equal(Object.hasOwn(body.entries, 'employee-manager-notes-v1'), false)
-    assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
     assert.equal(Object.hasOwn(body.entries['employee-custom-records'][0], 't_shirt_size'), false)
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET

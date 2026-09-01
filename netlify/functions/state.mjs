@@ -213,6 +213,16 @@ function filterEntriesForSession(entries, session) {
     filtered[LEGACY_HR_STATUS_KEY] = filterStatusesForEmployees(entries[LEGACY_HR_STATUS_KEY], allowedEmployeeIds)
   }
 
+  // School managers can read the recognition board for their own building, so
+  // they can see their team's stars. Writing is still refused for them in
+  // canWriteStateKey — this is read-only visibility, not entry access.
+  if (entries[RECOGNITION_KEY]) {
+    filtered[RECOGNITION_KEY] = Object.fromEntries(
+      Object.entries(entries[RECOGNITION_KEY] || {})
+        .filter(([, record]) => allowedEmployeeIds.has(String(record?.employeeId)))
+    )
+  }
+
   Object.entries(entries).forEach(([key, value]) => {
     const attendanceId = attendanceEmployeeId(key)
     if (attendanceId && allowedEmployeeIds.has(String(attendanceId))) filtered[key] = value

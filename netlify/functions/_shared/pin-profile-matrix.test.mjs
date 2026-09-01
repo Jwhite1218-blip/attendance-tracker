@@ -7,6 +7,7 @@ import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
 import { handleSessionRequest } from '../session.mjs'
 import { handleStateRequest } from '../state.mjs'
+import { canWriteStateKey } from './permissions.mjs'
 
 const SCHOOLS = LOCATIONS.filter(location => location.id !== 'Admin')
 
@@ -264,7 +265,20 @@ test('all 15 building sessions receive only their roster and no recognition reco
       assert.equal(response.status, 200)
       assert.equal(body.roster.length, expectedRosterCount, `${school.name} roster count`)
       assert.ok(body.roster.every(employee => employee.location === school.id))
-      assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
+
+      // School managers read their own building's board only. Every other
+      // building's stars must stay out of the payload, and writing recognition
+      // remains refused for them (permissions.test.mjs covers the write side).
+      const rosterIds = new Set(
+        employees.filter(employee => employee.location === school.id)
+          .map(employee => String(employee.kronos_id || employee.id))
+      )
+      const visible = Object.values(body.entries['all-star-recognition-v1'] || {})
+      assert.ok(visible.length > 0, `${school.name} should see its own recognition`)
+      assert.ok(
+        visible.every(record => rosterIds.has(String(record.employeeId))),
+        `${school.name} must not receive another building's recognition`
+      )
     }
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
@@ -310,8 +324,17 @@ test('legacy school sessions cannot receive recognition data even if they reques
     const body = await response.json()
 
     assert.equal(response.status, 200)
-    assert.equal(Object.hasOwn(body.entries, 'all-star-recognition-v1'), false)
     assert.ok(body.roster.every(employee => employee.location === targetSchool.id))
+
+    // A school PIN that claims canEditRecognition still cannot escalate: it
+    // reads its own building's board and nothing more. The write path stays
+    // closed regardless of what the PIN profile asserts.
+    const visible = Object.values(body.entries['all-star-recognition-v1'] || {})
+    assert.deepEqual(visible.map(record => record.id), [targetRecognition.id])
+    assert.equal(
+      canWriteStateKey({ role: 'school', canEditRecognition: true }, 'all-star-recognition-v1'),
+      false
+    )
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret

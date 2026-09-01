@@ -7,13 +7,6 @@ import {
   hasLizAdminAccess,
 } from './futureTools.js'
 
-test('recognition program is limited to administrator authority', () => {
-  assert.equal(canAccessRecognitionProgram({ role: 'admin' }), true)
-  assert.equal(canAccessRecognitionProgram({ role: 'school' }), false)
-  assert.equal(canAccessRecognitionProgram({ role: 'viewer' }), false)
-  assert.equal(canAccessRecognitionProgram({}), false)
-})
-
 test('future-tool buttons are limited to Liz full-admin access', () => {
   assert.equal(canSeeLizFutureTools({
     role: 'admin',
@@ -81,4 +74,12 @@ test('blackout calendar is hidden from editable restricted-district access and f
     canEditAttendance: true,
     canManageBlackouts: false,
   }), false)
+})
+
+test('school managers can open the recognition board, admins still run it', () => {
+  assert.equal(canAccessRecognitionProgram({ role: 'admin' }), true)
+  assert.equal(canAccessRecognitionProgram({ role: 'school' }), true)
+  // Read-only reviewers and anything unrecognised stay out.
+  assert.equal(canAccessRecognitionProgram({ role: 'viewer' }), false)
+  assert.equal(canAccessRecognitionProgram({}), false)
 })
