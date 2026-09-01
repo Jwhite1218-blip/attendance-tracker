@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { getAllFlaggedEmployees } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees, getAttendanceStageLabel, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
@@ -28,9 +28,14 @@ export default function Dashboard() {
   const totalEmployees = employees.length
   const locationCounts = getLocationCounts()
 
-  const flaggedEmployees = getAllFlaggedEmployees()
+  const allFlaggedEmployees = getAllFlaggedEmployees()
     .map(flag => ({ ...flag, employee: allEmployees.find(e => String(e.kronos_id || e.id) === String(flag.empId)) }))
     .filter(f => f.employee)
+  // Inactive staff keep their flag but leave the watch list — see
+  // splitFlaggedByEmploymentStatus. Their status still shows on the inactive
+  // roster below, and returns to the main list if they are reactivated.
+  const { active: flaggedEmployees, inactive: flaggedInactive } = splitFlaggedByEmploymentStatus(allFlaggedEmployees)
+  const flaggedStatusByEmpKey = new Map(flaggedInactive.map(f => [String(f.empId), f]))
 
   const openEmployeeRecord = employee => {
     const employeeId = employee.kronos_id || employee.id
@@ -261,10 +266,18 @@ export default function Dashboard() {
 
         {inactiveEmployees.length > 0 ? (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Inactive employees</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Inactive employees
+              {flaggedInactive.length > 0 && (
+                <span className="ml-2 normal-case font-medium text-gray-400">
+                  {flaggedInactive.length} with open attendance follow-up
+                </span>
+              )}
+            </p>
             <div className="divide-y divide-gray-100">
               {inactiveEmployees.map(employee => {
                 const empKey = employee.kronos_id || employee.id
+                const flagged = flaggedStatusByEmpKey.get(String(empKey))
                 return (
                   <div key={empKey} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <button type="button" onClick={() => openEmployeeRecord(employee)} className="text-left group">
@@ -274,6 +287,11 @@ export default function Dashboard() {
                         {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
                         {' · View history'}
                       </p>
+                      {flagged && (
+                        <p className="text-xs font-semibold text-amber-700 mt-1">
+                          {getAttendanceStageLabel(flagged)} · kept if reactivated
+                        </p>
+                      )}
                     </button>
                     {lizAdminAccess && (
                       <button

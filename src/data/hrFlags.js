@@ -157,6 +157,20 @@ export function getAllFlaggedEmployees() {
     })
 }
 
+// The follow-up list is a watch list: it only means something if every name on
+// it is someone a manager can still act on. Employees who have left keep their
+// flag (the history stays intact and comes back if they are reactivated) but
+// move out of the main list into the inactive roster.
+export function splitFlaggedByEmploymentStatus(flaggedWithEmployees) {
+  const active = []
+  const inactive = []
+  ;(flaggedWithEmployees || []).forEach(entry => {
+    if (entry?.employee?.active === false) inactive.push(entry)
+    else active.push(entry)
+  })
+  return { active, inactive }
+}
+
 export function getAttendanceStageLabel(status) {
   if (!status) return 'No active attendance action'
   if (status.seniorityReset && status.stage === 'verbal_warning') return 'Union seniority reset · Verbal warning required'

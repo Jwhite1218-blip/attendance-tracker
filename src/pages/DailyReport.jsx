@@ -8,10 +8,18 @@ export default function DailyReport() {
   const { dataVersion } = useAuth()
   const [exporting, setExporting] = useState(false)
   const today = useMemo(() => new Date(), [])
-  const dateKey = getTodayDateKey(today)
-  const employees = useMemo(() => getEmployeesWithEffectiveLocations(), [dataVersion])
+  const todayKey = getTodayDateKey(today)
+  // Any past day can be reviewed — "who was out that day" when nobody was in
+  // the app to watch it live. Future days hold no records, so today is the cap.
+  const [dateKey, setDateKey] = useState(todayKey)
+  const isToday = dateKey === todayKey
+  // Inactive staff are included on purpose: this is a record of who was out on
+  // a given day, and someone who has since left was still an employee then.
+  // It also keeps the page in parity with the 5pm email, whose roster builder
+  // (daily-report.mjs effectiveRoster) does not filter on active either.
+  const employees = useMemo(() => getEmployeesWithEffectiveLocations({ includeInactive: true }), [dataVersion])
   const rows = useMemo(() => buildDailyReportRows(employees, dateKey), [employees, dateKey])
-  const dateLabel = today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const dateLabel = new Date(`${dateKey}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const locationCount = new Set(rows.map(row => row.locationId)).size
 
   const exportReport = async () => {
@@ -33,7 +41,32 @@ export default function DailyReport() {
       <div className="print:hidden flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Daily Attendance Report</h1>
-          <p className="text-sm text-charcoal-200 mt-1">{dateLabel} · Same content as the automated 5pm email.</p>
+          <p className="text-sm text-charcoal-200 mt-1">
+            {dateLabel}
+            {isToday ? ' · Same content as the automated 5pm email.' : ' · Past date'}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <label htmlFor="daily-report-date" className="text-xs font-semibold text-charcoal-200 uppercase tracking-wide">
+              Report date
+            </label>
+            <input
+              id="daily-report-date"
+              type="date"
+              value={dateKey}
+              max={todayKey}
+              onChange={event => setDateKey(event.target.value || todayKey)}
+              className="text-sm font-semibold border-2 border-brand-400 rounded-lg px-3 py-1.5 bg-brand-50 text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-300 cursor-pointer"
+            />
+            {!isToday && (
+              <button
+                type="button"
+                onClick={() => setDateKey(todayKey)}
+                className="text-xs font-semibold text-brand-300 underline hover:text-brand-200"
+              >
+                Back to today
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 self-start">
           <button
