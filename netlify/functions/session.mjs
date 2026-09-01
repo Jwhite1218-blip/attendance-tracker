@@ -22,13 +22,25 @@ const MAX_IP_ATTEMPTS = 100
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 
 function publicAccess(session) {
+  const canEditRecognition = session.role === 'admin' && (
+    session.canEditRecognition === true
+    || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
+  )
   return {
     role: session.role,
     locationId: session.locationId || null,
     displayName: session.displayName || null,
     employeeId: session.employeeId || null,
     canEditAttendance: (session.role === 'admin' || session.role === 'school') && session.canEditAttendance !== false,
-    canWriteEmployeeNotes: session.role === 'admin' && session.canEditAttendance !== false,
+    canEditRecognition,
+    canManageRecognitionAwards: session.role === 'admin'
+      && canEditRecognition
+      && session.recognitionOnly !== true
+      && session.canManageRecognitionAwards !== false,
+    recognitionOnly: session.recognitionOnly === true,
+    canWriteEmployeeNotes: session.role === 'admin'
+      && session.canEditAttendance !== false
+      && session.recognitionOnly !== true,
     canManageRoster: session.role === 'admin' && session.canManageRoster === true,
     canManageBlackouts: session.role === 'admin' && session.canManageBlackouts === true,
     watermark: session.watermark === 'localis' ? 'localis' : null,

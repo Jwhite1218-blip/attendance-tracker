@@ -7,3 +7,12 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
+
+.all-star-display {
+  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-stretch: condensed;
+}
+
+.all-star-script {
+  font-family: 'Segoe Script', 'Bradley Hand', cursive;
+}
