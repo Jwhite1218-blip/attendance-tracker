@@ -7,6 +7,7 @@ import {
   getServerSession,
   loadSharedState,
 } from '../data/sharedStore.js'
+import { fetchDeployedBuildId, shouldReloadForUpdate } from '../data/appVersion.js'
 
 const AuthContext = createContext({
   role: 'admin',
@@ -88,7 +89,16 @@ export default function PinGate({ children }) {
         await loadSharedState()
         setSyncStatus('saved')
         setDataVersion(version => version + 1)
-      } catch {
+      } catch (refreshError) {
+        if (refreshError.status === 401) {
+          // The 8-hour session expired while this tab sat open. Flip straight
+          // back to the PIN gate rather than leaving a dead-looking app on
+          // screen. Queued offline edits survive and flush after re-login.
+          configureClientAccess(null)
+          clearClientDataCache()
+          setAuthed(null)
+          return
+        }
         // Keep the last confirmed cache available during a brief network issue.
         setSyncStatus('pending')
       } finally {
@@ -96,13 +106,36 @@ export default function PinGate({ children }) {
       }
     }
 
+    const refreshOnWake = () => {
+      if (document.visibilityState === 'visible') refresh()
+    }
+
     window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refreshOnWake)
     const intervalId = window.setInterval(refresh, 60 * 1000)
     return () => {
       window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refreshOnWake)
       window.clearInterval(intervalId)
     }
   }, [authed])
+
+  // When someone returns to a tab left open overnight — logged in or sitting
+  // on the PIN screen — pick up any newer deploy before they touch anything.
+  // Only on wake, never mid-use, so an in-progress edit is never lost to a
+  // surprise reload.
+  useEffect(() => {
+    const checkVersionOnWake = () => {
+      if (document.visibilityState !== 'visible') return
+      fetchDeployedBuildId().then(deployedId => {
+        if (shouldReloadForUpdate(__BUILD_ID__, deployedId, window.sessionStorage)) {
+          window.location.reload()
+        }
+      })
+    }
+    document.addEventListener('visibilitychange', checkVersionOnWake)
+    return () => document.removeEventListener('visibilitychange', checkVersionOnWake)
+  }, [])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
