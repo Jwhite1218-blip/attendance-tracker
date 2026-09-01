@@ -7,6 +7,7 @@ import {
   getEmployeeAttendanceStatus,
   isFlagged,
   isQualifyingCode,
+  splitFlaggedByEmploymentStatus,
 } from './hrFlags.js'
 import { installTestBrowserStorage } from './testBrowserStorage.js'
 
@@ -152,4 +153,23 @@ test('prior school-year stages do not carry into the active July-June year', asy
 
   assert.equal(getEmployeeAttendanceStatus(employeeId), null)
   assert.equal(isFlagged(employeeId), false)
+})
+
+test('inactive employees leave the follow-up watch list but keep their flag', () => {
+  const activeFlag = { empId: '1', employee: { first_name: 'Amy', active: true } }
+  const inactiveFlag = { empId: '2', employee: { first_name: 'Bo', active: false } }
+  // Roster records predating the active flag have no `active` field at all.
+  const legacyFlag = { empId: '3', employee: { first_name: 'Cy' } }
+
+  const { active, inactive } = splitFlaggedByEmploymentStatus([activeFlag, inactiveFlag, legacyFlag])
+
+  assert.deepEqual(active.map(f => f.empId), ['1', '3'])
+  assert.deepEqual(inactive.map(f => f.empId), ['2'])
+  // The flag itself is untouched, so reactivating restores it to the main list.
+  assert.equal(inactive[0].employee.first_name, 'Bo')
+})
+
+test('splitting flagged employees tolerates an empty or missing list', () => {
+  assert.deepEqual(splitFlaggedByEmploymentStatus([]), { active: [], inactive: [] })
+  assert.deepEqual(splitFlaggedByEmploymentStatus(undefined), { active: [], inactive: [] })
 })

@@ -76,6 +76,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   const empKey = employee?.kronos_id || employee?.id
   const attendanceStatus = getEmployeeAttendanceStatus(empKey)
+  const isInactive = employee?.active === false
 
   const setCalendarMode = nextMode => {
     setMode(nextMode)
@@ -407,46 +408,69 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
             {lizAdminAccess && <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Employee status</p>
-              <p className="text-[11px] text-gray-400 mt-1">Inactive employees leave active rosters without losing their history.</p>
-              <input
-                type="text"
-                value={inactiveReason}
-                onChange={event => setInactiveReason(event.target.value)}
-                placeholder="Reason (optional)"
-                className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-              />
-              {confirmInactive ? (
-                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3">
-                  <p className="text-xs font-semibold text-red-700">Move {employee?.first_name} to inactive employees?</p>
-                  <p className="text-[11px] text-red-600 mt-1">Their attendance history and notes will be kept.</p>
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEmployeeActive(empKey, false, inactiveReason)
-                        onStatusChange?.()
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
-                    >
-                      Confirm inactive
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmInactive(false)}
-                      className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-semibold hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+              {isInactive ? (
+                <>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    This employee is inactive. They are off active rosters and off the HR attendance follow-up list, but their history and notes are kept.
+                  </p>
+                  {employee?.inactive_reason && (
+                    <p className="text-xs text-gray-500 mt-2">Reason: {employee.inactive_reason}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmployeeActive(empKey, true)
+                      onStatusChange?.()
+                    }}
+                    className="mt-2 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
+                  >
+                    Reactivate employee
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmInactive(true)}
-                  className="mt-2 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
-                >
-                  Move to inactive
-                </button>
+                <>
+                  <p className="text-[11px] text-gray-400 mt-1">Inactive employees leave active rosters without losing their history.</p>
+                  <input
+                    type="text"
+                    value={inactiveReason}
+                    onChange={event => setInactiveReason(event.target.value)}
+                    placeholder="Reason (optional)"
+                    className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
+                  />
+                  {confirmInactive ? (
+                    <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3">
+                      <p className="text-xs font-semibold text-red-700">Move {employee?.first_name} to inactive employees?</p>
+                      <p className="text-[11px] text-red-600 mt-1">Their attendance history and notes will be kept.</p>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmployeeActive(empKey, false, inactiveReason)
+                            onStatusChange?.()
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
+                        >
+                          Confirm inactive
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmInactive(false)}
+                          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-semibold hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmInactive(true)}
+                      className="mt-2 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
+                    >
+                      Move to inactive
+                    </button>
+                  )}
+                </>
               )}
             </div>}
           </div>
