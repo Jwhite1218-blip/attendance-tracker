@@ -7,6 +7,7 @@ import LocationView from './pages/LocationView.jsx'
 import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
+import StaffAdmin from './pages/StaffAdmin.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
@@ -66,9 +67,11 @@ function AppShell() {
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
   const standardNavItems = [
-    // Administrators only. School managers reach their own location dashboard
-    // through the always-visible logo link, which also points at homePath.
-    ...(role === 'admin' ? [{ path: homePath, label: 'Dashboard' }] : []),
+    // Every signed-in role gets the Dashboard entry, pointing at its own
+    // homePath — a school manager still only ever reaches their own location's
+    // dashboard. Hiding it (d7997ee) removed a duplicate nav path but read to
+    // managers as the button disappearing, so Liz asked for it back (2026-09-01).
+    { path: homePath, label: 'Dashboard' },
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: 'All-Stars' }] : []),
     { path: '/ledger', label: 'Employee Records' },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
@@ -256,6 +259,9 @@ function AppShell() {
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
           <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />
           <Route path="/ledger" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LedgerView />} />
+          {/* Reached from the Dashboard button rather than the nav: roster
+              housekeeping is occasional and does not belong on the front page. */}
+          <Route path="/staff" element={role === 'admin' ? <StaffAdmin /> : <Navigate to={homePath} replace />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />

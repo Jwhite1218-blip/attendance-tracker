@@ -91,12 +91,14 @@ export const RECOGNITION_CRITERIA = {
     'Going above and beyond to help coworkers',
     'Mentoring a new team member and creating positive experiences',
     'Taking initiative to learn new skills or tasks',
+    'Other',
   ],
   'star-shout-out': [
     'Creating a positive cafeteria environment for students',
     'Participating in school functions beyond regular duties',
     'Working with teachers and communicating effectively',
     'Showing patience or kindness when helping students',
+    'Other',
   ],
   'warren-employee-month': [
     'Qualified through All-Star of the Month',
@@ -182,10 +184,15 @@ export function createRecognitionRecord(input, options = {}) {
   }
 }
 
-// Star of the Day is the award managers give daily, so it carries the message
-// requirement. Nominations and shout-outs stay lighter-weight on purpose.
+// Every award a manager writes by hand carries the message requirement: a name
+// with no reason attached is the thing the program is trying to avoid, and each
+// of these can now be given for "Other", which means nothing without the note.
+// Liz, 2026-09-01: extended from Star of the Day to both nomination surfaces.
+// The monthly draw is exempt — it writes its own note.
+const MESSAGE_REQUIRED_TYPES = new Set(['star-of-day', 'shooting-star', 'star-shout-out'])
+
 export function requiresStarMessage(type) {
-  return type === 'star-of-day'
+  return MESSAGE_REQUIRED_TYPES.has(type)
 }
 
 export const DISTRICT_SUBMITTER_ID = 'district'
