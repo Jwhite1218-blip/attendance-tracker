@@ -34,7 +34,7 @@ authentication were superseded by Liz's later Warren-specific requirements.
 | Exception-only attendance | Unmarked workdays remain unrecorded; managers enter an exception and optional comment. |
 | Attendance comments | One comment-capable picker is used by the active weekly and employee-calendar workflows. |
 | July-June accountability | The third qualifying occurrence starts formal tracking; the fourth requires a verbal warning; prior school-year stages expire. Direct automated tests cover the thresholds and year boundary. |
-| Union seniority reset | Only UNEX records count. Weekends and district blackout/holiday dates are skipped when determining the next scheduled workday, and UNEX records on closed dates are ignored. Direct automated coverage includes weekends, holidays, and legacy non-UNEX codes. |
+| Union seniority reset | Only NCNS records count (Liz, 2026-09-01: a UNEX call-in is still an occurrence, but the employee called, so it never reaches this stage). Weekends and district blackout/holiday dates are skipped when determining the next scheduled workday, and NCNS records on closed dates are ignored. The verdict is recomputed from stored triggers on read, so statuses saved under the earlier consecutive-UNEX rule clear themselves at deploy. Direct automated coverage includes weekends, holidays, legacy non-NCNS codes, consecutive UNEX days, and the stale-status heal. |
 | Monday-Sunday week | The school attendance week starts Monday and renders seven days through Sunday. A sticky mobile date strip keeps the active week visible while scrolling. |
 | Weekends and blackout dates | Weekends are locked. Admin-created blackout dates are locked in every attendance view. |
 | Blackout ranges | A single admin action creates a labeled inclusive date range, including a range crossing December-January. Invalid, reversed, and oversized ranges are tested. |
@@ -88,12 +88,14 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 99 passed, 0 failed, verified on this branch after
-  rebasing onto `main`. Coverage includes recognition rules, monthly weighting,
-  role permissions, school isolation, the PIN-profile matrix, and
+- Automated tests: 115 passed, 0 failed, verified after Liz's 2026-09-01 review
+  changes. Coverage includes recognition rules, monthly
+  weighting, role permissions, school isolation, the PIN-profile matrix, the
+  NCNS seniority rule with its stale-status heal, the message requirement on
+  every hand-written award, and
   `state-key-parity.test.mjs`, which fails if the SQL allowlist, the server key
   list, and the client `FIXED_STORAGE_KEYS` ever disagree. (Earlier revisions
-  recorded 51 and 85 against narrower suites.)
+  recorded 51, 85, and 99 against narrower suites.)
 - Production build: passed.
 - Production dependency audit: zero known vulnerabilities after validating the
   React Router 7.18.2 security update on the isolated testing clone.

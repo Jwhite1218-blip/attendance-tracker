@@ -20,7 +20,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
         </summary>
         <div className="mt-2 space-y-1.5 text-xs text-gray-500 border-l-2 border-gray-200 pl-3">
           <p>
-            <span className="font-semibold text-gray-700">Documented occurrences</span> — each unexcused absence, late-in, or early-out on record for this school year. Approved and protected leave never counts.
+            <span className="font-semibold text-gray-700">Documented occurrences</span> — each no-call/no-show (NCNS), unexcused call-in absence (UNEX), late-in (LI), or early-out (EO) on record for this school year. Approved and protected leave never counts.
           </p>
           <p>
             <span className="font-semibold text-amber-700">Formal attendance tracking</span> — reached at the 3rd occurrence. The employee is now formally being tracked for attendance.
@@ -29,7 +29,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
             <span className="font-semibold text-amber-700">Verbal warning required</span> — reached at the 4th occurrence. A verbal warning needs to be given and documented.
           </p>
           <p>
-            <span className="font-semibold text-red-700">Union seniority reset</span> — triggered by two unexcused call-ins (UNEX) on back-to-back scheduled workdays. Under the union agreement this resets the employee&apos;s seniority standing, so it is flagged separately and listed first. Weekends and district holidays do not break the streak — two UNEX days on either side of them still count as back-to-back.
+            <span className="font-semibold text-red-700">Union seniority reset</span> — triggered by two no-call/no-shows (NCNS) on back-to-back scheduled workdays. An unexcused call-in (UNEX) does not trigger this: it still counts as an occurrence, but the employee did call. Under the union agreement a reset changes the employee&apos;s seniority standing, so it is flagged separately and listed first. Weekends and district holidays do not break the streak — two NCNS days on either side of them still count as back-to-back.
           </p>
         </div>
       </details>

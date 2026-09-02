@@ -1,6 +1,6 @@
 // Attendance accountability follows a July–June school year.
 // The third qualifying occurrence starts formal tracking, the fourth triggers
-// a verbal-warning stage, and two consecutive UNEX workdays reset union
+// a verbal-warning stage, and two consecutive NCNS workdays reset union
 // seniority status.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
@@ -45,14 +45,31 @@ function nextScheduledWorkday(dateKey) {
   return date.toISOString().slice(0, 10)
 }
 
+// Per Liz (2026-09-01): only back-to-back no-call/no-shows reset seniority. An
+// unexcused call-in is still an occurrence and still counts toward the tracking
+// and verbal-warning stages, but the employee did call, so it never reaches here.
 function findSeniorityResetDate(triggers) {
-  const unexcusedCallIns = triggers.filter(trigger => trigger.code === 'UNEX')
-  for (let index = 1; index < unexcusedCallIns.length; index++) {
-    if (nextScheduledWorkday(unexcusedCallIns[index - 1].date) === unexcusedCallIns[index].date) {
-      return unexcusedCallIns[index].date
+  const noCallNoShows = (triggers || []).filter(trigger => trigger.code === 'NCNS')
+  for (let index = 1; index < noCallNoShows.length; index++) {
+    if (nextScheduledWorkday(noCallNoShows[index - 1].date) === noCallNoShows[index].date) {
+      return noCallNoShows[index].date
     }
   }
   return null
+}
+
+// seniorityReset is recomputed from the stored triggers on every read rather
+// than trusted as saved. Statuses written under the old consecutive-UNEX rule
+// still carry its verdict, and this heals them in place on first read: the
+// storage key is mirrored in the server allowlist and two SQL migrations, so
+// bumping it would make this a schema change instead of a code fix.
+function withDerivedSeniorityReset(statuses) {
+  return Object.fromEntries(
+    Object.entries(statuses || {}).map(([key, status]) => {
+      const seniorityResetAt = findSeniorityResetDate(status?.triggers)
+      return [key, { ...status, seniorityReset: Boolean(seniorityResetAt), seniorityResetAt }]
+    })
+  )
 }
 
 function migrateLegacyFlags() {
@@ -86,7 +103,7 @@ function migrateLegacyFlags() {
 function getAllStatuses() {
   try {
     const saved = localStorage.getItem(FLAGS_KEY)
-    if (saved) return JSON.parse(saved)
+    if (saved) return withDerivedSeniorityReset(JSON.parse(saved))
     const migrated = migrateLegacyFlags()
     if (Object.keys(migrated).length) {
       try {
