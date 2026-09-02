@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import warrenLogo from '../assets/warren-logo.png'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { buildStarCardHtml } from '../data/starCard.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import {
   ANNUAL_AWARD_CATEGORIES,
@@ -79,6 +80,28 @@ function formatDate(dateKey) {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+// Opens the card in its own window and sends it straight to the print dialog.
+// The card is written into a fresh document rather than printed from this page
+// so the app's own layout can never bleed into the printed sheet.
+function openStarCardPrintWindow(card) {
+  const printWindow = window.open('', '_blank', 'width=880,height=780')
+  if (!printWindow) return false
+  printWindow.document.open()
+  printWindow.document.write(buildStarCardHtml([card], { pad: false }))
+  printWindow.document.close()
+  printWindow.focus()
+  // A document.write'd page has no load event to wait on, so give the layout a
+  // tick to settle before the dialog opens over it.
+  setTimeout(() => {
+    try {
+      printWindow.print()
+    } catch {
+      // The window is still open and printable by hand if the dialog is refused.
+    }
+  }, 300)
+  return true
 }
 
 function emptyRecognitionForm(type) {
@@ -196,7 +219,10 @@ export default function RecognitionProgram() {
     }))
   }
 
-  const finishConfirmedSubmission = (surface, message) => {
+  // card is the printable Star of the Day payload, or null for the surfaces that
+  // do not produce one. It rides on the confirmation so the Print button stays
+  // available after the form has been cleared for the next entry.
+  const finishConfirmedSubmission = (surface, message, card = null) => {
     surfaceSetters[surface](current => ({
       ...current,
       employeeId: '',
@@ -208,8 +234,19 @@ export default function RecognitionProgram() {
     setFeedback({ type: 'success', message })
     setConfirmations(current => ({
       ...current,
-      [surface]: { type: 'saved', message: `${message} The shared record is confirmed.` },
+      [surface]: { type: 'saved', message: `${message} The shared record is confirmed.`, card },
     }))
+  }
+
+  const handlePrintCard = surface => {
+    const card = confirmations[surface]?.card
+    if (!card) return
+    if (!openStarCardPrintWindow(card)) {
+      setFeedback({
+        type: 'error',
+        message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print star card again.',
+      })
+    }
   }
 
   const submitRecognition = async (surface, form, event) => {
@@ -218,6 +255,7 @@ export default function RecognitionProgram() {
     clearConfirmation(surface)
     setSubmittingSurface(surface)
     let confirmationMessage = ''
+    let card = null
     try {
       if (!recognitionTypeAllowedForRole(role, form.type, canManageRecognitionAwards)) {
         throw new Error('Only a district administrator can record Warren Food Services Employee of the Month.')
@@ -233,15 +271,26 @@ export default function RecognitionProgram() {
       confirmationMessage = record.type === 'shooting-star'
         ? `${employeeName(employee)} was added to the quarterly Shooting Star nominations.`
         : `${employeeName(employee)} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
+      // Only the daily star has a printable card: the physical board is a Star
+      // of the Day board, and a nomination is not an award yet.
+      card = record.type === 'star-of-day'
+        ? {
+          name: employeeName(employee),
+          date: record.date,
+          criteria: record.criteria,
+          message: record.note,
+          recognizedBy: record.recognizedBy,
+        }
+        : null
       await flushPendingWrites()
-      finishConfirmedSubmission(surface, confirmationMessage)
+      finishConfirmedSubmission(surface, confirmationMessage, card)
     } catch (error) {
       if (confirmationMessage) {
         const pendingMessage = 'The entry is saved on this device, but the shared record is not confirmed yet. Do not submit it again—use Retry confirmation below.'
         setFeedback({ type: 'error', message: pendingMessage })
         setConfirmations(current => ({
           ...current,
-          [surface]: { type: 'pending', message: pendingMessage, confirmationMessage },
+          [surface]: { type: 'pending', message: pendingMessage, confirmationMessage, card },
         }))
       } else {
         setFeedback({ type: 'error', message: error.message })
@@ -258,7 +307,7 @@ export default function RecognitionProgram() {
     setFeedback(null)
     try {
       await flushPendingWrites()
-      finishConfirmedSubmission(surface, confirmation.confirmationMessage)
+      finishConfirmedSubmission(surface, confirmation.confirmationMessage, confirmation.card)
     } catch {
       const pendingMessage = 'The shared record is still not confirmed. Keep this page open and try again when the connection is restored.'
       setFeedback({ type: 'error', message: pendingMessage })
@@ -378,6 +427,7 @@ export default function RecognitionProgram() {
               onToggleCriterion={toggleCriterion}
               onSubmit={event => submitRecognition('star', starForm, event)}
               onRetry={() => handleRetryConfirmation('star')}
+              onPrintCard={() => handlePrintCard('star')}
             />
 
             <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
@@ -408,6 +458,7 @@ export default function RecognitionProgram() {
                 onToggleCriterion={toggleCriterion}
                 onSubmit={event => submitRecognition('bonus', bonusForm, event)}
                 onRetry={() => handleRetryConfirmation('bonus')}
+                onPrintCard={() => handlePrintCard('bonus')}
               />
             )}
             <MonthlyDrawing
@@ -463,6 +514,7 @@ function RecognitionEntryForm({
   onToggleCriterion,
   onSubmit,
   onRetry,
+  onPrintCard,
 }) {
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
@@ -646,6 +698,17 @@ function RecognitionEntryForm({
                       className="flex-none rounded-lg border border-amber-400 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-amber-900 hover:bg-amber-100 disabled:opacity-60"
                     >
                       Retry confirmation
+                    </button>
+                  )}
+                  {/* Offered only once the shared record is confirmed: a printed
+                      card handed to someone should mean the star is recorded. */}
+                  {confirmation.type === 'saved' && confirmation.card && (
+                    <button
+                      type="button"
+                      onClick={onPrintCard}
+                      className="flex-none rounded-lg border border-emerald-400 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-emerald-900 hover:bg-emerald-100"
+                    >
+                      <span className="mr-1.5" aria-hidden="true">★</span>Print star card
                     </button>
                   )}
                 </div>
