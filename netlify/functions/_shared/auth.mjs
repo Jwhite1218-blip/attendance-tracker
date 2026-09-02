@@ -63,7 +63,12 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
 
   const recognitionOnly = rawAccess.role === 'admin' && rawAccess.recognitionOnly === true
   const canEditAttendance = !recognitionOnly && rawAccess.canEditAttendance !== false
-  const canEditRecognition = rawAccess.role === 'admin' && (
+  // Building managers record recognition for their own team: catching someone
+  // shining is a building-level act, and a district office cannot do it daily
+  // for fifteen kitchens. Their writes are still scoped to their own roster in
+  // handleMutate, and the district-only award stays behind
+  // canManageRecognitionAwards, which remains administrator-only below.
+  const canEditRecognition = (rawAccess.role === 'admin' || rawAccess.role === 'school') && (
     rawAccess.canEditRecognition === true
     || (rawAccess.canEditRecognition !== false && canEditAttendance)
   )

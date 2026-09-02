@@ -30,8 +30,12 @@ export function monthlyDrawingStatus(monthKey, dateValue = new Date()) {
   return { isOpen: false, state: 'waiting', opensOn, closesOn }
 }
 
+// Building managers give the daily star, nominations and shout-outs for their
+// own team. Warren Food Services Employee of the Month stays district-only:
+// canManageRecognitionAwards is administrator-only in auth.mjs, so a school
+// session is refused it here and again on the server.
 export function recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards = role === 'admin') {
-  if (role !== 'admin') return false
+  if (role !== 'admin' && role !== 'school') return false
   return type !== 'warren-employee-month' || canManageRecognitionAwards === true
 }
 
