@@ -253,21 +253,29 @@ function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
   return { type: 'object-patch', set, remove }
 }
 
-function recognitionMutationForSession(mutation, session) {
+function recognitionMutationForSession(mutation, session, allowedEmployeeIds) {
   if (mutation?.type !== 'object-patch') return mutation
+  // A building manager may only recognise their own team. Rows naming anyone
+  // else are dropped rather than rejected: the session's own roster is the
+  // authority, not whatever employee id the client sent.
+  const scopedToSchool = session.role === 'school'
   return {
     ...mutation,
     set: Object.fromEntries(
-      Object.entries(mutation.set || {}).map(([recognitionId, recognition]) => [
-        recognitionId,
-        {
-          ...recognition,
-          recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
-          // Stamped from the session, never from the client: this is what lets
-          // the district see which building handed out each star.
-          recognizedByLocationId: String(session.locationId || 'district').slice(0, 100),
-        },
-      ])
+      Object.entries(mutation.set || {})
+        .filter(([, recognition]) => (
+          !scopedToSchool || allowedEmployeeIds.has(String(recognition?.employeeId))
+        ))
+        .map(([recognitionId, recognition]) => [
+          recognitionId,
+          {
+            ...recognition,
+            recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
+            // Stamped from the session, never from the client: this is what lets
+            // the district see which building handed out each star.
+            recognizedByLocationId: String(session.locationId || 'district').slice(0, 100),
+          },
+        ])
     ),
   }
 }
@@ -474,7 +482,7 @@ export async function handleMutate(store, session, body) {
   ) {
     return jsonResponse({ error: 'Only a district administrator can record Warren Food Services Employee of the Month.' }, 403)
   }
-  if (key === RECOGNITION_KEY) mutation = recognitionMutationForSession(mutation, session)
+  if (key === RECOGNITION_KEY) mutation = recognitionMutationForSession(mutation, session, allowedEmployeeIds)
   try {
     validateMutation(key, mutation)
   } catch {

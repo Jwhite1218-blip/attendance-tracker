@@ -85,7 +85,9 @@ test('every school PIN variation logs in with its canonical building and safe ca
       assert.equal(body.access.role, 'school')
       assert.equal(body.access.locationId, school.id)
       assert.equal(body.access.canEditAttendance, true)
-      assert.equal(body.access.canEditRecognition, false)
+      // Building managers record their own team's stars (Liz, 2026-09-02).
+      assert.equal(body.access.canEditRecognition, true)
+      // The district award stays out of reach.
       assert.equal(body.access.canManageRecognitionAwards, false)
       assert.equal(body.access.canManageRoster, false)
       assert.equal(body.access.canManageBlackouts, false)
@@ -288,7 +290,7 @@ test('all 15 building sessions receive only their roster and no recognition reco
   }
 })
 
-test('legacy school sessions cannot receive recognition data even if they request the capability', async () => {
+test('school sessions read only their own building recognition board', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
@@ -326,13 +328,19 @@ test('legacy school sessions cannot receive recognition data even if they reques
     assert.equal(response.status, 200)
     assert.ok(body.roster.every(employee => employee.location === targetSchool.id))
 
-    // A school PIN that claims canEditRecognition still cannot escalate: it
-    // reads its own building's board and nothing more. The write path stays
-    // closed regardless of what the PIN profile asserts.
+    // A school PIN reads its own building's board and nothing more. Recording
+    // stars is now theirs (Liz, 2026-09-02), but that does not widen what they
+    // can see: another building's records stay invisible.
     const visible = Object.values(body.entries['all-star-recognition-v1'] || {})
     assert.deepEqual(visible.map(record => record.id), [targetRecognition.id])
     assert.equal(
       canWriteStateKey({ role: 'school', canEditRecognition: true }, 'all-star-recognition-v1'),
+      true
+    )
+    // Reaching the key is not reaching another building's staff: a session that
+    // never had recognition edit rights still cannot write.
+    assert.equal(
+      canWriteStateKey({ role: 'school', canEditRecognition: false }, 'all-star-recognition-v1'),
       false
     )
   } finally {

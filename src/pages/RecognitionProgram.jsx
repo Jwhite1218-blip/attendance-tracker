@@ -410,9 +410,12 @@ export default function RecognitionProgram() {
                 onRetry={() => handleRetryConfirmation('bonus')}
               />
             )}
+            {/* Drawing a monthly winner stays with the district even though
+                building managers now record the daily stars that enter it: the
+                draw awards a title, it does not catch someone shining. */}
             <MonthlyDrawing
               role={role}
-              canEdit={canEditRecognition}
+              canEdit={canEditRecognition && role === 'admin'}
               availableLocations={availableLocations}
               drawingLocation={drawingLocation}
               setDrawingLocation={setDrawingLocation}
