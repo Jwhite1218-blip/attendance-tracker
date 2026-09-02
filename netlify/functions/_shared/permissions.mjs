@@ -47,11 +47,14 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
     || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
 
   if (isAttendanceState && session.canEditAttendance === false) return false
-  if (isRecognitionState && (session.role !== 'admin' || !canEditRecognition)) return false
+  if (isRecognitionState && !canEditRecognition) return false
 
   if (session.role === 'school') {
     if (attendanceId) return allowedEmployeeIds.has(String(attendanceId))
-    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY
+    // Recognition is written by building managers for their own team. The rows
+    // themselves are narrowed to this building's roster in handleMutate, so
+    // reaching the key is not the same as reaching another building's staff.
+    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY || isRecognitionState
   }
 
   if (session.role !== 'admin') return false

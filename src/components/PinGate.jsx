@@ -172,7 +172,10 @@ export default function PinGate({ children }) {
         displayName: authed.displayName || null,
         employeeId: authed.employeeId || null,
         canEditAttendance: (authed.role === 'admin' || authed.role === 'school') && authed.canEditAttendance !== false,
-        canEditRecognition: authed.role === 'admin' && authed.canEditRecognition === true,
+        // Building managers record recognition for their own team; the server
+        // decides this in auth.mjs and scopes their writes to their own roster.
+        canEditRecognition: (authed.role === 'admin' || authed.role === 'school')
+          && authed.canEditRecognition === true,
         canManageRecognitionAwards: authed.role === 'admin'
           && authed.canManageRecognitionAwards === true,
         recognitionOnly: authed.recognitionOnly === true,

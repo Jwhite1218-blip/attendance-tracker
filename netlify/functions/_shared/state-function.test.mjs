@@ -377,7 +377,10 @@ test('recognition pilots receive only recognition data and cannot alter attendan
   }
 })
 
-test('school managers cannot write recognition records', async () => {
+// Liz, 2026-09-02: building managers record the daily star for their own team.
+// The record is still attributed from the session, never from the client, so a
+// spoofed recognizedBy is overwritten rather than trusted.
+test('school managers record recognition for their own team', async () => {
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
   process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
   try {
@@ -389,13 +392,13 @@ test('school managers cannot write recognition records', async () => {
       'all-star-recognition-v1': {},
     })
     const record = {
-      id: 'new-school-star',
+      id: 'own-team-star',
       employeeId,
       locationId: schoolEmployee.location,
       type: 'star-of-day',
       date: '2026-08-25',
       monthKey: null,
-      criteria: ['Outstanding customer service'],
+      criteria: ['Service'],
       note: 'Great lunch service',
       sourceName: '',
       recognizedBy: 'Spoofed Actor',
@@ -417,7 +420,69 @@ test('school managers cannot write recognition records', async () => {
     })
 
     const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
-    assert.equal(response.status, 403)
+    assert.equal(response.status, 200)
+
+    const saved = (await store.get('all-star-recognition-v1'))[record.id]
+    assert.ok(saved, 'the star should be recorded')
+    assert.equal(saved.employeeId, employeeId)
+    assert.equal(saved.recognizedBy, 'Test School Manager')
+    assert.equal(saved.recognizedByLocationId, schoolEmployee.location)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+// The building a manager signs in as is the authority, not the employee id the
+// client sends: a star for someone else's kitchen is dropped, not stored.
+test('school managers cannot record recognition for another building', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const ownEmployee = employees.find(employee => employee.location !== 'Admin')
+    const otherEmployee = employees.find(employee => (
+      employee.location !== 'Admin' && employee.location !== ownEmployee.location
+    ))
+    assert.ok(otherEmployee, 'the roster needs a second building for this test')
+
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {},
+    })
+    const record = {
+      id: 'other-building-star',
+      employeeId: String(otherEmployee.kronos_id || otherEmployee.id),
+      // The client even names the other building; the session still wins.
+      locationId: otherEmployee.location,
+      type: 'star-of-day',
+      date: '2026-08-25',
+      monthKey: null,
+      criteria: ['Service'],
+      note: 'Great lunch service',
+      sourceName: '',
+      recognizedBy: 'Spoofed Actor',
+      createdAt: '2026-08-25T12:00:00.000Z',
+    }
+    const request = await authenticatedRequest({
+      role: 'school',
+      locationId: ownEmployee.location,
+      displayName: 'Test School Manager',
+      canEditAttendance: true,
+    }, sessions, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://example.test' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [record.id]: record }, remove: [] },
+      }),
+    })
+
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    // The row is dropped rather than the request refused: the board simply
+    // never gains a star for a team this manager does not run.
+    assert.equal(response.status, 200)
     assert.deepEqual(await store.get('all-star-recognition-v1'), {})
   } finally {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
