@@ -7,6 +7,7 @@ import LocationView from './pages/LocationView.jsx'
 import CustomReport from './pages/CustomReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
+import StaffAdmin from './pages/StaffAdmin.jsx'
 import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
@@ -258,6 +259,9 @@ function AppShell() {
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
           <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />
           <Route path="/ledger" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LedgerView />} />
+          {/* Reached from the Dashboard button rather than the nav: roster
+              housekeeping is occasional and does not belong on the front page. */}
+          <Route path="/staff" element={role === 'admin' ? <StaffAdmin /> : <Navigate to={homePath} replace />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />

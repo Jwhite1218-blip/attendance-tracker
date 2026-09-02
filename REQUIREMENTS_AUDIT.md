@@ -88,10 +88,11 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 113 passed, 0 failed, verified on `main` after Liz's
-  2026-09-01 review changes. Coverage includes recognition rules, monthly
+- Automated tests: 115 passed, 0 failed, verified after Liz's 2026-09-01 review
+  changes. Coverage includes recognition rules, monthly
   weighting, role permissions, school isolation, the PIN-profile matrix, the
-  NCNS seniority rule with its stale-status heal, and
+  NCNS seniority rule with its stale-status heal, the message requirement on
+  every hand-written award, and
   `state-key-parity.test.mjs`, which fails if the SQL allowlist, the server key
   list, and the client `FIXED_STORAGE_KEYS` ever disagree. (Earlier revisions
   recorded 51, 85, and 99 against narrower suites.)

@@ -124,20 +124,41 @@ test('a Star of the Day cannot be recorded without saying why they shine', () =>
   )
 })
 
-test('nominations and shout-outs stay lighter-weight than a daily star', () => {
-  assert.equal(requiresStarMessage('star-of-day'), true)
-  for (const type of ['shooting-star', 'star-shout-out', 'warren-employee-month', 'all-star-of-month']) {
+// Liz, 2026-09-01: nominations now carry the same message requirement as a daily
+// star. Both can be given for "Other", which says nothing without the note.
+test('hand-written awards all require a star card message', () => {
+  for (const type of ['star-of-day', 'shooting-star', 'star-shout-out']) {
+    assert.equal(requiresStarMessage(type), true)
+  }
+  // The monthly draw writes its own note, so it stays exempt.
+  for (const type of ['warren-employee-month', 'all-star-of-month']) {
     assert.equal(requiresStarMessage(type), false)
   }
-  // A nomination with no message still records.
-  assert.equal(createRecognitionRecord({
+})
+
+test('a nomination without a message is refused', () => {
+  assert.throws(() => createRecognitionRecord({
     employeeId: '123',
     locationId: 'SchoolA',
     type: 'shooting-star',
     date: '2026-08-20',
     criteria: ['Taking initiative to learn new skills or tasks'],
     note: '',
-  }).note, '')
+  }), /star card message/i)
+})
+
+test('nomination surfaces accept Other as a reason', () => {
+  for (const type of ['shooting-star', 'star-shout-out']) {
+    const record = createRecognitionRecord({
+      employeeId: '123',
+      locationId: 'SchoolA',
+      type,
+      date: '2026-08-20',
+      criteria: ['Other'],
+      note: 'Stayed late to reset the serving line after a water shut-off.',
+    })
+    assert.deepEqual(record.criteria, ['Other'])
+  }
 })
 
 test('submitting building is recorded so the district can see who is giving stars', () => {

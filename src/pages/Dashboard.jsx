@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import { getLocationCounts, getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
+import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { getAllFlaggedEmployees, getAttendanceStageLabel, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
-import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
@@ -19,8 +18,6 @@ export default function Dashboard() {
   const showLizFutureTools = canSeeLizFutureTools(access)
   const lizAdminAccess = hasLizAdminAccess(access)
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
-  const [, setDirectoryVersion] = useState(0)
-  const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
   const employees = getEmployeesWithEffectiveLocations()
   const allEmployees = getEmployeesWithEffectiveLocations({ includeInactive: true })
@@ -32,17 +29,14 @@ export default function Dashboard() {
     .map(flag => ({ ...flag, employee: allEmployees.find(e => String(e.kronos_id || e.id) === String(flag.empId)) }))
     .filter(f => f.employee)
   // Inactive staff keep their flag but leave the watch list — see
-  // splitFlaggedByEmploymentStatus. Their status still shows on the inactive
-  // roster below, and returns to the main list if they are reactivated.
-  const { active: flaggedEmployees, inactive: flaggedInactive } = splitFlaggedByEmploymentStatus(allFlaggedEmployees)
-  const flaggedStatusByEmpKey = new Map(flaggedInactive.map(f => [String(f.empId), f]))
+  // splitFlaggedByEmploymentStatus. Their status shows on the /staff page and
+  // returns to the main list if they are reactivated.
+  const { active: flaggedEmployees } = splitFlaggedByEmploymentStatus(allFlaggedEmployees)
 
   const openEmployeeRecord = employee => {
     const employeeId = employee.kronos_id || employee.id
     navigate(`/employee/${encodeURIComponent(employeeId)}`)
   }
-
-  const refreshDirectory = () => setDirectoryVersion(version => version + 1)
 
   // Load all attendance from localStorage for current year
   const today = new Date()
@@ -222,7 +216,9 @@ export default function Dashboard() {
       )}
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      {/* Inactive headcount is deliberately absent: it lives on /staff with the
+          records themselves, so the front page reports only active operations. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(locationCounts).length}</p>
@@ -230,10 +226,6 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Active Staff</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalEmployees}</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-sm font-medium text-gray-500">Inactive Staff</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{inactiveEmployees.length}</p>
         </div>
       </div>
 
@@ -257,7 +249,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Employee Management */}
+      {/* Employee Management — the inactive roster itself lives on /staff so a
+          departed employee does not sit on the front page looking like an
+          active concern. */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
@@ -266,70 +260,18 @@ export default function Dashboard() {
               Add employees or restore inactive records. Existing attendance history stays attached to the employee.
             </p>
           </div>
-          {lizAdminAccess ? (
-            <button
-              type="button"
-              onClick={() => setShowAddEmployee(true)}
-              className="self-start px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
-            >
-              + Add employee
-            </button>
-          ) : (
-            <span className="self-start rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-500">
-              Roster read-only
-            </span>
-          )}
+          <Link
+            to="/staff"
+            className="self-start px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700"
+          >
+            Manage employees
+            {inactiveEmployees.length > 0 && (
+              <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-xs font-bold">
+                {inactiveEmployees.length} inactive
+              </span>
+            )}
+          </Link>
         </div>
-
-        {inactiveEmployees.length > 0 ? (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Inactive employees
-              {flaggedInactive.length > 0 && (
-                <span className="ml-2 normal-case font-medium text-gray-400">
-                  {flaggedInactive.length} with open attendance follow-up
-                </span>
-              )}
-            </p>
-            <div className="divide-y divide-gray-100">
-              {inactiveEmployees.map(employee => {
-                const empKey = employee.kronos_id || employee.id
-                const flagged = flaggedStatusByEmpKey.get(String(empKey))
-                return (
-                  <div key={empKey} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <button type="button" onClick={() => openEmployeeRecord(employee)} className="text-left group">
-                      <p className="text-sm font-semibold text-gray-800 group-hover:text-brand-700 transition-colors">{employee.first_name} {employee.last_name}</p>
-                      <p className="text-xs text-gray-400">
-                        ID: {employee.kronos_id} · {LOCATION_MAP[employee.location]?.name || employee.location}
-                        {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
-                        {' · View history'}
-                      </p>
-                      {flagged && (
-                        <p className="text-xs font-semibold text-amber-700 mt-1">
-                          {getAttendanceStageLabel(flagged)} · kept if reactivated
-                        </p>
-                      )}
-                    </button>
-                    {lizAdminAccess && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEmployeeActive(empKey, true)
-                          refreshDirectory()
-                        }}
-                        className="self-start sm:self-auto px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
-                      >
-                        Reactivate
-                      </button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        ) : (
-          <p className="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">No inactive employee records.</p>
-        )}
       </div>
 
       {/* Location Grid */}
@@ -387,16 +329,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {lizAdminAccess && (
-        <AddEmployeeModal
-          open={showAddEmployee}
-          onClose={() => setShowAddEmployee(false)}
-          onAdded={() => {
-            setShowAddEmployee(false)
-            refreshDirectory()
-          }}
-        />
-      )}
     </div>
   )
 }
