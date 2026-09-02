@@ -91,13 +91,23 @@ function buildEmployee(employee, locationOverrides, recordOverrides, managerNote
   }
 }
 
+// Every roster list in the app is alphabetical by last name, then first name —
+// the same order the Employee Records ledger shows. Sorting here rather than in
+// each view is what puts a newly added employee in their proper place instead
+// of at the bottom: custom employees are appended to the source roster, so any
+// consumer that doesn't sort would otherwise show a new hire last.
+export function compareEmployeesByName(left, right) {
+  return `${left?.last_name || ''} ${left?.first_name || ''}`.trim()
+    .localeCompare(`${right?.last_name || ''} ${right?.first_name || ''}`.trim(), undefined, { sensitivity: 'base' })
+}
+
 export function getEmployeesWithEffectiveLocations({ includeInactive = false } = {}) {
   const locationOverrides = getLocationOverrides()
   const recordOverrides = getEmployeeRecordOverrides()
   const managerNotes = getEmployeeManagerNotes()
-  const allEmployees = getSourceEmployees().map(employee =>
-    buildEmployee(employee, locationOverrides, recordOverrides, managerNotes)
-  )
+  const allEmployees = getSourceEmployees()
+    .map(employee => buildEmployee(employee, locationOverrides, recordOverrides, managerNotes))
+    .sort(compareEmployeesByName)
   return includeInactive ? allEmployees : allEmployees.filter(employee => employee.active)
 }
 
