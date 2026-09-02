@@ -54,6 +54,17 @@ function employeeName(employee) {
   return `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
 }
 
+// The picker is a lookup list, so it reads "Last, First" like the Employee
+// Records ledger — that is what makes its alphabetical order visible on screen.
+// Star cards, the leaderboard and confirmations stay on employeeName's
+// "First Last" so the recognition copy still reads like a person's name.
+function employeeListName(employee) {
+  const lastName = String(employee?.last_name || '').trim()
+  const firstName = String(employee?.first_name || '').trim()
+  if (!lastName) return firstName
+  return firstName ? `${lastName}, ${firstName}` : lastName
+}
+
 function formatMonth(monthKey) {
   if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) return monthKey
   return new Date(`${monthKey}-01T12:00:00`).toLocaleDateString('en-US', {
@@ -370,9 +381,17 @@ export default function RecognitionProgram() {
             />
 
             <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
+            {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
+                shorter main column left beside the taller side column. */}
+            <RecentRecognition records={scopedRecords} employeeMap={employeeMap} />
           </div>
 
           <div className="space-y-6">
+            {/* Liz, 2026-09-01: Recognition Levels leads the side column. A school
+                login has no bonus surface, so the levels card already sat at the
+                top there; an admin saw the bonus form pushed above it and the two
+                views disagreed. */}
+            <StarLevels />
             {bonusTypes.length > 0 && (
               <RecognitionEntryForm
                 surface="bonus"
@@ -391,7 +410,6 @@ export default function RecognitionProgram() {
                 onRetry={() => handleRetryConfirmation('bonus')}
               />
             )}
-            <StarLevels />
             <MonthlyDrawing
               role={role}
               canEdit={canEditRecognition}
@@ -418,8 +436,7 @@ export default function RecognitionProgram() {
 
 
         <SubmissionsByBuilding counts={starSubmissionsByLocation} schoolYearStart={schoolYearStart} />
-        <div className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <RecentRecognition records={scopedRecords} employeeMap={employeeMap} />
+        <div className="mt-6">
           <AnnualCelebration />
         </div>
       </div>
@@ -511,7 +528,7 @@ function RecognitionEntryForm({
                 <option value="">Choose an employee</option>
                 {employees.map(employee => (
                   <option key={employeeKey(employee)} value={employeeKey(employee)}>
-                    {employeeName(employee)}
+                    {employeeListName(employee)}
                   </option>
                 ))}
               </select>

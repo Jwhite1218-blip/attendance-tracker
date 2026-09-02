@@ -66,9 +66,11 @@ function AppShell() {
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
   const standardNavItems = [
-    // Administrators only. School managers reach their own location dashboard
-    // through the always-visible logo link, which also points at homePath.
-    ...(role === 'admin' ? [{ path: homePath, label: 'Dashboard' }] : []),
+    // Every signed-in role gets the Dashboard entry, pointing at its own
+    // homePath — a school manager still only ever reaches their own location's
+    // dashboard. Hiding it (d7997ee) removed a duplicate nav path but read to
+    // managers as the button disappearing, so Liz asked for it back (2026-09-01).
+    { path: homePath, label: 'Dashboard' },
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: 'All-Stars' }] : []),
     { path: '/ledger', label: 'Employee Records' },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),

@@ -72,13 +72,13 @@ test('third occurrence starts formal tracking and fourth requires a verbal warni
   assert.equal(status.stage, 'verbal_warning')
 })
 
-test('two consecutive UNEX workdays reset seniority across a weekend', async () => {
+test('two consecutive NCNS workdays reset seniority across a weekend', async () => {
   const employeeId = 'seniority-test'
   const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
   const monday = addDays(friday, 3)
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'UNEX'],
-    [monday, 'UNEX'],
+    [friday, 'NCNS'],
+    [monday, 'NCNS'],
   ))
   await flushPendingWrites()
 
@@ -88,7 +88,7 @@ test('two consecutive UNEX workdays reset seniority across a weekend', async () 
   assert.equal(isFlagged(employeeId), true)
 })
 
-test('district blackout holidays are skipped between consecutive UNEX workdays', async () => {
+test('district blackout holidays are skipped between consecutive NCNS workdays', async () => {
   const employeeId = 'holiday-seniority-test'
   const friday = firstWeekday(SCHOOL_YEAR_START, 8, 5)
   const mondayHoliday = addDays(friday, 3)
@@ -97,8 +97,8 @@ test('district blackout holidays are skipped between consecutive UNEX workdays',
   saveBlackoutDateRange(mondayHoliday, mondayHoliday, 'District holiday')
   await flushPendingWrites()
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'UNEX'],
-    [tuesday, 'UNEX'],
+    [friday, 'NCNS'],
+    [tuesday, 'NCNS'],
   ))
   await flushPendingWrites()
 
@@ -107,13 +107,32 @@ test('district blackout holidays are skipped between consecutive UNEX workdays',
   assert.equal(status.seniorityResetAt, tuesday)
 })
 
-test('only UNEX records can trigger a seniority reset', async () => {
-  const employeeId = 'unex-only-seniority-test'
+// Liz, 2026-09-01: a call-in is not a no-show. Back-to-back UNEX days are two
+// occurrences and nothing more; only NCNS reaches the seniority stage.
+test('consecutive UNEX call-ins do not reset seniority', async () => {
+  const employeeId = 'unex-no-seniority-test'
   const friday = firstWeekday(SCHOOL_YEAR_START, 9, 5)
   const monday = addDays(friday, 3)
 
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
     [friday, 'UNEX'],
+    [monday, 'UNEX'],
+  ))
+  await flushPendingWrites()
+
+  const status = getEmployeeAttendanceStatus(employeeId)
+  assert.equal(status.seniorityReset, false)
+  assert.equal(status.seniorityResetAt, null)
+  assert.equal(status.occurrenceCount, 2)
+})
+
+test('only NCNS records can trigger a seniority reset', async () => {
+  const employeeId = 'ncns-only-seniority-test'
+  const friday = firstWeekday(SCHOOL_YEAR_START, 11, 5)
+  const monday = addDays(friday, 3)
+
+  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
+    [friday, 'NCNS'],
     [monday, 'CC'],
   ))
   await flushPendingWrites()
@@ -121,7 +140,7 @@ test('only UNEX records can trigger a seniority reset', async () => {
   assert.equal(getEmployeeAttendanceStatus(employeeId).seniorityReset, false)
 })
 
-test('UNEX records on weekends or blackout holidays do not count', async () => {
+test('NCNS records on weekends or blackout holidays do not count', async () => {
   const employeeId = 'closed-day-test'
   const friday = firstWeekday(SCHOOL_YEAR_START, 10, 5)
   const saturday = addDays(friday, 1)
@@ -130,15 +149,68 @@ test('UNEX records on weekends or blackout holidays do not count', async () => {
   saveBlackoutDateRange(mondayHoliday, mondayHoliday, 'District holiday')
   await flushPendingWrites()
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'UNEX'],
-    [saturday, 'UNEX'],
-    [mondayHoliday, 'UNEX'],
+    [friday, 'NCNS'],
+    [saturday, 'NCNS'],
+    [mondayHoliday, 'NCNS'],
   ))
   await flushPendingWrites()
 
   const status = getEmployeeAttendanceStatus(employeeId)
   assert.equal(status.occurrenceCount, 1)
   assert.equal(status.seniorityReset, false)
+})
+
+// Statuses saved before the rule changed still carry "seniorityReset: true" from
+// a pair of UNEX days. They are recomputed on read, so the wrongly flagged
+// employees clear themselves at deploy instead of waiting for the next edit to
+// their attendance.
+test('a status stored under the old consecutive-UNEX rule clears on read', () => {
+  const employeeId = 'stale-unex-status-test'
+  const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
+  const monday = addDays(friday, 3)
+
+  localStorage.setItem('hr-attendance-progress-v2', JSON.stringify({
+    [`${employeeId}-${SCHOOL_YEAR_START}`]: {
+      empId: employeeId,
+      schoolYearStart: SCHOOL_YEAR_START,
+      occurrenceCount: 2,
+      stage: 'documented',
+      updatedAt: new Date().toISOString(),
+      triggers: [{ date: friday, code: 'UNEX' }, { date: monday, code: 'UNEX' }],
+      seniorityReset: true,
+      seniorityResetAt: monday,
+    },
+  }))
+
+  const status = getEmployeeAttendanceStatus(employeeId)
+  assert.equal(status.seniorityReset, false)
+  assert.equal(status.seniorityResetAt, null)
+  // The occurrences themselves are untouched — only the seniority verdict moved.
+  assert.equal(status.occurrenceCount, 2)
+  assert.equal(isFlagged(employeeId), false)
+})
+
+test('a stored NCNS pair still reads as a seniority reset', () => {
+  const employeeId = 'stored-ncns-status-test'
+  const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
+  const monday = addDays(friday, 3)
+
+  localStorage.setItem('hr-attendance-progress-v2', JSON.stringify({
+    [`${employeeId}-${SCHOOL_YEAR_START}`]: {
+      empId: employeeId,
+      schoolYearStart: SCHOOL_YEAR_START,
+      occurrenceCount: 2,
+      stage: 'documented',
+      updatedAt: new Date().toISOString(),
+      triggers: [{ date: friday, code: 'NCNS' }, { date: monday, code: 'NCNS' }],
+      seniorityReset: false,
+      seniorityResetAt: null,
+    },
+  }))
+
+  const status = getEmployeeAttendanceStatus(employeeId)
+  assert.equal(status.seniorityReset, true)
+  assert.equal(status.seniorityResetAt, monday)
 })
 
 test('prior school-year stages do not carry into the active July-June year', async () => {
