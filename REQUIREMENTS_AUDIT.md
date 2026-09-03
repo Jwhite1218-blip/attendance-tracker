@@ -88,14 +88,14 @@ their values.
 
 ## Current verification result
 
-- Automated tests: 115 passed, 0 failed, verified after Liz's 2026-09-01 review
-  changes. Coverage includes recognition rules, monthly
+- Automated tests: 125 passed, 0 failed, verified September 3 against current
+  `main`. Coverage includes recognition rules, monthly
   weighting, role permissions, school isolation, the PIN-profile matrix, the
   NCNS seniority rule with its stale-status heal, the message requirement on
   every hand-written award, and
   `state-key-parity.test.mjs`, which fails if the SQL allowlist, the server key
   list, and the client `FIXED_STORAGE_KEYS` ever disagree. (Earlier revisions
-  recorded 51, 85, and 99 against narrower suites.)
+  recorded 51, 85, 99, and 115 against narrower suites.)
 - Production build: passed.
 - Production dependency audit: zero known vulnerabilities after validating the
   React Router 7.18.2 security update on the isolated testing clone.
@@ -106,9 +106,15 @@ their values.
   use, and should not be used as a baseline.
 - Blackout calendar: 66 unique dates, earliest July 1, 2026. No dates fall
   between September 1 and 4, so the September 2 launch day is clear.
-- Production content was not modified during the release split. A fresh Liz
-  backup and an authenticated production smoke test remain required immediately
-  before the September 2 launch.
+- The September 2 production launch is confirmed. Netlify ready deploy
+  `6a98304f7478c80008c8bba8` published at 10:19 AM ET from `main` commit
+  `a2691d323cc06dc54f453f113acc4d0191185150`, which contains the recognition
+  workflow and public-NFC release commits. Production later advanced to ready
+  deploy `6a98d35ae3f50900087c5dda` from commit
+  `387140b8738a82dcf71463bd6e8710f2e61a0802` at 9:54 PM ET.
+- The fresh pre-launch Liz backup and authenticated Liz/building-manager smoke
+  checks are not independently evidenced in the repository or deploy history.
+  They remain owner-confirmation items and must not be inferred from public checks.
 - Known gap — shared HR notes: `employee-manager-notes-v1` was wired end to end
   but missing from the production SQL allowlist, so every write was rejected
   with `Unsupported state key.` Fixed and applied to production on August 31,
@@ -120,6 +126,9 @@ their values.
 - Recovery: Supabase Pro daily physical backups are active; point-in-time
   recovery is **not** enabled, so the recovery floor is the last daily
   snapshot — up to 24 hours of loss.
-- The current live release passed its public security/readiness check, and the
-  isolated candidate passed all 15 NFC leaderboard checks, on August 27, 2026.
+- September 3 read-only production verification passed: the homepage and assets
+  returned 200, anonymous session/state requests returned 401, required security
+  headers were present, and all 15 NFC pages/APIs resolved to the correct school
+  with only approved public fields. All leader lists were empty at verification
+  time; no production writes were performed.
 

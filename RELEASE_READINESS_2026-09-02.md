@@ -6,22 +6,32 @@ Dress rehearsal: Thursday, August 27, 2026
 
 Production launch: Wednesday, September 2, 2026
 
-## Current release position
+## Production outcome — verified September 3
 
-- **Production is unchanged.** The current production rollback baseline is
-  Netlify deploy `6a90d9a07b7e160009de2d61`, built from Git commit
-  `b0bbccedfba2591c5096283ce2ac2085a2e237a0`.
-- **The release candidate is on the isolated lab only.** Its current Netlify
-  deploy is `6a916347d1c3f3e45af22d49` at
-  <https://allstartracker-stress-20260821.netlify.app>.
-- The lab displays `Recognition Test Lab`, uses isolated Netlify Blobs data,
-  and has scheduled email reports disabled.
-- Production uses the tenant-scoped Supabase backend and has scheduled weekday
-  reports enabled.
-- All 15 public school URLs are frozen in
-  `SCHOOL_NFC_LEADERBOARD_URLS.csv`. The production URL column can be written
-  to NFC cards now, but those links will not display the new boards until the
-  September 2 production deployment succeeds.
+- **The September 2 production launch is confirmed.** Netlify production deploy
+  `6a98304f7478c80008c8bba8` reached ready state at 10:19 AM ET from `main`
+  commit `a2691d323cc06dc54f453f113acc4d0191185150`.
+- That deployment includes the internal All-Star recognition workflow and all
+  15 public NFC leaderboards; both release commits are ancestors of the deployed
+  commit.
+- Production advanced later on September 2 to ready deploy
+  `6a98d35ae3f50900087c5dda` at 9:54 PM ET from `main` commit
+  `387140b8738a82dcf71463bd6e8710f2e61a0802`; this is the current live deploy.
+- The documented read-only public readiness check passed on September 3: the
+  homepage and assets returned 200, anonymous session and state requests returned
+  401, and all required security headers were present.
+- The GET-only recognition readiness check passed for all 15 school pages and
+  APIs. Each token resolved to the correct school, unknown tokens returned 404,
+  and public responses exposed only the approved leaderboard fields. All 15
+  leader lists were empty at verification time.
+- Current `main` passes 125 automated tests and the Vite production build. The
+  production-only dependency audit reports zero known vulnerabilities.
+- Still not independently evidenced: the fresh pre-launch Liz backup, Liz and
+  representative building-manager authenticated smoke checks, physical phone/NFC
+  validation, the 60-minute monitoring window, and scheduled-report delivery.
+  These remain owner-confirmation items rather than inferred passes.
+- The isolated lab remains separate on Netlify Blobs. No production data writes
+  were performed during this verification.
 
 ## Verified August 28
 
