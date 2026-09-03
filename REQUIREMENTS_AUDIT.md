@@ -115,6 +115,9 @@ their values.
 - The fresh pre-launch Liz backup and authenticated Liz/building-manager smoke
   checks are not independently evidenced in the repository or deploy history.
   They remain owner-confirmation items and must not be inferred from public checks.
+- Owner confirmation received September 3: the updated PINs were saved and
+  delivered to Liz. Credential values are intentionally excluded from this
+  repository and the audit record.
 - Known gap — shared HR notes: `employee-manager-notes-v1` was wired end to end
   but missing from the production SQL allowlist, so every write was rejected
   with `Unsupported state key.` Fixed and applied to production on August 31,

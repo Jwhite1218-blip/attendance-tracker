@@ -30,6 +30,9 @@ Production launch: Wednesday, September 2, 2026
   representative building-manager authenticated smoke checks, physical phone/NFC
   validation, the 60-minute monitoring window, and scheduled-report delivery.
   These remain owner-confirmation items rather than inferred passes.
+- Owner confirmation received September 3: the updated PINs were saved and
+  delivered to Liz. Credential values are intentionally excluded from this
+  repository and the audit record.
 - The isolated lab remains separate on Netlify Blobs. No production data writes
   were performed during this verification.
 
