@@ -20,7 +20,11 @@ const PRESENTATION_PILOT_ACCESS = Object.freeze({
   canManageBlackouts: false,
   watermark: 'localis',
 })
-const SCHOOL_LOCATIONS = LOCATIONS.filter(location => location.id !== 'Admin')
+// District Admin is a building like any other: Liz and the district office team
+// work from it, and its staff need their attendance marked by someone scoped to
+// that building rather than by a district-wide login. It was previously excluded
+// here, which meant a building PIN for it was refused at sign-in.
+const SCHOOL_LOCATIONS = LOCATIONS
 
 function locationLookupKey(value) {
   return String(value || '')
