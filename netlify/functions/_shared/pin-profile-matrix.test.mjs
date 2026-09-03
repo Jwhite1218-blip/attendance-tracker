@@ -134,6 +134,43 @@ test('the district office signs in as a building, scoped to its own staff', asyn
   }
 })
 
+test('a school with read-only attendance still receives live recognition access', async () => {
+  const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_ACCESS_CODES_JSON = JSON.stringify({
+    6210: {
+      role: 'school',
+      locationId: 'Creston',
+      displayName: 'Creston Recognition',
+      canEditAttendance: false,
+      canEditRecognition: false,
+    },
+  })
+  process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
+
+  try {
+    const stores = { rate: createMemoryBlobStore(), sessions: createMemoryBlobStore() }
+    const response = await handleSessionRequest(new Request('https://example.test/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin: '6210' }),
+    }), { ip: '198.51.100.91' }, stores)
+    const body = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(body.access.role, 'school')
+    assert.equal(body.access.locationId, 'CrestonMS')
+    assert.equal(body.access.canEditAttendance, false)
+    assert.equal(body.access.canEditRecognition, true)
+    assert.equal(body.access.canManageRecognitionAwards, false)
+  } finally {
+    if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
+    else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
 test('invalid school and role PIN profiles are rejected instead of opening a broken dashboard', async () => {
   const previousCodes = process.env.ATTENDANCE_ACCESS_CODES_JSON
   const previousSecret = process.env.ATTENDANCE_SESSION_SECRET

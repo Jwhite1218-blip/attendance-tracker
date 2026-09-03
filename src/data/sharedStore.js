@@ -31,23 +31,28 @@ export function configureClientAccess(access) {
   clientAccess = access || null
 }
 
-function canWriteManagedKey(key) {
-  if (!clientAccess) return false
+export function canWriteManagedKeyForAccess(access, key) {
+  if (!access) return false
   if (ATTENDANCE_KEY_PATTERN.test(key) || key === 'hr-attendance-progress-v2' || key === 'hr-flags') {
-    return clientAccess.canEditAttendance !== false
+    return access.canEditAttendance !== false
   }
   if (key === 'all-star-recognition-v1') {
-    return clientAccess.role === 'admin' && clientAccess.canEditRecognition === true
+    return (access.role === 'admin' || access.role === 'school')
+      && access.canEditRecognition === true
   }
-  if (key === 'attendance-blackout-dates') return clientAccess.canManageBlackouts === true
-  if (key === 'employee-location-overrides') return clientAccess.canManageRoster === true
-  if (key === 'employee-manager-notes-v1') return clientAccess.canWriteEmployeeNotes === true
+  if (key === 'attendance-blackout-dates') return access.canManageBlackouts === true
+  if (key === 'employee-location-overrides') return access.canManageRoster === true
+  if (key === 'employee-manager-notes-v1') return access.canWriteEmployeeNotes === true
   if (key === 'employee-record-overrides' || key === 'employee-custom-records') {
-    return clientAccess.role === 'admin'
-      && clientAccess.canManageRoster === true
-      && clientAccess.canManageBlackouts === true
+    return access.role === 'admin'
+      && access.canManageRoster === true
+      && access.canManageBlackouts === true
   }
   return false
+}
+
+function canWriteManagedKey(key) {
+  return canWriteManagedKeyForAccess(clientAccess, key)
 }
 
 function readPendingWrites() {

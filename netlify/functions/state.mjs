@@ -213,9 +213,8 @@ function filterEntriesForSession(entries, session) {
     filtered[LEGACY_HR_STATUS_KEY] = filterStatusesForEmployees(entries[LEGACY_HR_STATUS_KEY], allowedEmployeeIds)
   }
 
-  // School managers can read the recognition board for their own building, so
-  // they can see their team's stars. Writing is still refused for them in
-  // canWriteStateKey — this is read-only visibility, not entry access.
+  // School managers receive only their own building's recognition board. The
+  // same roster boundary is applied again to writes in handleMutate.
   if (entries[RECOGNITION_KEY]) {
     filtered[RECOGNITION_KEY] = Object.fromEntries(
       Object.entries(entries[RECOGNITION_KEY] || {})

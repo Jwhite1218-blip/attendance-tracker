@@ -25,9 +25,12 @@ function publicAccess(session) {
   // Must stay in step with normalizeAccess in _shared/auth.mjs, which decides
   // the same thing for the state endpoint. A school session that can record
   // here but is refused there fails silently at the moment a manager submits.
-  const canEditRecognition = (session.role === 'admin' || session.role === 'school') && (
-    session.canEditRecognition === true
-    || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
+  const canEditRecognition = session.role === 'school' || (
+    session.role === 'admin'
+    && (
+      session.canEditRecognition === true
+      || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
+    )
   )
   return {
     role: session.role,

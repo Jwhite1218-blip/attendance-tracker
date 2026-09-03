@@ -8,10 +8,9 @@ export function canSeeLizFutureTools(access = {}) {
   return hasLizAdminAccess(access)
 }
 
-// District admins run the program; school managers get read-only visibility of
-// their own building's board so they can see their team's stars ahead of the
-// rollout. Entry stays admin-only — enforced server-side in canWriteStateKey,
-// not just hidden here.
+// District admins run the cross-building program; school managers can view and
+// record recognition only for their own building. The server owns that scope
+// boundary and keeps district-level awards administrator-only.
 export function canAccessRecognitionProgram(access = {}) {
   return access.role === 'admin' || access.role === 'school'
 }

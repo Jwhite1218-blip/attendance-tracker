@@ -51,9 +51,12 @@ function AppShell() {
     syncStatus,
   } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const schoolRecognitionOnly = role === 'school' && canEditRecognition && !canEditAttendance
 
   const accessLabel = recognitionOnly
     ? 'Recognition Pilot'
+    : schoolRecognitionOnly
+      ? 'School Recognition'
     : !canEditAttendance
     ? 'Read-only review'
     : role === 'school'
@@ -243,6 +246,10 @@ function AppShell() {
       {recognitionOnly ? (
         <div className="print:hidden sticky top-16 z-40 border-b border-fuchsia-200 bg-fuchsia-50/95 px-4 py-2 text-center text-xs font-semibold text-fuchsia-950 backdrop-blur">
           Recognition pilot · Entries save only to the isolated clone · Attendance and HR tools are unavailable
+        </div>
+      ) : schoolRecognitionOnly ? (
+        <div className="print:hidden sticky top-16 z-40 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-center text-xs font-semibold text-amber-950 backdrop-blur">
+          Recognition access · All-Star entries are enabled for this school · Attendance changes are disabled
         </div>
       ) : !canEditAttendance && (
         <div className="print:hidden sticky top-16 z-40 border-b border-cyan-200 bg-cyan-50/95 px-4 py-2 text-center text-xs font-semibold text-cyan-900 backdrop-blur">
