@@ -155,7 +155,9 @@ test('additive Chef PIN receives restricted district access without replacing ex
 })
 
 test('all school identifiers, names, short names, case, and spacing normalize to one canonical building ID', () => {
-  const schools = LOCATIONS.filter(location => location.id !== 'Admin')
+  // District Admin is a building too: Liz and the district office work from it,
+  // and its staff are marked by a login scoped to that building.
+  const schools = LOCATIONS
 
   for (const school of schools) {
     assert.equal(normalizeSchoolLocationId(school.id), school.id)
@@ -165,14 +167,15 @@ test('all school identifiers, names, short names, case, and spacing normalize to
     assert.equal(normalizeSchoolLocationId(school.shortName), school.id)
   }
 
-  assert.equal(normalizeSchoolLocationId('Admin'), null)
+  assert.equal(normalizeSchoolLocationId('Admin'), 'Admin')
   assert.equal(normalizeSchoolLocationId('Not A Warren School'), null)
   assert.equal(normalizeSchoolLocationId(''), null)
 })
 
 test('PIN profiles fail closed for invalid buildings and contradictory capabilities', () => {
   assert.equal(normalizeAccessProfile({ role: 'school' }), null)
-  assert.equal(normalizeAccessProfile({ role: 'school', locationId: 'Admin' }), null)
+  // The district office is a building with its own manager login.
+  assert.equal(normalizeAccessProfile({ role: 'school', locationId: 'Admin' }).locationId, 'Admin')
   assert.equal(normalizeAccessProfile({ role: 'school', locationId: 'Unknown School' }), null)
   assert.equal(normalizeAccessProfile({ role: 'viewer' }), null)
 
