@@ -195,6 +195,16 @@ test('PIN profiles fail closed for invalid buildings and contradictory capabilit
   assert.equal(school.canManageBlackouts, false)
   assert.equal(school.canManageRecognitionAwards, false)
 
+  const recognitionOnlyBuilding = normalizeAccessProfile({
+    role: 'school',
+    locationId: 'Creston',
+    canEditAttendance: false,
+    canEditRecognition: false,
+  })
+  assert.equal(recognitionOnlyBuilding.canEditAttendance, false)
+  assert.equal(recognitionOnlyBuilding.canEditRecognition, true)
+  assert.equal(recognitionOnlyBuilding.canManageRecognitionAwards, false)
+
   const recognitionOnlySchool = normalizeAccessProfile({
     role: 'school',
     locationId: 'Creston',

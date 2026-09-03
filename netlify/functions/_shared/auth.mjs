@@ -72,9 +72,16 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
   // for fifteen kitchens. Their writes are still scoped to their own roster in
   // handleMutate, and the district-only award stays behind
   // canManageRecognitionAwards, which remains administrator-only below.
-  const canEditRecognition = (rawAccess.role === 'admin' || rawAccess.role === 'school') && (
-    rawAccess.canEditRecognition === true
-    || (rawAccess.canEditRecognition !== false && canEditAttendance)
+  // A building login always owns recognition for its own roster, even when its
+  // attendance tools are intentionally read-only. The state endpoint still
+  // scopes every school write to that building and keeps district awards behind
+  // the administrator-only capability below.
+  const canEditRecognition = rawAccess.role === 'school' || (
+    rawAccess.role === 'admin'
+    && (
+      rawAccess.canEditRecognition === true
+      || (rawAccess.canEditRecognition !== false && canEditAttendance)
+    )
   )
   const canManageRoster = rawAccess.role === 'admin'
     && !recognitionOnly
