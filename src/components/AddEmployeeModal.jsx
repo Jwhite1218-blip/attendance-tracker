@@ -15,8 +15,8 @@ const EMPTY_FORM = {
   t_shirt_size: '',
 }
 
-export default function AddEmployeeModal({ open, onClose, onAdded }) {
-  const [form, setForm] = useState(EMPTY_FORM)
+export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocation = '' }) {
+  const [form, setForm] = useState(() => ({ ...EMPTY_FORM, location: defaultLocation }))
   const [error, setError] = useState('')
 
   if (!open) return null

@@ -10,6 +10,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
+import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import {
   buildEmployeeHistoryRows,
@@ -73,6 +74,9 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [picker, setPicker] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [inactiveReason, setInactiveReason] = useState('')
+  const [terminationDate, setTerminationDate] = useState('')
+  const [lastDayWorked, setLastDayWorked] = useState('')
+  const [statusError, setStatusError] = useState('')
   const [noteAdded, setNoteAdded] = useState(false)
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
@@ -119,6 +123,9 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     const currentEmployee = getEmployeeByKey(empKey)
     setNoteDraft('')
     setInactiveReason(currentEmployee?.inactive_reason || '')
+    setTerminationDate(currentEmployee?.termination_date || '')
+    setLastDayWorked(currentEmployee?.last_day_worked || '')
+    setStatusError('')
     setNoteAdded(false)
     setConfirmInactive(false)
     setShowEditEmployee(false)
@@ -468,6 +475,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   {employee?.inactive_reason && (
                     <p className="text-xs text-gray-500 mt-2">Reason: {employee.inactive_reason}</p>
                   )}
+                  <p className="text-xs text-gray-500 mt-2">Termination date: {employee?.termination_date || 'Not recorded'}</p>
+                  <p className="text-xs text-gray-500 mt-1">Last day worked: {employee?.last_day_worked || 'Not recorded'}</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -482,13 +491,26 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               ) : (
                 <>
                   <p className="text-[11px] text-gray-400 mt-1">Inactive employees leave active rosters without losing their history.</p>
+                  <label className="block mt-3 text-xs font-semibold text-gray-600">
+                    Termination date (required)
+                    <input type="date" required value={terminationDate} onChange={event => { setTerminationDate(event.target.value); setConfirmInactive(false); setStatusError('') }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="block mt-3 text-xs font-semibold text-gray-600">
+                    Last day worked (required)
+                    <input type="date" required value={lastDayWorked} onChange={event => { setLastDayWorked(event.target.value); setConfirmInactive(false); setStatusError('') }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
+                  </label>
+                  <label className="block mt-3 text-xs font-semibold text-gray-600">
+                    Reason (required)
                   <input
                     type="text"
+                    required
                     value={inactiveReason}
-                    onChange={event => setInactiveReason(event.target.value)}
-                    placeholder="Reason (optional)"
+                    onChange={event => { setInactiveReason(event.target.value); setConfirmInactive(false); setStatusError('') }}
+                    placeholder="Reason for leaving"
                     className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
                   />
+                  </label>
+                  {statusError && <p role="alert" className="mt-2 text-xs text-red-700">{statusError}</p>}
                   {confirmInactive ? (
                     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3">
                       <p className="text-xs font-semibold text-red-700">Move {employee?.first_name} to inactive employees?</p>
@@ -497,8 +519,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                         <button
                           type="button"
                           onClick={() => {
-                            setEmployeeActive(empKey, false, inactiveReason)
-                            onStatusChange?.()
+                            try {
+                              setEmployeeActive(empKey, false, { inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked })
+                              onStatusChange?.()
+                            } catch (error) { setStatusError(error.message) }
                           }}
                           className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-semibold hover:bg-red-700"
                         >
@@ -516,7 +540,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setConfirmInactive(true)}
+                      onClick={() => {
+                        try {
+                          validateInactiveDetails({ inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked })
+                          setStatusError('')
+                          setConfirmInactive(true)
+                        } catch (error) { setStatusError(error.message) }
+                      }}
                       className="mt-2 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
                     >
                       Move to inactive
