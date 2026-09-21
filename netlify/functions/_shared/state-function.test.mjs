@@ -4,7 +4,40 @@ import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
-import { handleStateRequest } from '../state.mjs'
+import { handleStateRequest, handleMutate } from '../state.mjs'
+import { validateInactiveDetails } from '../../../src/data/employmentStatus.js'
+
+test('inactive details require both real dates and a nonblank reason', () => {
+  const complete = { termination_date: '2026-09-18', last_day_worked: '2026-09-17', inactive_reason: 'Resigned' }
+  assert.doesNotThrow(() => validateInactiveDetails(complete))
+  for (const field of Object.keys(complete)) {
+    assert.throws(() => validateInactiveDetails({ ...complete, [field]: '' }))
+  }
+  assert.throws(() => validateInactiveDetails({ ...complete, inactive_reason: '   ' }))
+  assert.throws(() => validateInactiveDetails({ ...complete, termination_date: '2026-02-30' }))
+  assert.throws(() => validateInactiveDetails({ ...complete, last_day_worked: 'not-a-date' }))
+})
+
+test('server enforces new inactive details while preserving legacy records and attendance', async () => {
+  const key = 'employee-record-overrides'
+  const legacy = { active: false, inactive_reason: 'Legacy departure' }
+  const attendance = { '2026-09-01': { code: 'RTO' } }
+  const store = stateStore({ [key]: { legacy }, 'att-emp-example-2026': attendance })
+  const access = { role: 'admin', canManageRoster: true, canManageBlackouts: true }
+  const write = record => handleMutate(store, access, { key, mutation: { type: 'object-patch', set: { example: record } } })
+  const missing = await write({ active: false, inactive_reason: 'Resigned' })
+  assert.equal(missing.status, 400)
+  assert.match((await missing.json()).error, /Termination date/)
+  assert.deepEqual(await store.get(key), { legacy })
+  const details = { active: false, inactive_reason: 'Resigned', termination_date: '2026-09-18', last_day_worked: '2026-09-17' }
+  assert.equal((await write(details)).status, 200)
+  assert.deepEqual((await store.get(key)).example, details)
+  assert.deepEqual(await store.get('att-emp-example-2026'), attendance)
+  assert.equal((await handleMutate(store, access, { key, mutation: { type: 'object-patch', set: { legacy: { ...legacy, position: 'Updated title' } } } })).status, 200)
+  assert.equal((await write({ ...details, last_day_worked: '' })).status, 400)
+  assert.equal((await write({ active: true, inactive_reason: '', termination_date: '', last_day_worked: '' })).status, 200)
+  assert.equal((await handleMutate(store, { role: 'school', locationId: 'BrookViewE' }, { key, mutation: { type: 'object-patch', set: { example: details } } })).status, 403)
+})
 
 function stateStore(entries) {
   const values = new Map(Object.entries(entries))

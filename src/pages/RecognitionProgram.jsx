@@ -10,6 +10,7 @@ import {
   RECOGNITION_CRITERIA,
   RECOGNITION_CRITERIA_DESCRIPTIONS,
   RECOGNITION_TYPE_MAP,
+  RECOGNITION_TYPES,
   STAR_LEVELS,
   addRecognition,
   drawMonthlyAllStar,
@@ -124,6 +125,7 @@ export default function RecognitionProgram() {
   } = access
   const [localVersion, setLocalVersion] = useState(0)
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
+  const [historyType, setHistoryType] = useState('all')
   const [drawingLocation, setDrawingLocation] = useState(role === 'school' ? locationId : '')
   const [drawingMonth, setDrawingMonth] = useState(localDateKey().slice(0, 7))
   // Two separate entry surfaces. Star of the Day is the daily job and owns the
@@ -392,7 +394,9 @@ export default function RecognitionProgram() {
               Tracked separately · not earned stars
             </p>
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-              <SecondaryCount label="Shout-outs" value={compilation.shoutOuts} />
+              <a href="#recognition-history" onClick={() => setHistoryType('star-shout-out')} className="rounded text-purple-800 underline underline-offset-4 hover:text-purple-600" aria-label={`View all shout-outs (${compilation.shoutOuts} this school year)`}>
+                <SecondaryCount label="Shout-outs" value={compilation.shoutOuts} />
+              </a>
               <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
               <SecondaryCount label="Building All-Stars" value={compilation.buildingAllStars} />
               {canManageRecognitionAwards && (
@@ -433,7 +437,7 @@ export default function RecognitionProgram() {
             <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
             {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
                 shorter main column left beside the taller side column. */}
-            <RecentRecognition records={scopedRecords} employeeMap={employeeMap} />
+            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} type={historyType} onTypeChange={setHistoryType} />
           </div>
 
           <div className="space-y-6">
@@ -1049,12 +1053,23 @@ function AceBucksCard() {
   )
 }
 
-function RecentRecognition({ records, employeeMap }) {
-  const recent = records.slice(0, 10)
+function RecentRecognition({ records, employeeMap, type, onTypeChange }) {
+  const [visibleCount, setVisibleCount] = useState(10)
+  const filtered = records.filter(record => type === 'all' || record.type === type)
+  const recent = filtered.slice(0, visibleCount)
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <section id="recognition-history" className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">All-Star board</p>
-      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Recent Recognition</h2>
+      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Recognition history</h2>
+      <p className="mt-2 text-xs text-gray-500">All recorded dates, newest first. Uses the Building view selected above.</p>
+      <label className="mt-4 block text-xs font-semibold text-gray-700">
+        Filter recognition history
+        <select value={type} onChange={event => onTypeChange(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
+          <option value="all">All recognition types</option>
+          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+        </select>
+      </label>
+      <p role="status" className="mt-2 text-xs text-gray-500">Showing {recent.length} of {filtered.length} records</p>
       {recent.length ? (
         <div className="mt-4 divide-y divide-gray-100">
           {recent.map(record => {
@@ -1088,8 +1103,9 @@ function RecentRecognition({ records, employeeMap }) {
           })}
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">No recognitions have been recorded in this view yet.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">No recognitions match this building and recognition type.</p>
       )}
+      {recent.length < filtered.length && <button type="button" onClick={() => setVisibleCount(count => count + 10)} className="mt-4 rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50">Show more recognition</button>}
     </section>
   )
 }
