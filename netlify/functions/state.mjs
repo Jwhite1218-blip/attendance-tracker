@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
+import { validateEmploymentChanges } from '../../src/data/employmentStatus.js'
 import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
@@ -491,6 +492,15 @@ export async function handleMutate(store, session, body) {
   if (session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)) {
     const currentValue = await store.get(key, { type: 'json' })
     mutation = schoolStatusMutation(mutation, currentValue, allowedEmployeeIds)
+  }
+
+  if (key === RECORD_OVERRIDES_KEY) {
+    const current = await store.get(key, { type: 'json' })
+    try {
+      validateEmploymentChanges(current, applyStateMutation(key, current, mutation))
+    } catch (error) {
+      return jsonResponse({ error: error.message }, 400)
+    }
   }
 
   const value = await store.updateJSON(key, mutation, session.displayName || 'authenticated user')

@@ -13,6 +13,9 @@ import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
+import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
+import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
+import { hasLizAdminAccess } from '../data/futureTools.js'
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
@@ -29,7 +32,11 @@ function formatDateShort(dateStr) {
 export default function LocationView() {
   const { id: urlId } = useParams()
   const navigate = useNavigate()
-  const { role, locationId: myLocationId, canManageRoster, canEditAttendance, dataVersion } = useAuth()
+  const access = useAuth()
+  const { role, locationId: myLocationId, canManageRoster, canEditAttendance, dataVersion } = access
+  const lizAdminAccess = hasLizAdminAccess(access)
+  const [showAddEmployee, setShowAddEmployee] = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
   // School-role sessions are always locked to their own school, regardless of URL
   const id = role === 'school' ? myLocationId : urlId
   const location = LOCATION_MAP[id]
@@ -196,6 +203,13 @@ export default function LocationView() {
         </div>
       </div>
 
+      {lizAdminAccess && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => setShowAddEmployee(true)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">+ Add employee</button>
+          <p className="text-xs text-charcoal-200">Add to {location.name}, or use Edit beside an employee’s name.</p>
+        </div>
+      )}
+
       <SchoolDashboardInsights
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
@@ -307,6 +321,7 @@ export default function LocationView() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
+                {lizAdminAccess && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
                 {role === 'admin' && canManageRoster && (
                   <button
                     onClick={() => setTransferTarget(emp)}
@@ -428,6 +443,7 @@ export default function LocationView() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
+                      {lizAdminAccess && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
                       {role === 'admin' && canManageRoster && (
                         <button
                           onClick={() => setTransferTarget(emp)}
@@ -513,6 +529,17 @@ export default function LocationView() {
           onClose={() => setTransferTarget(null)}
           onTransferred={() => { setRefreshKey(k => k + 1); setTransferTarget(null) }}
         />
+      )}
+
+      {lizAdminAccess && showAddEmployee && (
+        <AddEmployeeModal key={id} open defaultLocation={id} onClose={() => setShowAddEmployee(false)} onAdded={() => { setShowAddEmployee(false); setRefreshKey(k => k + 1) }} />
+      )}
+      {lizAdminAccess && editTarget && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/45 p-3" role="dialog" aria-modal="true" aria-label={`Edit ${editTarget.first_name} ${editTarget.last_name}`} onKeyDown={event => { if (event.key === 'Escape') setEditTarget(null) }}>
+          <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <EmployeeEditForm key={editTarget.kronos_id || editTarget.id} employee={editTarget} onCancel={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); setRefreshKey(k => k + 1) }} />
+          </div>
+        </div>
       )}
 
       <AttendancePickerModal

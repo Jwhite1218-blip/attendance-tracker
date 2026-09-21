@@ -2,6 +2,7 @@
 // sessionStorage. It is intentionally not imported into the public JS bundle.
 
 import { normalizeBirthday } from './employeeFields.js'
+import { validateInactiveDetails } from './employmentStatus.js'
 import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
@@ -162,10 +163,13 @@ export function addEmployeeNote(empId, text, author) {
   return getEmployeeByKey(key)
 }
 
-export function setEmployeeActive(empId, active, reason = '') {
+export function setEmployeeActive(empId, active, details = {}) {
+  if (!active) validateInactiveDetails(details)
   return updateEmployeeRecord(empId, {
     active: Boolean(active),
-    inactive_reason: active ? '' : String(reason || '').trim(),
+    inactive_reason: active ? '' : details.inactive_reason.trim(),
+    termination_date: active ? '' : details.termination_date,
+    last_day_worked: active ? '' : details.last_day_worked,
     inactive_at: active ? null : new Date().toISOString(),
   })
 }
