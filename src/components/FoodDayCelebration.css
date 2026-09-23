@@ -1,0 +1,102 @@
+.food-day-banner, .food-day-celebration {
+  --food-green: #007a5b;
+  --food-red: #f2262b;
+  --food-cream: #fffde6;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+.food-day-banner { background: var(--food-green); color: white; }
+.food-day-banner-inner {
+  max-width: 1400px; margin: auto; padding: 15px 32px;
+  display: flex; align-items: center; gap: 22px;
+}
+.food-day-banner-inner p { font-size: clamp(17px, 2vw, 26px); font-weight: 800; line-height: 1.2; }
+.food-day-banner-spark { color: #f3d753; font-size: 34px; line-height: 1; }
+.food-day-banner-inner a {
+  display: inline-flex; align-items: center; gap: 10px;
+  border-left: 1px solid #ffffff70; padding-left: 22px;
+  color: white; font-size: 16px; font-weight: 700; text-decoration: underline; text-underline-offset: 5px;
+}
+.food-day-banner-inner button {
+  margin-left: auto; flex-shrink: 0; width: 44px; height: 44px;
+  display: grid; place-items: center; border-radius: 6px;
+}
+.food-day-banner-inner button:hover { background: #ffffff20; }
+.food-day-banner a:focus-visible, .food-day-banner button:focus-visible { outline: 3px solid #ffe674; outline-offset: 4px; }
+.food-day-celebration { background: var(--food-cream); color: #005e4b; }
+.food-day-hero { position: relative; overflow: hidden; }
+.food-day-hero-inner {
+  position: relative; max-width: 1400px; margin: auto; padding: 54px 60px 50px;
+  min-height: calc(100svh - 64px - 74px - 126px);
+  display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); align-items: center; gap: 34px;
+}
+.food-day-copy h1 {
+  margin: 0; font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+  font-size: clamp(72px, 10.6vw, 160px); font-weight: 400; line-height: .96;
+  text-transform: uppercase; letter-spacing: -1.5px; color: var(--food-red);
+}
+.food-day-copy h1 span { display: block; }
+.food-day-copy h1 span:first-child { color: var(--food-green); white-space: nowrap; }
+.food-day-thanks { max-width: 590px; margin-top: 26px; font-size: clamp(19px, 1.8vw, 27px); line-height: 1.35; font-weight: 750; }
+.food-day-actions { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 28px; }
+.food-day-actions a {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 52px;
+  padding: 13px 22px; border: 2px solid var(--food-green); border-radius: 6px;
+  font-size: 20px; line-height: 1.3; font-weight: 750; text-align: center;
+}
+.food-day-primary { background: var(--food-green); color: white; }
+.food-day-secondary { color: var(--food-green); }
+.food-day-primary:hover { background: #005d46; }
+.food-day-secondary:hover { background: #007a5b0d; }
+.food-day-actions a:focus-visible { outline: 3px solid var(--food-red); outline-offset: 4px; }
+.food-day-poster {
+  width: 100%; max-width: 360px; justify-self: center; padding: 15px;
+  background: white; transform: rotate(4deg); box-shadow: 0 3px 14px #73651c20;
+}
+.food-day-poster img { display: block; width: 100%; height: auto; }
+.food-day-footer {
+  min-height: 126px; background: var(--food-green); color: white;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 24px max(32px, calc((100vw - 1320px) / 2 + 24px));
+}
+.food-day-footer h2 { font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif; font-weight: 400; font-size: 38px; line-height: 1.2; }
+.food-day-footer p { margin-top: 6px; font-size: 19px; line-height: 1.4; }
+.food-day-footer time { font-size: 14px; white-space: nowrap; }
+.food-day-confetti { position: absolute; inset: 0; pointer-events: none; }
+.food-day-confetti-piece {
+  position: absolute; left: var(--piece-x); top: var(--piece-y); width: 13px; height: 23px;
+  background: var(--piece-color); transform: rotate(var(--piece-turn));
+}
+.food-day-shape-1 { width: 12px; height: 12px; border-radius: 50%; }
+.food-day-shape-2 {
+  width: 24px; height: 24px;
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 94%, 50% 72%, 21% 94%, 32% 57%, 2% 35%, 39% 35%);
+}
+@media (max-width: 1000px) {
+  .food-day-hero-inner { padding: 48px 48px; gap: 30px; }
+  .food-day-copy h1 { font-size: clamp(66px, 8.5vw, 92px); }
+  .food-day-actions a { font-size: 14px; padding: 12px 15px; }
+}
+@media (max-width: 640px) {
+  .food-day-banner-inner { padding: 12px 16px; gap: 8px 12px; display: grid; grid-template-columns: 1fr 40px; }
+  .food-day-banner-spark { display: none; }
+  .food-day-banner-inner p { font-size: 17px; }
+  .food-day-banner-inner a { grid-row: 2; border-left: 0; padding: 3px 0; font-size: 14px; }
+  .food-day-banner-inner button { grid-column: 2; grid-row: 1 / 3; }
+  .food-day-hero-inner { display: flex; flex-direction: column; min-height: auto; padding: 38px 28px 42px; gap: 36px; }
+  .food-day-copy { width: 100%; }
+  .food-day-copy h1 { font-size: clamp(57px, 14vw, 86px); letter-spacing: -1px; }
+  .food-day-thanks { margin-top: 22px; font-size: 19px; }
+  .food-day-actions { margin-top: 24px; gap: 10px; }
+  .food-day-actions a { width: 100%; font-size: 16px; }
+  .food-day-poster { width: 215px; padding: 10px; }
+  .food-day-confetti-piece { opacity: .6; width: 7px; height: 13px; }
+  .food-day-shape-1 { height: 7px; }
+  .food-day-shape-2 { width: 15px; height: 15px; }
+  .food-day-footer { flex-direction: column; align-items: flex-start; padding: 26px 28px; gap: 18px; }
+  .food-day-footer h2 { font-size: 27px; }
+  .food-day-footer p { font-size: 16px; }
+}
+@media print {
+  .food-day-hero-inner { min-height: auto; }
+  .food-day-actions { display: none; }
+  .food-day-celebration { print-color-adjust: exact; }
+}
