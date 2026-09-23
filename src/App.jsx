@@ -12,6 +12,8 @@ import EmployeeRecordPage from './pages/EmployeeRecordPage.jsx'
 import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
 import PublicSchoolLeaderboard from './pages/PublicSchoolLeaderboard.jsx'
+import FoodDayCelebration, { FoodDayBanner } from './components/FoodDayCelebration.jsx'
+import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
@@ -258,7 +260,9 @@ function AppShell() {
       )}
 
       <main id="main-content">
+        <FoodDayBanner pathname={location.pathname} homePath={homePath} />
         <Routes>
+          <Route path={FOOD_DAY_PATH} element={<FoodDayCelebration homePath={homePath} canRecognize={recognitionAdminAccess} />} />
           <Route path="/" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
           <Route path="/location/:id" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LocationView />} />
           <Route path="/recognition" element={recognitionAdminAccess ? <RecognitionProgram /> : <Navigate to={homePath} replace />} />
