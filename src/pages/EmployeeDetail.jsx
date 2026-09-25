@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
 import { getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
@@ -240,7 +241,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 {employee?.first_name} {employee?.last_name}
               </h2>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500">
-                <span>ID: {employee?.kronos_id}</span>
+                {SHOW_EMPLOYEE_CARD_IDS && <span>ID: {employee?.kronos_id}</span>}
                 <span>{employee?.position}</span>
                 {employee?.location && <span>{employee?.location}</span>}
                 {yearsOfService != null && <span>{yearsOfService} yrs service</span>}
@@ -860,7 +861,7 @@ function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
     <div className="hidden print:block text-black">
       <h1 className="text-xl font-bold">Attendance Ledger — {yearLabel}</h1>
       <div className="mt-2 text-sm">
-        <p className="font-semibold">{employee?.first_name} {employee?.last_name} · ID: {employee?.kronos_id}</p>
+        <p className="font-semibold">{employee?.first_name} {employee?.last_name}{SHOW_EMPLOYEE_CARD_IDS && <> · ID: {employee?.kronos_id}</>}</p>
         <p>{employee?.position} · {LOCATION_MAP[employee?.location]?.name || employee?.location || 'Unassigned'}</p>
         <p className="text-gray-600">Printed {new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}</p>
       </div>
