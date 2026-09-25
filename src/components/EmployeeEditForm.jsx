@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { transferEmployee, updateEmployeeRecord } from '../data/employeeLocations.js'
 import { normalizeBirthday, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
@@ -50,7 +51,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-sm font-bold text-gray-900">Edit employee card</h3>
-          <p className="text-xs text-gray-400 mt-1">Personnel ID {employee.kronos_id} is locked so attendance history stays connected.</p>
+          {SHOW_EMPLOYEE_CARD_IDS && <p className="text-xs text-gray-400 mt-1">Personnel ID {employee.kronos_id} is locked so attendance history stays connected.</p>}
         </div>
         <button type="button" onClick={onCancel} className="text-xs font-semibold text-gray-400 hover:text-gray-600">Cancel</button>
       </div>
