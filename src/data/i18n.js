@@ -16,6 +16,8 @@
 // Generic interface chrome below is translated: those terms are standard and
 // unambiguous.
 
+import { PROGRAM_STRINGS } from './programVocabulary.js'
+
 export const SUPPORTED_LOCALES = [
   { code: 'en', name: 'English' },
   { code: 'es', name: 'Español' },
@@ -24,17 +26,19 @@ export const SUPPORTED_LOCALES = [
 export const DEFAULT_LOCALE = 'en'
 export const LANGUAGE_STORAGE_KEY = 'attendance-language-v1'
 
-// Terms that must be written by a person who speaks the language and knows
-// the program. Listed rather than guessed so the gap is visible.
-export const NEEDS_PROGRAM_TRANSLATION = [
-  'Attendance code names and their descriptions (attendanceCodes.js)',
-  'Recognition type names — Star of the Day, Shooting Star, Warren Star Shout-Out',
-  'Star level names — Bronze, Silver, Gold, Platinum, Superstar',
-  'The six recognition reasons as they appear on the printed card',
-  'HR occurrence stage wording, which follows district policy language',
-]
+// Warren's own vocabulary lives in programVocabulary.js and is drafted but
+// not signed off. It is merged in here so the completeness checks cover it,
+// and a test refuses to let any screen use it until a reviewer approves.
+export { APPROVAL, OPEN_QUESTIONS, REVIEW_GROUPS, isApproved } from './programVocabulary.js'
 
-const STRINGS = {
+// Prefixes owned by programVocabulary.js.
+export const PROGRAM_KEY_PREFIXES = ['code.', 'hr.', 'recognition.', 'level.', 'reason.']
+
+export function isProgramKey(key) {
+  return PROGRAM_KEY_PREFIXES.some(prefix => String(key).startsWith(prefix))
+}
+
+const UI_STRINGS = {
   en: {
     'language.label': 'Language',
     'language.switchTo': 'Switch to {name}',
@@ -131,7 +135,21 @@ const STRINGS = {
   },
 }
 
+const STRINGS = {
+  en: { ...UI_STRINGS.en, ...PROGRAM_STRINGS.en },
+  es: { ...UI_STRINGS.es, ...PROGRAM_STRINGS.es },
+}
+
 export { STRINGS }
+
+// Plural selection. Kept explicit rather than folded into translate() so a
+// caller has to say that a count is involved: "1 incidencia documentada" and
+// "3 incidencias documentadas" differ in Spanish exactly as they do in
+// English, and a silent fallback to the singular reads as a bug.
+export function translateCount(locale, key, count, values) {
+  const suffix = Math.abs(Number(count)) === 1 ? 'one' : 'other'
+  return translate(locale, `${key}.${suffix}`, { count, ...values })
+}
 
 // 'es-MX', 'es_419' and 'ES' all mean Spanish here. Anything unrecognised
 // falls back to English rather than throwing.

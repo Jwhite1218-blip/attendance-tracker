@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   DEFAULT_LOCALE,
-  NEEDS_PROGRAM_TRANSLATION,
+  OPEN_QUESTIONS,
   STRINGS,
   SUPPORTED_LOCALES,
   formatDate,
@@ -10,7 +10,12 @@ import {
   normalizeLocale,
   orphanTranslations,
   translate,
+  translateCount,
+  isApproved,
+  isProgramKey,
+  PROGRAM_KEY_PREFIXES,
 } from './i18n.js'
+import { PROGRAM_STRINGS } from './programVocabulary.js'
 
 test('a missing translation shows English rather than a raw key', () => {
   assert.equal(translate('es', 'gate.unlock'), 'Entrar')
@@ -83,11 +88,12 @@ test('no language carries a key English has dropped', () => {
   }
 })
 
-test('the program vocabulary is left for a human to translate', () => {
-  // These carry policy and brand meaning. If this list ever empties, it should
-  // be because Warren's own Spanish speakers wrote them, not because a tool did.
-  assert.ok(NEEDS_PROGRAM_TRANSLATION.length > 0)
-  for (const note of NEEDS_PROGRAM_TRANSLATION) assert.equal(typeof note, 'string')
+test('the judgement calls in the draft are written down, not buried', () => {
+  // Whoever reviews the Spanish should be told what the draft decided on their
+  // behalf — program names left in English, FMLA kept as an acronym — rather
+  // than having to notice it.
+  assert.ok(OPEN_QUESTIONS.length > 0)
+  for (const question of OPEN_QUESTIONS) assert.equal(typeof question, 'string')
 })
 
 test('the program name is not translated', () => {
@@ -113,4 +119,67 @@ test('an unreadable date is passed through rather than guessed at', () => {
 test('English is the fallback language', () => {
   assert.equal(DEFAULT_LOCALE, 'en')
   assert.ok(SUPPORTED_LOCALES.some(locale => locale.code === DEFAULT_LOCALE))
+})
+
+// --- Warren's own vocabulary ------------------------------------------------
+
+test('the drafted program vocabulary is complete in both languages', () => {
+  const english = Object.keys(PROGRAM_STRINGS.en)
+  assert.ok(english.length > 40, 'the draft should cover the whole vocabulary')
+  assert.deepEqual(
+    english.filter(key => !Object.hasOwn(PROGRAM_STRINGS.es, key)),
+    [],
+    'every drafted term needs a Spanish line for a reviewer to correct'
+  )
+})
+
+test('program keys are recognisable as program keys', () => {
+  for (const key of Object.keys(PROGRAM_STRINGS.en)) {
+    assert.ok(isProgramKey(key), `${key} is not covered by PROGRAM_KEY_PREFIXES`)
+  }
+})
+
+test('counts are pluralised rather than silently left singular', () => {
+  assert.equal(translateCount('en', 'hr.occurrences', 1), '1 documented occurrence')
+  assert.equal(translateCount('en', 'hr.occurrences', 3), '3 documented occurrences')
+  assert.equal(translateCount('es', 'hr.occurrences', 1), '1 incidencia documentada')
+  assert.equal(translateCount('es', 'hr.occurrences', 3), '3 incidencias documentadas')
+  assert.equal(translateCount('es', 'hr.occurrences', 0), '0 incidencias documentadas')
+})
+
+test('unreviewed program wording cannot reach a screen', async () => {
+  // The real gate. The Spanish for the attendance codes is a draft, and a
+  // draft of a disciplinary category must not be shown to staff before a
+  // person who speaks the language has signed it off. Once APPROVAL is
+  // filled in, this check steps aside and the terms can be wired up.
+  if (isApproved()) return
+
+  const { readdir, readFile } = await import('node:fs/promises')
+  const roots = ['src/components', 'src/pages', 'src/data', 'src/lib']
+  const offenders = []
+
+  async function walk(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = `${dir}/${entry.name}`
+      if (entry.isDirectory()) { await walk(path); continue }
+      if (!/\.(jsx?|mjs)$/.test(entry.name)) continue
+      if (entry.name.endsWith('.test.js') || entry.name === 'programVocabulary.js') continue
+      const source = await readFile(path, 'utf8')
+      for (const prefix of PROGRAM_KEY_PREFIXES) {
+        // A literal scan rather than a regex: there are only three quote
+        // styles, and a plain search cannot be tripped up by escaping.
+        const used = [`t('${prefix}`, `t("${prefix}`, 't(`' + prefix]
+          .some(needle => source.includes(needle))
+        if (used) offenders.push(`${path} uses t('${prefix}…')`)
+      }
+    }
+  }
+
+  for (const root of roots) await walk(root)
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'program wording is still a draft — set APPROVAL in programVocabulary.js before using it on screen'
+  )
 })
