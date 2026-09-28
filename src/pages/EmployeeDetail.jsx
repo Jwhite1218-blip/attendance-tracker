@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
@@ -26,6 +27,7 @@ import {
   getEmployeeStarCount,
   getNextStarLevel,
   getStarLevel,
+  recognitionAccent,
   schoolYearStartFor,
 } from '../data/recognitionStore.js'
 import { Link } from 'react-router-dom'
@@ -62,6 +64,8 @@ function getMonthStats(attendance, year, monthIdx) {
 }
 
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
+  const term = useProgramTerms()
+  const [showAllRecognition, setShowAllRecognition] = useState(false)
   const access = useAuth()
   const { role, displayName, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
@@ -252,7 +256,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 </span>
                 {attendanceStatus && (
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${isFlagged(empKey) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                    {getAttendanceStageLabel(attendanceStatus)}
+                    {term.stageLabel(attendanceStatus)}
                   </span>
                 )}
               </div>
@@ -378,14 +382,40 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           </Link>
         </div>
         {recognitionRecords.length > 0 && (
-          <div className="grid gap-px border-t border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4">
-            {recognitionRecords.slice(0, 4).map(record => (
-              <div key={record.id} className="bg-[#211c14] px-4 py-3">
-                <p className="text-xs font-bold text-white">{RECOGNITION_TYPE_MAP[record.type]?.label || record.type}</p>
-                <p className="mt-1 text-[10px] text-white/45">{record.date}{record.criteria?.[0] ? ` - ${record.criteria[0]}` : ''}</p>
-              </div>
-            ))}
-          </div>
+          <>
+            {/* Four is a summary; the whole history is what a manager needs in
+                a review conversation, so the rest is one click away and
+                scrolls rather than pushing the page down. */}
+            <div className={`grid gap-px border-t border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-4${
+              showAllRecognition ? ' max-h-72 overflow-y-auto' : ''
+            }`}>
+              {(showAllRecognition ? recognitionRecords : recognitionRecords.slice(0, 4)).map(record => {
+                const accent = recognitionAccent(record.type)
+                return (
+                  <div key={record.id} className="bg-[#211c14] px-4 py-3">
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-white">
+                      <span className={accent.mark} aria-hidden="true">{accent.glyph}</span>
+                      {term.recognitionLabel(record.type, RECOGNITION_TYPE_MAP[record.type]?.label || record.type)}
+                    </p>
+                    <p className="mt-1 text-[10px] text-white/45">
+                      {record.date}{record.criteria?.[0] ? ` - ${term.reason(record.criteria[0])}` : ''}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+            {recognitionRecords.length > 4 && (
+              <button
+                type="button"
+                onClick={() => setShowAllRecognition(current => !current)}
+                className="w-full border-t border-white/10 bg-[#1a1610] px-4 py-2 text-xs font-bold text-[#f4d87d] hover:bg-[#241f16]"
+              >
+                {showAllRecognition
+                  ? 'Show the four most recent'
+                  : `Show all ${recognitionRecords.length} recognitions`}
+              </button>
+            )}
+          </>
         )}
         </section>
       )}
@@ -411,7 +441,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               <p className="text-[11px] text-gray-400 mt-1">Shared HR notes are saved across district-manager logins. Each entry is dated and attributed, and earlier entries are never edited or replaced.</p>
               {attendanceStatus && isFlagged(empKey) && (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-                  <span className="font-bold">HR occurrence alert:</span> {getAttendanceStageLabel(attendanceStatus)}
+                  <span className="font-bold">HR occurrence alert:</span> {term.stageLabel(attendanceStatus)}
                 </div>
               )}
 
@@ -757,7 +787,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                         key={codeInfo.code}
                         className="inline-flex items-center justify-center rounded text-[9px] font-bold border px-1"
                         style={{ backgroundColor: codeInfo.hex.bg, color: codeInfo.hex.text, borderColor: codeInfo.hex.border }}
-                        title={`${codeInfo.label}: ${monthStats[codeInfo.code]}`}
+                        title={`${term.codeLabel(codeInfo.code, codeInfo.label)}: ${monthStats[codeInfo.code]}`}
                       >
                         {codeInfo.shortLabel}{monthStats[codeInfo.code]}
                       </span>
@@ -855,6 +885,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 // print the interactive calendar grid — easier to read on paper and includes
 // every comment, which is the point of putting this in a personnel file.
 function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
+  const term = useProgramTerms()
+  const [showAllRecognition, setShowAllRecognition] = useState(false)
   const rows = buildEmployeeHistoryRows(attendance)
 
   return (
@@ -883,7 +915,7 @@ function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
               <tr key={record.date} className="border-b border-gray-300">
                 <td className="py-1 pr-3 whitespace-nowrap align-top">{record.date}</td>
                 <td className="py-1 pr-3 align-top">{record.code}</td>
-                <td className="py-1 pr-3 align-top">{CODE_MAP[record.code]?.label || record.code}</td>
+                <td className="py-1 pr-3 align-top">{term.codeLabel(record.code, CODE_MAP[record.code]?.label || record.code)}</td>
                 <td className="py-1 align-top">{record.note || ''}</td>
               </tr>
             ))}

@@ -8,6 +8,7 @@ import {
   loadSharedState,
 } from '../data/sharedStore.js'
 import { fetchDeployedBuildId, shouldReloadForUpdate } from '../data/appVersion.js'
+import { LanguageToggle, useLanguage } from './LanguageProvider.jsx'
 
 const AuthContext = createContext({
   role: 'admin',
@@ -37,6 +38,7 @@ export function logout() {
 }
 
 export default function PinGate({ children }) {
+  const { t } = useLanguage()
   // Use 'checking' string sentinel so it's distinct from null (= not authed)
   const [authed, setAuthed] = useState('checking')
   const [pin, setPin] = useState('')
@@ -154,7 +156,7 @@ export default function PinGate({ children }) {
     } catch (submitError) {
       configureClientAccess(null)
       await endServerSession()
-      setError(submitError.message || 'Unable to sign in. Please try again.')
+      setError(submitError.message || t('gate.signInFailed'))
       setPin('')
     } finally {
       setSubmitting(false)
@@ -162,7 +164,13 @@ export default function PinGate({ children }) {
   }
 
   // Still checking session — show brief loading
-  if (authed === 'checking') return <div className="min-h-screen bg-charcoal-800" />
+  if (authed === 'checking') {
+    return (
+      <div className="min-h-screen bg-charcoal-800 flex items-center justify-center">
+        <p className="text-xs text-charcoal-400">{t('gate.connecting')}</p>
+      </div>
+    )
+  }
   // Authenticated — render the app, scoped to this session's role
   if (authed) {
     return (
@@ -203,12 +211,13 @@ export default function PinGate({ children }) {
               </svg>
             </div>
           </div>
-          <h1 className="text-xl font-bold text-brand-200 tracking-wide">WARREN TOWNSHIP</h1>
-          <p className="text-xs text-charcoal-300 mt-1">Food Service Attendance Portal</p>
+          <h1 className="text-xl font-bold text-brand-200 tracking-wide">{t('gate.district').toUpperCase()}</h1>
+          <p className="text-xs text-charcoal-300 mt-1">{t('gate.portal')}</p>
+          <div className="mt-4 flex justify-center"><LanguageToggle /></div>
         </div>
 
         <form onSubmit={handleSubmit} className="bg-charcoal-700 rounded-xl border border-charcoal-600 p-6 shadow-xl">
-          <label htmlFor="access-pin" className="block text-sm font-medium text-charcoal-100 mb-3">Enter Access PIN</label>
+          <label htmlFor="access-pin" className="block text-sm font-medium text-charcoal-100 mb-3">{t('gate.pinLabel')}</label>
           <div className="relative">
             <input
               id="access-pin"
@@ -228,7 +237,7 @@ export default function PinGate({ children }) {
             <button
               type="button"
               onClick={() => setShowPin(!showPin)}
-              aria-label={showPin ? 'Hide access PIN' : 'Show access PIN'}
+              aria-label={showPin ? t('gate.hidePin') : t('gate.showPin')}
               aria-pressed={showPin}
               className="absolute right-1 top-1/2 min-h-11 min-w-11 -translate-y-1/2 rounded-md text-charcoal-300 hover:bg-charcoal-700 hover:text-charcoal-100 focus:outline-none focus:ring-2 focus:ring-brand-400"
             >
@@ -252,12 +261,12 @@ export default function PinGate({ children }) {
             disabled={submitting}
             className="w-full mt-4 py-3 rounded-lg bg-brand-500 text-white font-semibold text-sm hover:bg-brand-600 disabled:opacity-60 disabled:cursor-wait transition-colors"
           >
-            {submitting ? 'Connecting…' : 'Unlock'}
+            {submitting ? t('gate.connecting') : t('gate.unlock')}
           </button>
         </form>
 
         <p className="text-center text-xs text-charcoal-500 mt-4">
-          Session expires after 8 hours · Warren Township Food Service
+          {t('gate.sessionNote')}
         </p>
       </div>
     </div>

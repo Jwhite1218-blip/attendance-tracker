@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
@@ -363,6 +364,7 @@ function FutureToolButton({ symbol, title, url }) {
 }
 
 function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff, employeeExceptions }) {
+  const term = useProgramTerms()
   const title = type === 'birthdays'
     ? `${monthName} Birthdays`
     : type === 'anniversaries'
@@ -421,7 +423,7 @@ function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, req
                   {type === 'time-off' && (
                     <>
                       <p className="text-sm font-semibold text-brand-700">{formatDateKey(item.dateKey)}</p>
-                      <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
+                      <p className="text-xs text-gray-400">{term.codeLabel(item.record.code, CODE_MAP[item.record.code]?.label || item.record.code)}</p>
                     </>
                   )}
                   {type === 'exceptions' && (

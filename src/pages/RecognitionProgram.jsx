@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
-import warrenLogo from '../assets/warren-logo.png'
+import AllStarBanner from '../components/AllStarBanner.jsx'
+import aramarkMark from '../assets/aramark-mark.png'
+import starOutline from '../assets/star-outline.png'
+import cardScriptFont from '../assets/fonts/sacramento.woff2'
+import cardLabelFont from '../assets/fonts/bebas-neue.woff2'
+import cardDisplayFont from '../assets/fonts/antonio-bold.woff2'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { buildStarCardHtml } from '../data/starCard.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
@@ -12,6 +18,11 @@ import {
   RECOGNITION_TYPE_MAP,
   RECOGNITION_TYPES,
   STAR_LEVELS,
+  recognitionAccent,
+  topLeaderboardEntries,
+  toStarCardEntries,
+  buildingRecognitionSummary,
+  schoolYearMonthKeys,
   addRecognition,
   drawMonthlyAllStar,
   existingMonthlyWinner,
@@ -86,11 +97,40 @@ function formatDate(dateKey) {
 // Opens the card in its own window and sends it straight to the print dialog.
 // The card is written into a fresh document rather than printed from this page
 // so the app's own layout can never bleed into the printed sheet.
+// The popup is a document.write'd about:blank with no base URL of its own, so
+// the card's fonts and artwork have to be named absolutely. They stay on this
+// origin because the site's CSP has no font-src and falls back to 'self',
+// which rules out inlining them as data: URIs the way the bulk sheet does.
+const CARD_ASSETS = {
+  script: new URL(cardScriptFont, window.location.origin).href,
+  label: new URL(cardLabelFont, window.location.origin).href,
+  display: new URL(cardDisplayFont, window.location.origin).href,
+  logo: new URL(aramarkMark, window.location.origin).href,
+  star: new URL(starOutline, window.location.origin).href,
+}
+
+function openStarCardSheet(cards) {
+  const printWindow = window.open('', '_blank', 'width=880,height=780')
+  if (!printWindow) return false
+  printWindow.document.open()
+  printWindow.document.write(buildStarCardHtml(cards, { pad: true, assets: CARD_ASSETS }))
+  printWindow.document.close()
+  printWindow.focus()
+  setTimeout(() => {
+    try {
+      printWindow.print()
+    } catch {
+      // The sheet is on screen either way; the person can print it themselves.
+    }
+  }, 400)
+  return true
+}
+
 function openStarCardPrintWindow(card) {
   const printWindow = window.open('', '_blank', 'width=880,height=780')
   if (!printWindow) return false
   printWindow.document.open()
-  printWindow.document.write(buildStarCardHtml([card], { pad: false }))
+  printWindow.document.write(buildStarCardHtml([card], { pad: false, assets: CARD_ASSETS }))
   printWindow.document.close()
   printWindow.focus()
   // A document.write'd page has no load event to wait on, so give the layout a
@@ -167,6 +207,20 @@ export default function RecognitionProgram() {
   const earnedStars = schoolYearRecords.filter(recognitionEarnsStar)
   const thisMonth = localDateKey().slice(0, 7)
   const thisMonthStars = earnedStars.filter(record => record.date.startsWith(`${thisMonth}-`))
+  // Everyone caught shining this month, pinned to the banner the way their
+  // paper cards go up on the board. Someone caught twice keeps one pin and
+  // carries the count, so a single strong week cannot crowd the board out.
+  const pinnedStars = useMemo(() => {
+    const byEmployee = new Map()
+    for (const record of thisMonthStars) {
+      const id = String(record.employeeId)
+      const existing = byEmployee.get(id)
+      if (existing) existing.count += 1
+      else byEmployee.set(id, { id, name: employeeName(employeeMap.get(id)) || id, count: 1 })
+    }
+    return [...byEmployee.values()]
+      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+  }, [thisMonthStars, employeeMap])
   const recognizedPeople = new Set(earnedStars.map(record => record.employeeId)).size
   const compilation = {
     dailyStars: schoolYearRecords.filter(record => record.type === 'star-of-day').length,
@@ -187,6 +241,16 @@ export default function RecognitionProgram() {
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
   const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
+  // Buildings in the current view, named even when they have recognised
+  // nobody — an empty row is the signal worth seeing.
+  const buildingCounts = buildingRecognitionSummary(
+    schoolYearRecords,
+    schoolYearStart,
+    (scopeLocation === 'all' ? availableLocations.map(location => location.id) : [scopeLocation])
+  )
+  // July through the month we are in: a table of empty columns for months
+  // that have not happened yet is just noise.
+  const boardMonths = schoolYearMonthKeys(schoolYearStart).filter(month => month <= thisMonth)
   const drawingScope = role === 'school' ? locationId : (scopeLocation !== 'all' ? scopeLocation : drawingLocation)
   const drawingEntries = drawingScope ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth) : []
   const monthlyWinner = drawingScope ? existingMonthlyWinner(records, drawingScope, drawingMonth) : null
@@ -238,6 +302,20 @@ export default function RecognitionProgram() {
       ...current,
       [surface]: { type: 'saved', message: `${message} The shared record is confirmed.`, card },
     }))
+  }
+
+  // Prints every Star of the Day currently in view as a cut-and-pin sheet.
+  // Nominations and shout-outs are skipped: the board is a Star of the Day
+  // board, and toStarCardEntries drops them.
+  const handlePrintSheet = visibleRecords => {
+    const cards = toStarCardEntries(visibleRecords, id => employeeName(employeeMap.get(String(id))))
+    if (!cards.length) {
+      setFeedback({ type: 'error', message: 'There are no Star of the Day cards to print in this view.' })
+      return
+    }
+    if (!openStarCardSheet(cards)) {
+      setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
+    }
   }
 
   const handlePrintCard = surface => {
@@ -351,7 +429,16 @@ export default function RecognitionProgram() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f7f3e9] pb-12">
-      <AllStarHero schoolYearStart={schoolYearStart} />
+      <div className="border-b-4 border-[#d5aa3d] bg-black px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5">
+        <div className="mx-auto max-w-7xl">
+          <AllStarBanner
+            starCount={thisMonthStars.length}
+            countLabel={`stars · ${formatMonth(thisMonth)}`}
+            pinned={pinnedStars}
+            emptyNote={`No stars pinned yet for ${formatMonth(thisMonth)} — catch someone shining.`}
+          />
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
         <div className="rounded-2xl border border-[#d7b44b]/50 bg-white shadow-xl overflow-hidden">
@@ -435,9 +522,11 @@ export default function RecognitionProgram() {
             />
 
             <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
+
+            <BuildingStarCounts summary={buildingCounts} months={boardMonths} schoolYearStart={schoolYearStart} />
             {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
                 shorter main column left beside the taller side column. */}
-            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} type={historyType} onTypeChange={setHistoryType} />
+            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} type={historyType} onTypeChange={setHistoryType} onPrintSheet={handlePrintSheet} />
           </div>
 
           <div className="space-y-6">
@@ -523,6 +612,7 @@ function RecognitionEntryForm({
   onRetry,
   onPrintCard,
 }) {
+  const term = useProgramTerms()
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
   const messageRequired = requiresStarMessage(form.type)
@@ -550,6 +640,7 @@ function RecognitionEntryForm({
               <div className="mt-2 space-y-2">
                 {selectableTypes.map(typeId => {
                   const type = RECOGNITION_TYPE_MAP[typeId]
+                  const typeAccent = recognitionAccent(typeId)
                   if (!type) return null
                   return (
                     <label
@@ -565,7 +656,10 @@ function RecognitionEntryForm({
                         className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-400"
                       />
                       <span className="min-w-0">
-                        <span className="block font-semibold text-gray-900">{type.label}</span>
+                        <span className="flex items-center gap-1.5 font-semibold text-gray-900">
+                          <span className={typeAccent.mark} aria-hidden="true">{typeAccent.glyph}</span>
+                          {term.recognitionLabel(type.id, type.label)}
+                        </span>
                         <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500">{type.description}</span>
                       </span>
                     </label>
@@ -631,7 +725,7 @@ function RecognitionEntryForm({
                     <span>
                       <span className="block font-semibold text-gray-800">{criterion}</span>
                       {!compact && RECOGNITION_CRITERIA_DESCRIPTIONS[criterion] && (
-                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{RECOGNITION_CRITERIA_DESCRIPTIONS[criterion]}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{term.reasonDescription(criterion, RECOGNITION_CRITERIA_DESCRIPTIONS[criterion])}</span>
                       )}
                     </span>
                   </label>
@@ -733,6 +827,11 @@ function RecognitionEntryForm({
 // Sits directly under Star of the Day: the board only ever counts earned stars,
 // so the number a manager sees here always matches the award they just gave.
 function StarLeaderboard({ leaderboard, schoolYearStart }) {
+  // Condensed to a top ten at Liz's request, but never a dead end: a manager
+  // looking for their own people can open the rest.
+  const [showAll, setShowAll] = useState(false)
+  const shown = showAll ? leaderboard : topLeaderboardEntries(leaderboard, 10)
+  const hidden = leaderboard.length - shown.length
   return (
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -746,7 +845,7 @@ function StarLeaderboard({ leaderboard, schoolYearStart }) {
 
       {leaderboard.length ? (
         <div className="mt-5 grid gap-3">
-          {leaderboard.map((entry, index) => {
+          {shown.map((entry, index) => {
             const progressTarget = entry.nextLevel?.minimum || entry.count
             const progress = progressTarget ? Math.min(100, (entry.count / progressTarget) * 100) : 100
             return (
@@ -788,6 +887,25 @@ function StarLeaderboard({ leaderboard, schoolYearStart }) {
           <p className="mt-1 text-xs text-gray-500">Record the first Star of the Day to begin this school year.</p>
         </div>
       )}
+
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-4 w-full rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50"
+        >
+          Show all {leaderboard.length} — {hidden} more below the top {shown.length}
+        </button>
+      )}
+      {showAll && leaderboard.length > 10 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(false)}
+          className="mt-4 w-full rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+        >
+          Back to the top 10
+        </button>
+      )}
     </section>
   )
 }
@@ -825,54 +943,6 @@ function SubmissionsByBuilding({ counts, schoolYearStart }) {
   )
 }
 
-function AllStarHero({ schoolYearStart }) {
-  const stars = [
-    ['8%', '18%', 'text-xl'], ['17%', '60%', 'text-xs'], ['30%', '24%', 'text-3xl'],
-    ['52%', '12%', 'text-sm'], ['64%', '68%', 'text-2xl'], ['82%', '20%', 'text-xl'],
-    ['92%', '55%', 'text-xs'], ['73%', '34%', 'text-xs'], ['40%', '76%', 'text-sm'],
-  ]
-  return (
-    <header className="relative overflow-hidden border-b-4 border-[#d5aa3d] bg-black text-white">
-      {stars.map(([left, top, size], index) => (
-        <span key={index} className={`pointer-events-none absolute ${size} text-[#e3b93f]/60`} style={{ left, top }} aria-hidden="true">★</span>
-      ))}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_15%,rgba(228,188,70,0.2),transparent_34%),linear-gradient(110deg,rgba(183,119,22,0.12),transparent_50%)]" />
-      <div className="relative max-w-7xl mx-auto px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-        <div className="grid items-center gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <div className="flex items-center gap-3">
-              <img src={warrenLogo} alt="Warren Township" className="h-12 w-12 rounded-lg border border-amber-300/30 bg-white object-contain p-1" />
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.28em] text-[#e9c866]">Warren Student Nutrition Team</p>
-                <p className="mt-1 text-xs text-white/50">{schoolYearStart}-{schoolYearStart + 1} recognition program</p>
-              </div>
-            </div>
-            <h1 className="all-star-display mt-7 text-5xl uppercase leading-[0.88] tracking-tight sm:text-6xl lg:text-7xl">
-              All-Star <span className="text-[#e7bd4d]">Recognition</span>
-            </h1>
-            <p className="all-star-script mt-4 text-2xl text-[#f1d98c] sm:text-3xl">Catch someone shining every day.</p>
-            <p className="mt-5 max-w-2xl text-sm leading-relaxed text-white/70 sm:text-base">
-              Recognizing daily excellence in service, teamwork, food quality, safety, and positivity - because every day, every meal, every star makes a difference.
-            </p>
-          </div>
-          <div className="relative mx-auto w-full max-w-md rounded-2xl border-2 border-[#d8b34a] bg-gradient-to-br from-[#fff9dc] via-[#ddc982] to-[#a77925] p-[2px] shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-            <div className="rounded-[14px] bg-[#17130d]/95 px-6 py-7 text-center">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#eacb6e]">Every day. Every meal.</p>
-              <p className="all-star-display mt-3 text-3xl uppercase leading-none text-white">Every Star Makes a Difference.</p>
-              <div className="mx-auto my-5 h-px w-24 bg-[#d8b34a]" />
-              <div className="flex items-center justify-center gap-4">
-                <span className="text-5xl text-[#ffd75c]" aria-hidden="true">★</span>
-                <span className="text-left text-xs font-black uppercase tracking-[0.18em] text-white/75">Warren Student<br />Nutrition Team</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
-  )
-}
-
-// A quiet counter for the categories that are tracked but do not earn stars.
 function SecondaryCount({ label, value }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">
@@ -1053,10 +1123,14 @@ function AceBucksCard() {
   )
 }
 
-function RecentRecognition({ records, employeeMap, type, onTypeChange }) {
+function RecentRecognition({ records, employeeMap, type, onTypeChange, onPrintSheet }) {
+  const term = useProgramTerms()
   const [visibleCount, setVisibleCount] = useState(10)
   const filtered = records.filter(record => type === 'all' || record.type === type)
   const recent = filtered.slice(0, visibleCount)
+  // Counts the whole filtered set, not just what is on screen: the sheet
+  // prints everything listed, so the button must not promise fewer.
+  const printableCount = filtered.filter(record => record.type === 'star-of-day').length
   return (
     <section id="recognition-history" className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">All-Star board</p>
@@ -1066,26 +1140,41 @@ function RecentRecognition({ records, employeeMap, type, onTypeChange }) {
         Filter recognition history
         <select value={type} onChange={event => onTypeChange(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
           <option value="all">All recognition types</option>
-          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{term.recognitionLabel(item.id, item.label)}</option>)}
         </select>
       </label>
-      <p role="status" className="mt-2 text-xs text-gray-500">Showing {recent.length} of {filtered.length} records</p>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p role="status" className="text-xs text-gray-500">Showing {recent.length} of {filtered.length} records</p>
+        {printableCount > 0 && (
+          <button
+            type="button"
+            onClick={() => onPrintSheet?.(filtered)}
+            className="rounded-lg border border-[#d7b44b] bg-[#fdf7e8] px-3 py-1.5 text-xs font-bold text-[#7a4b12] hover:bg-[#f7ecd2] print:hidden"
+          >
+            Print {printableCount} star card{printableCount === 1 ? '' : 's'} · six per page
+          </button>
+        )}
+      </div>
       {recent.length ? (
         <div className="mt-4 divide-y divide-gray-100">
           {recent.map(record => {
             const employee = employeeMap.get(String(record.employeeId))
             const type = RECOGNITION_TYPE_MAP[record.type]
+            const accent = recognitionAccent(record.type)
             return (
               <div key={record.id} className="py-3 first:pt-0 last:pb-0">
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 text-lg text-[#d9aa32]" aria-hidden="true">★</span>
+                  <span className={`mt-0.5 text-lg ${accent.mark}`} aria-hidden="true">{accent.glyph}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Link to={`/employee/${record.employeeId}`} className="text-sm font-bold text-gray-900 hover:text-[#9a651b]">
                           {employeeName(employee) || record.employeeId}
                         </Link>
-                        <p className="mt-0.5 text-xs font-semibold text-[#a36d1d]">{type?.label || record.type}</p>
+                        <span className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${accent.chip}`}>
+                          {term.recognitionLabel(record.type, type?.label || record.type)}
+                          {!accent.earns && <span className="font-medium opacity-70">· no star</span>}
+                        </span>
                       </div>
                       <span className="flex-none text-[11px] text-gray-400">{formatDate(record.date)}</span>
                     </div>
@@ -1130,6 +1219,85 @@ function AnnualCelebration() {
           <p className="mt-1 text-xs leading-relaxed text-gray-500">Final award decisions remain performance-based; the source does not prescribe an automatic formula.</p>
         </div>
       </div>
+    </section>
+  )
+}
+
+// Stars earned per building, month by month, with the school-year total.
+// Counts Star of the Day only, matching every other figure on this page.
+function BuildingStarCounts({ summary, months, schoolYearStart }) {
+  if (!summary.length) return null
+  const districtTotal = summary.reduce((total, entry) => total + entry.total, 0)
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">By building</p>
+          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Stars by month</h2>
+          <p className="mt-1 text-sm text-gray-500">Star of the Day only, counted for the building the person works in.</p>
+        </div>
+        <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
+      </div>
+
+      {/* Wide on purpose — the table scrolls rather than the page. */}
+      <div className="mt-5 -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
+        <table className="w-full min-w-[34rem] border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-gray-200">
+              <th className="py-2 pr-3 text-left text-xs font-bold uppercase tracking-wide text-gray-500">Building</th>
+              {months.map(month => (
+                <th key={month} className="px-2 py-2 text-center text-xs font-bold uppercase tracking-wide text-gray-500">
+                  {formatMonth(month).slice(0, 3)}
+                </th>
+              ))}
+              <th className="pl-3 py-2 text-right text-xs font-bold uppercase tracking-wide text-[#9a651b]">Year</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.map(entry => (
+              <tr key={entry.locationId} className="border-b border-gray-100 last:border-0">
+                <td className="py-2 pr-3 font-semibold text-gray-800">
+                  {LOCATION_MAP[entry.locationId]?.name || entry.locationId}
+                </td>
+                {months.map(month => {
+                  const count = entry.months[month] || 0
+                  return (
+                    <td
+                      key={month}
+                      className={`px-2 py-2 text-center tabular-nums ${count ? 'text-gray-700' : 'text-gray-300'}`}
+                    >
+                      {count || '—'}
+                    </td>
+                  )
+                })}
+                <td className={`pl-3 py-2 text-right font-black tabular-nums ${
+                  entry.total ? 'text-[#ad741e]' : 'text-gray-300'
+                }`}>
+                  {entry.total}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200">
+              <td className="py-2 pr-3 text-xs font-bold uppercase tracking-wide text-gray-500">All buildings</td>
+              {months.map(month => (
+                <td key={month} className="px-2 py-2 text-center text-xs font-semibold tabular-nums text-gray-500">
+                  {summary.reduce((total, entry) => total + (entry.months[month] || 0), 0) || '—'}
+                </td>
+              ))}
+              <td className="pl-3 py-2 text-right text-sm font-black tabular-nums text-[#ad741e]">{districtTotal}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      {summary.some(entry => entry.total === 0) && (
+        <p className="mt-3 text-xs text-gray-500">
+          A building showing no stars has not recognised anyone this school year.
+        </p>
+      )}
     </section>
   )
 }

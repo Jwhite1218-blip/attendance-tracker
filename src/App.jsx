@@ -15,6 +15,8 @@ import PublicSchoolLeaderboard from './pages/PublicSchoolLeaderboard.jsx'
 import FoodDayCelebration, { FoodDayBanner } from './components/FoodDayCelebration.jsx'
 import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
+import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
+import { useProgramTerms } from './components/useProgramTerms.js'
 import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
@@ -52,20 +54,22 @@ function AppShell() {
     watermark,
     syncStatus,
   } = useAuth()
+  const { t } = useLanguage()
+  const term = useProgramTerms()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const schoolRecognitionOnly = role === 'school' && canEditRecognition && !canEditAttendance
 
   const accessLabel = recognitionOnly
-    ? 'Recognition Pilot'
+    ? t('role.recognitionPilot')
     : schoolRecognitionOnly
-      ? 'School Recognition'
+      ? t('role.schoolRecognition')
     : !canEditAttendance
-    ? 'Read-only review'
+    ? t('role.readOnly')
     : role === 'school'
-      ? 'School Manager'
+      ? t('role.schoolManager')
       : canManageRoster && canManageBlackouts
-        ? 'Administrator'
-        : 'Administrator · Limited editing'
+        ? t('role.administrator')
+        : t('role.administratorLimited')
 
   const homePath = recognitionOnly ? '/recognition' : role === 'school' ? `/location/${locationId}` : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
@@ -76,16 +80,16 @@ function AppShell() {
     // homePath — a school manager still only ever reaches their own location's
     // dashboard. Hiding it (d7997ee) removed a duplicate nav path but read to
     // managers as the button disappearing, so Liz asked for it back (2026-09-01).
-    { path: homePath, label: 'Dashboard' },
-    ...(recognitionAdminAccess ? [{ path: '/recognition', label: 'All-Stars' }] : []),
-    { path: '/ledger', label: 'Employee Records' },
-    ...(showBlackoutCalendar ? [{ path: '/calendar', label: 'Blackout Calendar' }] : []),
-    ...(role === 'admin' ? [{ path: '/reports/custom', label: 'Custom Report' }] : []),
-    ...(role === 'admin' ? [{ path: '/reports/master', label: 'Master Report' }] : []),
-    ...(lizAdminAccess ? [{ path: '/backup-recovery', label: 'Backup & Recovery' }] : []),
+    { path: homePath, label: t('nav.dashboard') },
+    ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
+    { path: '/ledger', label: t('nav.employeeRecords') },
+    ...(showBlackoutCalendar ? [{ path: '/calendar', label: t('nav.blackoutCalendar') }] : []),
+    ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
+    ...(role === 'admin' ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
+    ...(lizAdminAccess ? [{ path: '/backup-recovery', label: t('nav.backupRecovery') }] : []),
   ]
   const navItems = recognitionOnly
-    ? [{ path: '/recognition', label: 'All-Stars' }]
+    ? [{ path: '/recognition', label: t('nav.allStars') }]
     : standardNavItems
 
   const schoolName = role === 'school' ? LOCATION_MAP[locationId]?.name : null
@@ -143,12 +147,12 @@ function AppShell() {
                 className={`inline-flex items-center gap-1.5 text-[10px] font-semibold ${
                   syncStatus === 'pending' ? 'text-red-300' : syncStatus === 'saving' ? 'text-amber-200' : 'text-emerald-300'
                 }`}
-                title={syncStatus === 'pending' ? 'Changes are saved on this device and will retry automatically.' : 'Shared attendance data is connected.'}
+                title={syncStatus === 'pending' ? t('sync.retryingTitle') : t('sync.connectedTitle')}
               >
                 <span className={`w-2 h-2 rounded-full ${
                   syncStatus === 'pending' ? 'bg-red-400' : syncStatus === 'saving' ? 'bg-amber-300' : 'bg-emerald-400'
                 }`} />
-                {syncStatus === 'pending' ? 'Retrying' : syncStatus === 'saving' ? 'Saving' : 'Shared'}
+                {syncStatus === 'pending' ? t('sync.retrying') : syncStatus === 'saving' ? t('sync.saving') : t('sync.shared')}
               </span>
               {displayName && (
                 <div className="hidden xl:block text-right leading-tight">
@@ -156,12 +160,13 @@ function AppShell() {
                   <span className="block text-[10px] text-charcoal-300">{accessLabel}</span>
                 </div>
               )}
+              <LanguageToggle />
               <img src={localisLogo} alt="Localis" className="h-9 w-auto object-contain" />
               <button
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
-                title="Lock & Log Out"
-                aria-label="Lock and log out"
+                title={t('nav.logout')}
+                aria-label={t('nav.logout')}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -171,11 +176,12 @@ function AppShell() {
 
             {/* Mobile menu button */}
             <div className="flex xl:hidden items-center gap-2">
+              <LanguageToggle />
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
                   syncStatus === 'pending' ? 'bg-red-400' : syncStatus === 'saving' ? 'bg-amber-300' : 'bg-emerald-400'
                 }`}
-                title={syncStatus === 'pending' ? 'Shared-data sync will retry automatically.' : 'Shared attendance data is connected.'}
+                title={syncStatus === 'pending' ? t('sync.retryingTitle') : t('sync.connectedTitle')}
               />
               {displayName && (
                 <span
@@ -188,8 +194,8 @@ function AppShell() {
               <button
                 onClick={logout}
                 className="text-charcoal-300 hover:text-red-400 transition-colors p-1.5"
-                title="Lock & Log Out"
-                aria-label="Lock and log out"
+                title={t('nav.logout')}
+                aria-label={t('nav.logout')}
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
@@ -198,7 +204,7 @@ function AppShell() {
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                 className="text-charcoal-200 hover:text-white p-2 -mr-2"
-                aria-label="Toggle menu"
+                aria-label={t('nav.toggleMenu')}
               >
                 {mobileMenuOpen ? (
                   <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -239,6 +245,12 @@ function AppShell() {
         </div>
       </nav>
 
+      {term.isDraftLanguage && (
+        <div className="print:hidden border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-900">
+          {t('language.draftNotice')}
+        </div>
+      )}
+
       {TEST_ENVIRONMENT_LABEL && (
         <div className="print:hidden border-b border-fuchsia-300 bg-fuchsia-700 px-4 py-2 text-center text-xs font-black uppercase tracking-[0.16em] text-white shadow-sm">
           {TEST_ENVIRONMENT_LABEL} · Isolated test data · Nothing entered here affects production
@@ -255,7 +267,7 @@ function AppShell() {
         </div>
       ) : !canEditAttendance && (
         <div className="print:hidden sticky top-16 z-40 border-b border-cyan-200 bg-cyan-50/95 px-4 py-2 text-center text-xs font-semibold text-cyan-900 backdrop-blur">
-          Read-only access · Navigation is enabled · All changes are disabled
+          {t('banner.readOnly')}
         </div>
       )}
 

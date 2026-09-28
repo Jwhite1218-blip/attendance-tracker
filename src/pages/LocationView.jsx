@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { useParams, Link, Navigate, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
@@ -566,6 +567,7 @@ function SchoolDashboardInsights({
   weekExceptions,
   weekLabel,
 }) {
+  const term = useProgramTerms()
   const cards = [
     {
       id: 'birthdays',
@@ -685,13 +687,13 @@ function SchoolDashboardInsights({
                       {activeInsight === 'time-off' && (
                         <>
                           <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
-                          <p className="text-xs text-gray-400">{CODE_MAP[item.record.code]?.label || item.record.code}</p>
+                          <p className="text-xs text-gray-400">{term.codeLabel(item.record.code, CODE_MAP[item.record.code]?.label || item.record.code)}</p>
                         </>
                       )}
                       {activeInsight === 'exceptions' && (
                         <>
                           <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
-                          <p className="text-xs text-gray-400">{CODE_MAP[item.code]?.label || item.code}</p>
+                          <p className="text-xs text-gray-400">{term.codeLabel(item.code, CODE_MAP[item.code]?.label || item.code)}</p>
                         </>
                       )}
                     </div>

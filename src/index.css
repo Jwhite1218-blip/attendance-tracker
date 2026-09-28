@@ -8,11 +8,40 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The All-Star program's own faces, taken from Liz's printed banner and cards.
+   Self-hosted because the site sets no font-src and falls back to
+   default-src 'self', so a font CDN is blocked with no visible error.
+   Sacramento stands in for Brittany Signature, which is commercial. */
+@font-face {
+  font-family: 'All Star Display';
+  src: url('./assets/fonts/anton.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'All Star Script';
+  src: url('./assets/fonts/sacramento.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'All Star Label';
+  src: url('./assets/fonts/bebas-neue.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
 .all-star-display {
-  font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
-  font-stretch: condensed;
+  font-family: 'All Star Display', Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
 }
 
 .all-star-script {
-  font-family: 'Segoe Script', 'Bradley Hand', cursive;
+  font-family: 'All Star Script', 'Segoe Script', 'Bradley Hand', cursive;
+}
+
+.all-star-label {
+  font-family: 'All Star Label', 'Arial Narrow', Impact, sans-serif;
+  letter-spacing: 0.06em;
 }

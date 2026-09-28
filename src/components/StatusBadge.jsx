@@ -1,6 +1,8 @@
 import { CODE_MAP } from '../data/attendanceCodes.js'
+import { useProgramTerms } from './useProgramTerms.js'
 
 export function StatusBadge({ code, size = 'normal' }) {
+  const term = useProgramTerms()
   const info = CODE_MAP[code]
   if (!info) return null
 
@@ -21,7 +23,7 @@ export function StatusBadge({ code, size = 'normal' }) {
         color: cls.text,
         borderColor: cls.border,
       }}
-      title={info.label}
+      title={term.codeLabel(code, info.label)}
     >
       {label}
     </span>
@@ -29,6 +31,7 @@ export function StatusBadge({ code, size = 'normal' }) {
 }
 
 export function StatusBadgeLarge({ code }) {
+  const term = useProgramTerms()
   const info = CODE_MAP[code]
   if (!info) return null
 
@@ -44,7 +47,7 @@ export function StatusBadgeLarge({ code }) {
       }}
     >
       <span className="font-bold">{info.shortLabel}</span>
-      <span>{info.label}</span>
+      <span>{term.codeLabel(code, info.label)}</span>
     </span>
   )
 }
