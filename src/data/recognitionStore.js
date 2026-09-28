@@ -285,3 +285,125 @@ export function existingMonthlyWinner(records, locationId, monthKey) {
     && record.monthKey === monthKey
   ) || null
 }
+
+// Liz asked for the school-year leaderboard condensed to a top ten. Ties that
+// straddle the cut are kept: two people on the same star count are the same
+// standing, and dropping one of them because of an alphabetical tiebreak reads
+// as the board being wrong.
+export function topLeaderboardEntries(entries, limit = 10) {
+  const list = Array.isArray(entries) ? entries : []
+  if (list.length <= limit || limit < 1) return list
+  const cutoff = list[limit - 1]?.count
+  let end = limit
+  while (end < list.length && list[end]?.count === cutoff) end += 1
+  return list.slice(0, end)
+}
+
+// Earned stars per building, by month and for the school year. Deliberately
+// counts Star of the Day only, matching every other total on the page, so two
+// figures can never disagree about how many stars exist.
+export function buildingRecognitionSummary(records, startYear, locationIds = []) {
+  const summary = new Map()
+  const ensure = locationId => {
+    if (!summary.has(locationId)) summary.set(locationId, { locationId, months: {}, total: 0 })
+    return summary.get(locationId)
+  }
+  locationIds.forEach(ensure)
+
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!recognitionEarnsStar(record)) continue
+    if (!isRecognitionInSchoolYear(record, startYear)) continue
+    const locationId = String(record.locationId || '')
+    if (!locationId) continue
+    const monthKey = String(record.date || '').slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) continue
+    const entry = ensure(locationId)
+    entry.months[monthKey] = (entry.months[monthKey] || 0) + 1
+    entry.total += 1
+  }
+
+  return [...summary.values()].sort((left, right) => right.total - left.total
+    || left.locationId.localeCompare(right.locationId))
+}
+
+// The months of a school year in order, July through June, so a table has a
+// stable set of columns even in a month nobody was recognised.
+export function schoolYearMonthKeys(startYear) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = ((6 + index) % 12) + 1
+    const year = month >= 7 ? startYear : startYear + 1
+    return `${year}-${String(month).padStart(2, '0')}`
+  })
+}
+
+// Recognition records turned into printable Star of the Day cards. Only the
+// daily star prints: the physical board is a Star of the Day board, and a
+// nomination is not an award yet.
+export function toStarCardEntries(records, resolveName) {
+  return (Array.isArray(records) ? records : [])
+    .filter(record => record?.type === 'star-of-day')
+    .map(record => ({
+      name: resolveName(record.employeeId) || String(record.employeeId || ''),
+      date: record.date,
+      criteria: record.criteria || [],
+      message: record.note || '',
+      recognizedBy: record.recognizedBy || '',
+    }))
+}
+
+// Liz asked for Shout-Outs and Shooting Stars to read differently from the
+// daily star, because they are different things: only Star of the Day earns a
+// star and a drawing entry. Kept here rather than in the page so the entry
+// form, the history list and any later surface cannot drift apart.
+//
+// `earns` marks the two that actually add to someone's star count, so the
+// distinction is visible at a glance and not just a colour difference.
+export const RECOGNITION_ACCENTS = {
+  'star-of-day': {
+    glyph: '★',
+    earns: true,
+    text: 'text-[#a36d1d]',
+    chip: 'border-amber-300 bg-amber-50 text-[#8a5a12]',
+    mark: 'text-[#d9aa32]',
+  },
+  'shooting-star': {
+    glyph: '✦',
+    earns: false,
+    text: 'text-indigo-700',
+    chip: 'border-indigo-200 bg-indigo-50 text-indigo-800',
+    mark: 'text-indigo-400',
+  },
+  'star-shout-out': {
+    glyph: '❝',
+    earns: false,
+    text: 'text-teal-700',
+    chip: 'border-teal-200 bg-teal-50 text-teal-800',
+    mark: 'text-teal-500',
+  },
+  'warren-employee-month': {
+    glyph: '🏆',
+    earns: false,
+    text: 'text-[#7a4b12]',
+    chip: 'border-[#d7b44b] bg-[#fdf3d8] text-[#7a4b12]',
+    mark: 'text-[#b8892f]',
+  },
+  'all-star-of-month': {
+    glyph: '🥇',
+    earns: false,
+    text: 'text-orange-700',
+    chip: 'border-orange-200 bg-orange-50 text-orange-800',
+    mark: 'text-orange-500',
+  },
+}
+
+export const DEFAULT_RECOGNITION_ACCENT = {
+  glyph: '★',
+  earns: false,
+  text: 'text-gray-600',
+  chip: 'border-gray-200 bg-gray-50 text-gray-700',
+  mark: 'text-gray-400',
+}
+
+export function recognitionAccent(typeId) {
+  return RECOGNITION_ACCENTS[typeId] || DEFAULT_RECOGNITION_ACCENT
+}
