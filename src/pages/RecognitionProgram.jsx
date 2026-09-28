@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
-import warrenLogo from '../assets/warren-logo.png'
+import AllStarBanner from '../components/AllStarBanner.jsx'
 import aramarkMark from '../assets/aramark-mark.png'
 import starOutline from '../assets/star-outline.png'
 import cardScriptFont from '../assets/fonts/sacramento.woff2'
@@ -184,6 +184,20 @@ export default function RecognitionProgram() {
   const earnedStars = schoolYearRecords.filter(recognitionEarnsStar)
   const thisMonth = localDateKey().slice(0, 7)
   const thisMonthStars = earnedStars.filter(record => record.date.startsWith(`${thisMonth}-`))
+  // Everyone caught shining this month, pinned to the banner the way their
+  // paper cards go up on the board. Someone caught twice keeps one pin and
+  // carries the count, so a single strong week cannot crowd the board out.
+  const pinnedStars = useMemo(() => {
+    const byEmployee = new Map()
+    for (const record of thisMonthStars) {
+      const id = String(record.employeeId)
+      const existing = byEmployee.get(id)
+      if (existing) existing.count += 1
+      else byEmployee.set(id, { id, name: employeeName(employeeMap.get(id)) || id, count: 1 })
+    }
+    return [...byEmployee.values()]
+      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+  }, [thisMonthStars, employeeMap])
   const recognizedPeople = new Set(earnedStars.map(record => record.employeeId)).size
   const compilation = {
     dailyStars: schoolYearRecords.filter(record => record.type === 'star-of-day').length,
@@ -368,7 +382,16 @@ export default function RecognitionProgram() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f7f3e9] pb-12">
-      <AllStarHero schoolYearStart={schoolYearStart} />
+      <div className="border-b-4 border-[#d5aa3d] bg-black px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5">
+        <div className="mx-auto max-w-7xl">
+          <AllStarBanner
+            starCount={thisMonthStars.length}
+            countLabel={`stars · ${formatMonth(thisMonth)}`}
+            pinned={pinnedStars}
+            emptyNote={`No stars pinned yet for ${formatMonth(thisMonth)} — catch someone shining.`}
+          />
+        </div>
+      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
         <div className="rounded-2xl border border-[#d7b44b]/50 bg-white shadow-xl overflow-hidden">
@@ -842,54 +865,6 @@ function SubmissionsByBuilding({ counts, schoolYearStart }) {
   )
 }
 
-function AllStarHero({ schoolYearStart }) {
-  const stars = [
-    ['8%', '18%', 'text-xl'], ['17%', '60%', 'text-xs'], ['30%', '24%', 'text-3xl'],
-    ['52%', '12%', 'text-sm'], ['64%', '68%', 'text-2xl'], ['82%', '20%', 'text-xl'],
-    ['92%', '55%', 'text-xs'], ['73%', '34%', 'text-xs'], ['40%', '76%', 'text-sm'],
-  ]
-  return (
-    <header className="relative overflow-hidden border-b-4 border-[#d5aa3d] bg-black text-white">
-      {stars.map(([left, top, size], index) => (
-        <span key={index} className={`pointer-events-none absolute ${size} text-[#e3b93f]/60`} style={{ left, top }} aria-hidden="true">★</span>
-      ))}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_15%,rgba(228,188,70,0.2),transparent_34%),linear-gradient(110deg,rgba(183,119,22,0.12),transparent_50%)]" />
-      <div className="relative max-w-7xl mx-auto px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
-        <div className="grid items-center gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <div>
-            <div className="flex items-center gap-3">
-              <img src={warrenLogo} alt="Warren Township" className="h-12 w-12 rounded-lg border border-amber-300/30 bg-white object-contain p-1" />
-              <div>
-                <p className="text-xs font-black uppercase tracking-[0.28em] text-[#e9c866]">Warren Student Nutrition Team</p>
-                <p className="mt-1 text-xs text-white/50">{schoolYearStart}-{schoolYearStart + 1} recognition program</p>
-              </div>
-            </div>
-            <h1 className="all-star-display mt-7 text-5xl uppercase leading-[0.88] tracking-tight sm:text-6xl lg:text-7xl">
-              All-Star <span className="text-[#e7bd4d]">Recognition</span>
-            </h1>
-            <p className="all-star-script mt-4 text-2xl text-[#f1d98c] sm:text-3xl">Catch someone shining every day.</p>
-            <p className="mt-5 max-w-2xl text-sm leading-relaxed text-white/70 sm:text-base">
-              Recognizing daily excellence in service, teamwork, food quality, safety, and positivity - because every day, every meal, every star makes a difference.
-            </p>
-          </div>
-          <div className="relative mx-auto w-full max-w-md rounded-2xl border-2 border-[#d8b34a] bg-gradient-to-br from-[#fff9dc] via-[#ddc982] to-[#a77925] p-[2px] shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
-            <div className="rounded-[14px] bg-[#17130d]/95 px-6 py-7 text-center">
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-[#eacb6e]">Every day. Every meal.</p>
-              <p className="all-star-display mt-3 text-3xl uppercase leading-none text-white">Every Star Makes a Difference.</p>
-              <div className="mx-auto my-5 h-px w-24 bg-[#d8b34a]" />
-              <div className="flex items-center justify-center gap-4">
-                <span className="text-5xl text-[#ffd75c]" aria-hidden="true">★</span>
-                <span className="text-left text-xs font-black uppercase tracking-[0.18em] text-white/75">Warren Student<br />Nutrition Team</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
-  )
-}
-
-// A quiet counter for the categories that are tracked but do not earn stars.
 function SecondaryCount({ label, value }) {
   return (
     <span className="inline-flex items-baseline gap-1.5">

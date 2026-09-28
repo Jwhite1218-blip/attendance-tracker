@@ -1,0 +1,262 @@
+/* Liz's printed All-Stars banner, rebuilt as a live surface.
+   It is not a flat export because the stars have to pin to it: the hollow
+   centre of the gold star carries the running count, and the board below it
+   fills with the people recognised this month. */
+
+.allstar-banner {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(232, 198, 92, 0.45);
+  border-radius: 14px;
+  background-color: #0b0a08;
+  background-size: cover;
+  background-position: center;
+  color: #fff;
+  isolation: isolate;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Darkened towards the middle so the wordmark stays legible over the
+   brightest clusters of confetti. */
+.allstar-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(8, 7, 6, 0.82) 0%, rgba(8, 7, 6, 0.55) 45%, rgba(8, 7, 6, 0.78) 100%);
+  z-index: 0;
+}
+
+.allstar-banner__inner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  /* Bottom padding is the gutter the two corner marks sit in, so they never
+     ride over the pinned board below. */
+  padding: 18px 16px 52px;
+}
+
+/* --- the six programme ribbons ------------------------------------------- */
+
+.allstar-banner__ribbons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.allstar-banner__ribbons--right {
+  align-items: flex-end;
+}
+
+.allstar-banner__ribbon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 148px;
+  max-width: 100%;
+  aspect-ratio: 620 / 205;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+
+.allstar-banner__ribbon span {
+  font-size: 11px;
+  line-height: 1;
+  color: #3a2a06;
+  text-transform: uppercase;
+  transform: translateY(1px);
+}
+
+/* --- centre column -------------------------------------------------------- */
+
+.allstar-banner__core {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  min-width: 0;
+}
+
+.allstar-banner__eyebrow {
+  margin: 0;
+  font-size: clamp(17px, 3.1vw, 30px);
+  line-height: 1.02;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+}
+
+.allstar-banner__wordmark {
+  margin: -2px 0 0;
+  font-size: clamp(34px, 6.6vw, 68px);
+  line-height: 1;
+  background: linear-gradient(180deg, #fdf3d4 0%, #e8c65c 42%, #b8892f 72%, #f2e2ae 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.55));
+}
+
+.allstar-banner__starwrap {
+  position: relative;
+  width: clamp(150px, 27vw, 232px);
+  margin-top: -4px;
+}
+
+.allstar-banner__star {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Sits in the hollow middle of the star artwork. */
+.allstar-banner__count {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.allstar-banner__count b {
+  font-size: clamp(26px, 4.6vw, 44px);
+  font-weight: 400;
+  color: #ffe9a8;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+.allstar-banner__count span {
+  margin-top: 3px;
+  font-size: 9px;
+  text-transform: uppercase;
+  color: rgba(255, 233, 168, 0.8);
+}
+
+.allstar-banner__tagline {
+  margin: 2px 0 0;
+  font-size: clamp(15px, 2.5vw, 25px);
+  line-height: 1.15;
+  color: #f4e6bb;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+/* --- corner marks --------------------------------------------------------- */
+
+.allstar-banner__mark {
+  position: absolute;
+  bottom: 8px;
+  z-index: 2;
+  height: 34px;
+  width: auto;
+  opacity: 0.95;
+}
+
+.allstar-banner__mark--aramark { left: 0; }
+.allstar-banner__mark--seal { right: 0; height: 42px; }
+
+/* --- pinned board --------------------------------------------------------- */
+
+.allstar-board {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(232, 198, 92, 0.3);
+  background: rgba(8, 7, 6, 0.55);
+  position: relative;
+  z-index: 1;
+}
+
+.allstar-board__pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px 4px 6px;
+  border: 1px solid rgba(232, 198, 92, 0.42);
+  border-radius: 999px;
+  background: rgba(232, 198, 92, 0.1);
+  font-size: 11px;
+  font-weight: 600;
+  color: #fbf1d8;
+  white-space: nowrap;
+}
+
+.allstar-board__pin svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  fill: #e8c65c;
+}
+
+.allstar-board__pin em {
+  font-style: normal;
+  color: rgba(251, 241, 216, 0.55);
+  font-weight: 500;
+}
+
+.allstar-board__empty {
+  font-size: 11px;
+  color: rgba(251, 241, 216, 0.6);
+}
+
+/* --- narrow screens ------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .allstar-banner__inner {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    padding-bottom: 56px;
+  }
+
+  /* The ribbons become one wrapping row beneath the wordmark rather than two
+     columns that would squeeze the centre off the screen. */
+  .allstar-banner__ribbons {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    order: 3;
+  }
+
+  .allstar-banner__ribbons--right { align-items: center; }
+  .allstar-banner__core { order: 1; }
+  .allstar-banner__ribbon { width: 108px; }
+  .allstar-banner__ribbon span { font-size: 9px; }
+}
+
+/* On a phone the full poster pushes the entry form a screen and a half down,
+   and entering a star is why a manager opened the page. The wordmark, star,
+   tagline and marks carry the identity; the six ribbons are decorative here
+   because the entry form lists the same reasons a thumb-scroll below. */
+@media (max-width: 440px) {
+  .allstar-banner__ribbons { display: none; }
+  .allstar-banner__starwrap { width: 132px; }
+  .allstar-banner__inner { padding: 14px 14px 46px; }
+  .allstar-banner__mark { height: 26px; }
+  .allstar-banner__mark--seal { height: 32px; }
+}
+
+/* --- print ---------------------------------------------------------------- */
+
+@media print {
+  .allstar-banner {
+    border-color: #b8892f;
+    border-radius: 0;
+    break-inside: avoid;
+  }
+
+  .allstar-board {
+    background: rgba(8, 7, 6, 0.6);
+  }
+}
