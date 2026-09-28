@@ -2,6 +2,11 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import warrenLogo from '../assets/warren-logo.png'
+import aramarkMark from '../assets/aramark-mark.png'
+import starOutline from '../assets/star-outline.png'
+import cardScriptFont from '../assets/fonts/sacramento.woff2'
+import cardLabelFont from '../assets/fonts/bebas-neue.woff2'
+import cardDisplayFont from '../assets/fonts/antonio-bold.woff2'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { buildStarCardHtml } from '../data/starCard.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
@@ -86,11 +91,23 @@ function formatDate(dateKey) {
 // Opens the card in its own window and sends it straight to the print dialog.
 // The card is written into a fresh document rather than printed from this page
 // so the app's own layout can never bleed into the printed sheet.
+// The popup is a document.write'd about:blank with no base URL of its own, so
+// the card's fonts and artwork have to be named absolutely. They stay on this
+// origin because the site's CSP has no font-src and falls back to 'self',
+// which rules out inlining them as data: URIs the way the bulk sheet does.
+const CARD_ASSETS = {
+  script: new URL(cardScriptFont, window.location.origin).href,
+  label: new URL(cardLabelFont, window.location.origin).href,
+  display: new URL(cardDisplayFont, window.location.origin).href,
+  logo: new URL(aramarkMark, window.location.origin).href,
+  star: new URL(starOutline, window.location.origin).href,
+}
+
 function openStarCardPrintWindow(card) {
   const printWindow = window.open('', '_blank', 'width=880,height=780')
   if (!printWindow) return false
   printWindow.document.open()
-  printWindow.document.write(buildStarCardHtml([card], { pad: false }))
+  printWindow.document.write(buildStarCardHtml([card], { pad: false, assets: CARD_ASSETS }))
   printWindow.document.close()
   printWindow.focus()
   // A document.write'd page has no load event to wait on, so give the layout a
