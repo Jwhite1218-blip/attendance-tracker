@@ -5,14 +5,21 @@
 // after recording a star. Keeping them here means the card a manager prints
 // cannot drift from the ones already pinned to the board.
 //
+// The layout follows Liz's printed card: script title at the left, Aramark mark
+// at the right, the gold outline star behind the name rule, the reason list in
+// lowercase condensed caps, and DATE / RECOGNIZED BY ruled along the foot.
+//
 // Reasons come from ALL_STAR_REASON_OPTIONS so the card always offers exactly
 // the reasons the program recognises.
+//
+// Fonts and the logo arrive as `assets` rather than being imported, because
+// this module is also run under Node by the sheet generator and by its tests,
+// where a .woff2 import would not resolve. With no assets the card still prints
+// correctly in system faces — it just isn't the branded version.
 
 import { ALL_STAR_REASON_OPTIONS } from './recognitionStore.js'
 
 export const CARDS_PER_PAGE = 6
-
-const STAR_PATH = 'M12 2.3l2.9 6.26 6.85.79-5.08 4.64 1.38 6.74L12 17.4l-6.05 3.33 1.38-6.74L2.25 9.35l6.85-.79z'
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -33,37 +40,50 @@ function renderCard(entry) {
   const chosen = new Set(entry?.criteria || [])
   const reasons = ALL_STAR_REASON_OPTIONS
     .map(name => `<span class="reason${filled && chosen.has(name) ? ' reason-on' : ''}">${escapeHtml(name)}</span>`)
-    .join('<span class="dot">&middot;</span>')
+    .join('<span class="sep">-</span>')
 
   const message = filled
-    ? `<p class="msg">${escapeHtml(entry.message || '')}</p>`
+    ? `<p class="msg">${escapeHtml(entry.message || '')}</p><span class="ruled"></span>`
     : '<span class="ruled"></span><span class="ruled"></span>'
 
   return `<article class="card">
-  <svg class="watermark" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}"/></svg>
-  <header class="head">
-    <svg class="star" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}"/></svg>
-    <div>
+  <div class="frame">
+    <header class="head">
       <h2 class="title">Star of the Day</h2>
-      <p class="sub">Warren Student Nutrition</p>
+      <span class="brand"></span>
+    </header>
+    <span class="bigstar" aria-hidden="true"></span>
+    <div class="namezone">
+      <span class="nameline">${filled ? escapeHtml(entry.name || '') : ''}</span>
     </div>
-  </header>
-  <div class="namezone">
-    <span class="namelbl">This star goes to</span>
-    <span class="nameline">${filled ? escapeHtml(entry.name || '') : ''}</span>
-  </div>
-  <p class="lbl why">Why they shine${filled ? '' : ' &mdash; circle all that apply'}</p>
-  <p class="reasons">${reasons}</p>
-  <div class="message">${message}</div>
-  <div class="footrow">
-    <div class="field"><span class="lbl">Date</span><span class="line">${filled ? formatCardDate(entry.date) : ''}</span></div>
-    <div class="field"><span class="lbl">Recognized by</span><span class="line">${filled ? escapeHtml(entry.recognizedBy || '') : ''}</span></div>
+    <p class="why">Why they shine :</p>
+    <p class="reasons">${reasons}</p>
+    <div class="message">${message}</div>
+    <div class="footrow">
+      <div class="field"><span class="lbl">Date</span><span class="line">${filled ? formatCardDate(entry.date) : ''}</span></div>
+      <div class="field"><span class="lbl">Recognized by</span><span class="line">${filled ? escapeHtml(entry.recognizedBy || '') : ''}</span></div>
+    </div>
   </div>
 </article>`
 }
 
+// Only emitted when the caller supplies the files. Same-origin URLs are the
+// only option here: the site's CSP has no font-src of its own, so it falls back
+// to default-src 'self', which rules out inlined data: fonts.
+function fontFaces(assets) {
+  const faces = [
+    ['CardScript', assets.script],
+    ['CardLabel', assets.label],
+    ['CardDisplay', assets.display],
+  ]
+  return faces
+    .filter(([, url]) => url)
+    .map(([family, url]) => `@font-face { font-family: ${family}; src: url("${escapeHtml(url)}") format('woff2'); font-display: block; }`)
+    .join('\n  ')
+}
+
 const STYLES = `
-  :root { color-scheme: light; --gold: #c28b24; --deep: #8a5f14; --ink: #14213d; }
+  :root { color-scheme: light; --gold: #b8892f; --goldlt: #d8b062; --ink: #111111; }
   * { box-sizing: border-box; }
   body { margin: 0; background: #eef2f7; color: var(--ink);
          font: 12px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -75,45 +95,60 @@ const STYLES = `
   .sheet { width: 8.5in; margin: 24px auto; padding: 0.25in; background: #fff;
            box-shadow: 0 2px 12px rgba(15,23,42,.12); }
   .grid { display: grid; grid-template-columns: repeat(2, 4in); grid-auto-rows: 3.5in; }
-  .card { position: relative; border: 1px dashed #9aa7b8; padding: 0.15in 0.18in;
-          display: flex; flex-direction: column; overflow: hidden; break-inside: avoid; }
-  .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-               width: 3.15in; height: 3.15in; z-index: 0; pointer-events: none;
-               fill: var(--gold); opacity: .13; }
-  .card > *:not(.watermark) { position: relative; z-index: 1; }
-  .head { display: flex; align-items: center; gap: 6px;
-          border-bottom: 2px solid var(--gold); padding-bottom: 4px; flex: none; }
-  .star { width: 18px; height: 18px; flex: none; fill: var(--gold); }
-  .title { margin: 0; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
-           font-size: 17px; letter-spacing: .045em; text-transform: uppercase;
-           color: var(--deep); line-height: 1; }
-  .sub { margin: 1px 0 0; font-size: 7px; font-weight: 700; letter-spacing: .1em;
-         text-transform: uppercase; color: #8b96a5; }
-  .namezone { flex: none; text-align: center; margin-top: 11px; }
-  .namelbl { display: block; font-size: 7px; font-weight: 700; letter-spacing: .12em;
-             text-transform: uppercase; color: var(--deep); margin-bottom: 3px; }
-  .nameline { display: block; border-bottom: 1.5px solid var(--deep); min-height: 28px;
-              padding: 0 4px 2px; font-family: Impact, Haettenschweiler, "Arial Narrow Bold", sans-serif;
-              font-size: 22px; letter-spacing: .02em; color: var(--ink); line-height: 1.3; }
-  .lbl { font-size: 7px; font-weight: 700; letter-spacing: .1em;
-         text-transform: uppercase; color: #8b96a5; flex: none; }
-  .why { margin: 9px 0 2px; }
-  .reasons { margin: 0; font-size: 8.5px; color: #45536b; line-height: 1.45; flex: none; }
-  .reason-on { font-weight: 700; color: var(--deep); border-bottom: 2px solid var(--gold); padding-bottom: 1px; }
-  .dot { margin: 0 2px; color: #b9c2ce; }
+  .card { position: relative; padding: 0.1in; break-inside: avoid; }
+  /* The cut guide sits on the card edge; the printed frame is inset within it. */
+  .card { outline: 1px dashed #c8d0da; outline-offset: -0.5px; }
+  .frame { position: relative; height: 100%; border: 1px solid #b9c2ce;
+           padding: 0.13in 0.15in 0.1in; display: flex; flex-direction: column; overflow: hidden; }
+
+  .head { display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 8px; flex: none; position: relative; z-index: 2; }
+  .title { margin: 0; font-family: CardScript, "Segoe Script", "Brush Script MT", cursive;
+           font-size: 33px; line-height: .95; font-weight: 400; color: var(--ink);
+           text-shadow: 2px 2px 0 rgba(150,150,150,.5); }
+  .brand { flex: none; width: 0.78in; height: 0.3in; background-repeat: no-repeat;
+           background-position: right top; background-size: contain; }
+
+  /* Sits behind the name rule exactly as it does on the printed card. */
+  .bigstar { position: absolute; top: 0.34in; left: 50%; transform: translateX(-50%);
+             width: 1.85in; height: 1.78in; z-index: 0; pointer-events: none;
+             background-repeat: no-repeat; background-position: center; background-size: contain; }
+
+  .namezone { flex: none; margin-top: 0.58in; position: relative; z-index: 2; }
+  .nameline { display: block; border-bottom: 3px solid var(--ink); min-height: 26px;
+              padding: 0 3px 1px; text-align: center;
+              font-family: CardDisplay, "Arial Narrow", Impact, sans-serif;
+              font-size: 19px; font-weight: 700; letter-spacing: .01em;
+              color: var(--ink); line-height: 1.35; }
+
+  .why { margin: 7px 0 1px; font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
+         font-size: 11px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase;
+         color: var(--gold); position: relative; z-index: 2; }
+  .reasons { margin: 0; position: relative; z-index: 2;
+             font-family: CardDisplay, "Arial Narrow", Impact, sans-serif;
+             font-size: 11px; font-weight: 700; letter-spacing: .005em;
+             text-transform: lowercase; color: var(--ink); line-height: 1.3; }
+  .reason-on { color: var(--gold); border-bottom: 2px solid var(--goldlt); padding-bottom: 1px; }
+  .sep { margin: 0 3px; color: #8d97a4; }
+
   .message { flex: 1; display: flex; flex-direction: column;
-             justify-content: space-evenly; padding: 4px 0 3px; min-height: 0; }
-  .ruled { display: block; border-bottom: 1px solid #c3cbd6; height: 0; }
-  .msg { margin: 0; font-size: 9px; line-height: 1.3; color: #24324a;
-         border-bottom: 1px solid #c3cbd6; padding-bottom: 2px; }
-  .footrow { display: flex; align-items: flex-end; gap: 0.26in; flex: none;
-             border-top: 1px solid #e2e7ee; padding-top: 6px; }
-  .footrow .field { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+             justify-content: space-evenly; padding: 5px 0 3px; min-height: 0;
+             position: relative; z-index: 2; }
+  .ruled { display: block; border-bottom: 1px solid #9aa4b1; height: 0; }
+  .msg { margin: 0; font-size: 9.5px; line-height: 1.3; color: #24324a;
+         border-bottom: 1px solid #9aa4b1; padding-bottom: 2px; }
+
+  .footrow { display: flex; align-items: flex-end; gap: 0.2in; flex: none; padding-top: 5px;
+             position: relative; z-index: 2; }
+  .footrow .field { display: flex; align-items: baseline; gap: 4px; min-width: 0; }
   .footrow .field:first-child { flex: 1; }
   .footrow .field:nth-child(2) { flex: 1.7; }
-  .line { flex: 1; border-bottom: 1px solid #45536b; min-height: 14px; font-size: 9.5px;
+  .lbl { font-family: CardLabel, "Arial Narrow", Impact, sans-serif; font-size: 9px;
+         letter-spacing: .05em; text-transform: uppercase; color: var(--ink); flex: none; }
+  .line { flex: 1; border-bottom: 1px solid var(--ink); min-height: 13px; font-size: 9.5px;
           font-weight: 600; padding: 0 2px 1px; min-width: 0;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
   @media print {
     body { background: #fff; }
     .screen-note { display: none; }
@@ -126,28 +161,40 @@ const STYLES = `
 // entries: [{ name, date, criteria: [...], message, recognizedBy }].
 // pad fills each page out to six cards so a part-full sheet still cuts cleanly;
 // a single card printed from the app leaves the rest of the page alone instead.
-export function buildStarCardHtml(entries = [], { pad = true, screenNote = '' } = {}) {
-  const list = entries.length ? entries : [null]
-  const pages = []
+// assets: { script, label, display, logo } — same-origin URLs, all optional.
+export function buildStarCardHtml(entries = [], { pad = true, screenNote = '', assets = {} } = {}) {
+  const list = Array.isArray(entries) ? entries : []
+  const sheets = []
 
-  for (let index = 0; index < list.length; index += CARDS_PER_PAGE) {
+  for (let index = 0; index < Math.max(list.length, pad ? CARDS_PER_PAGE : 0); index += CARDS_PER_PAGE) {
     const slice = list.slice(index, index + CARDS_PER_PAGE)
     const count = pad ? CARDS_PER_PAGE : slice.length
-    const cards = Array.from({ length: count }, (_, slot) => renderCard(slice[slot])).join('\n')
-    pages.push(`<section class="sheet"><div class="grid">\n${cards}\n</div></section>`)
+    const cards = []
+    for (let position = 0; position < count; position++) {
+      cards.push(renderCard(slice[position]))
+    }
+    sheets.push(`<section class="sheet"><div class="grid">${cards.join('')}</div></section>`)
   }
+
+  const note = screenNote
+    ? `<div class="screen-note"><h1>Star of the Day cards</h1><p>${escapeHtml(screenNote)}</p></div>`
+    : ''
+  const artRules = [
+    assets.logo ? `.brand { background-image: url("${escapeHtml(assets.logo)}"); }` : '',
+    assets.star ? `.bigstar { background-image: url("${escapeHtml(assets.star)}"); }` : '',
+  ].filter(Boolean).join('\n  ')
 
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Star of the Day Card</title>
-<style>${STYLES}</style>
+<title>Star of the Day cards</title>
+<style>
+  ${fontFaces(assets)}
+${STYLES}
+  ${artRules}
+</style>
 </head>
-<body>
-${screenNote ? `<div class="screen-note"><h1>${escapeHtml(screenNote)}</h1><p>Print at 100% scale (not "fit to page") on US Letter, then cut along the dashed lines.</p><p>This note does not print.</p></div>` : ''}
-${pages.join('\n')}
-</body>
-</html>
-`
+<body>${note}${sheets.join('')}</body>
+</html>`
 }
