@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { Link, useNavigate } from 'react-router-dom'
 import { LOCATION_MAP } from '../data/locations.js'
@@ -12,6 +13,7 @@ import { useAuth } from '../components/PinGate.jsx'
 // are looked at rarely, and a departed employee sitting on the front page reads
 // like an active concern. The Dashboard keeps a button through to this page.
 export default function StaffAdmin() {
+  const term = useProgramTerms()
   const access = useAuth()
   const navigate = useNavigate()
   const lizAdminAccess = hasLizAdminAccess(access)
@@ -109,7 +111,7 @@ export default function StaffAdmin() {
                       <p className="mt-1 text-xs text-gray-500">Termination date: {employee.termination_date || 'Not recorded'} · Last day worked: {employee.last_day_worked || 'Not recorded'}</p>
                       {flagged && (
                         <p className="text-xs font-semibold text-amber-700 mt-1">
-                          {getAttendanceStageLabel(flagged)} · kept if reactivated
+                          {term.stageLabel(flagged)} · kept if reactivated
                         </p>
                       )}
                     </button>

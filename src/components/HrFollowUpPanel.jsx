@@ -1,4 +1,5 @@
 import { CODE_MAP } from '../data/attendanceCodes.js'
+import { useProgramTerms } from './useProgramTerms.js'
 import { getAttendanceStageLabel } from '../data/hrFlags.js'
 import { LOCATION_MAP } from '../data/locations.js'
 
@@ -6,6 +7,7 @@ import { LOCATION_MAP } from '../data/locations.js'
 // Dashboard (every school) and each building's LocationView (that school's
 // roster only) so the follow-up list looks and behaves the same everywhere.
 export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, showLocation = true }) {
+  const term = useProgramTerms()
   if (!flaggedEmployees.length) return null
 
   return (
@@ -47,7 +49,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
                 {showLocation && `${LOCATION_MAP[f.employee.location]?.name || f.employee.location} · `}{f.employee.position}
               </p>
               <p className={`text-xs font-semibold mt-1.5 ${f.seniorityReset ? 'text-red-700' : 'text-amber-700'}`}>
-                {getAttendanceStageLabel(f)} · {f.occurrenceCount} occurrence{f.occurrenceCount === 1 ? '' : 's'} · {f.schoolYearStart}–{f.schoolYearStart + 1}
+                {term.stageLabel(f)} · {f.occurrenceCount} occurrence{f.occurrenceCount === 1 ? '' : 's'} · {f.schoolYearStart}–{f.schoolYearStart + 1}
               </p>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {f.triggers.map((t, i) => (

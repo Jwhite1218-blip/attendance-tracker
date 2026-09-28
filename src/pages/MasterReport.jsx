@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeYearAttendance } from '../data/attendanceStore.js'
@@ -7,6 +8,7 @@ import { StatusBadge } from '../components/StatusBadge.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
 export default function MasterReport() {
+  const term = useProgramTerms()
   const { dataVersion } = useAuth()
   const [year, setYear] = useState(new Date().getFullYear())
   const [allAttendance, setAllAttendance] = useState({})
@@ -141,7 +143,7 @@ export default function MasterReport() {
                 <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Staff</th>
                 <th className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3">Exceptions</th>
                 {allCodes.map(c => (
-                  <th key={c.code} className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3" title={c.label}>{c.shortLabel}</th>
+                  <th key={c.code} className="text-center text-xs font-medium text-gray-500 uppercase tracking-wide px-2 py-3" title={term.codeLabel(c.code, c.label)}>{c.shortLabel}</th>
                 ))}
               </tr>
             </thead>

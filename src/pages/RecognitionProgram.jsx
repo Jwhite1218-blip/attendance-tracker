@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import AllStarBanner from '../components/AllStarBanner.jsx'
@@ -563,6 +564,7 @@ function RecognitionEntryForm({
   onRetry,
   onPrintCard,
 }) {
+  const term = useProgramTerms()
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
   const messageRequired = requiresStarMessage(form.type)
@@ -605,7 +607,7 @@ function RecognitionEntryForm({
                         className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-400"
                       />
                       <span className="min-w-0">
-                        <span className="block font-semibold text-gray-900">{type.label}</span>
+                        <span className="block font-semibold text-gray-900">{term.recognitionLabel(type.id, type.label)}</span>
                         <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500">{type.description}</span>
                       </span>
                     </label>
@@ -671,7 +673,7 @@ function RecognitionEntryForm({
                     <span>
                       <span className="block font-semibold text-gray-800">{criterion}</span>
                       {!compact && RECOGNITION_CRITERIA_DESCRIPTIONS[criterion] && (
-                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{RECOGNITION_CRITERIA_DESCRIPTIONS[criterion]}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{term.reasonDescription(criterion, RECOGNITION_CRITERIA_DESCRIPTIONS[criterion])}</span>
                       )}
                     </span>
                   </label>
@@ -1046,6 +1048,7 @@ function AceBucksCard() {
 }
 
 function RecentRecognition({ records, employeeMap, type, onTypeChange }) {
+  const term = useProgramTerms()
   const [visibleCount, setVisibleCount] = useState(10)
   const filtered = records.filter(record => type === 'all' || record.type === type)
   const recent = filtered.slice(0, visibleCount)
@@ -1058,7 +1061,7 @@ function RecentRecognition({ records, employeeMap, type, onTypeChange }) {
         Filter recognition history
         <select value={type} onChange={event => onTypeChange(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
           <option value="all">All recognition types</option>
-          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{term.recognitionLabel(item.id, item.label)}</option>)}
         </select>
       </label>
       <p role="status" className="mt-2 text-xs text-gray-500">Showing {recent.length} of {filtered.length} records</p>
