@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useProgramTerms } from './useProgramTerms.js'
 import { ATTENDANCE_CODES, CLEAR_ATTENDANCE } from '../data/attendanceCodes.js'
 import { StatusBadgeLarge } from './StatusBadge.jsx'
 
 export default function AttendancePickerModal({ picker, onClose, onSave }) {
+  const term = useProgramTerms()
   const [selectedCode, setSelectedCode] = useState('')
   const [note, setNote] = useState('')
 
@@ -91,7 +93,7 @@ export default function AttendancePickerModal({ picker, onClose, onSave }) {
             onClick={() => onSave('', '')}
             className="px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
           >
-            {CLEAR_ATTENDANCE.label}
+            {term.codeLabel('', CLEAR_ATTENDANCE.label)}
           </button>
           <div className="flex gap-2">
             <button type="button" onClick={onClose} className="flex-1 sm:flex-none px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-white">

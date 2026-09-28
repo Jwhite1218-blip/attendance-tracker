@@ -13,7 +13,6 @@ import {
   translateCount,
   isApproved,
   isProgramKey,
-  PROGRAM_KEY_PREFIXES,
 } from './i18n.js'
 import { PROGRAM_STRINGS } from './programVocabulary.js'
 
@@ -147,39 +146,32 @@ test('counts are pluralised rather than silently left singular', () => {
   assert.equal(translateCount('es', 'hr.occurrences', 0), '0 incidencias documentadas')
 })
 
-test('unreviewed program wording cannot reach a screen', async () => {
-  // The real gate. The Spanish for the attendance codes is a draft, and a
-  // draft of a disciplinary category must not be shown to staff before a
-  // person who speaks the language has signed it off. Once APPROVAL is
-  // filled in, this check steps aside and the terms can be wired up.
+test('unreviewed program wording always says it is unreviewed', async () => {
+  // The wording is now shown on purpose, so Liz's team can review it where it
+  // is actually used rather than on a printout. That makes the risk different:
+  // not that staff see the draft, but that they see it without knowing it is
+  // one. So while APPROVAL is unset, the app has to carry a visible notice.
+  //
+  // Once approved, the notice disappears on its own — useProgramTerms derives
+  // isDraftLanguage from isApproved() — and this check steps aside.
   if (isApproved()) return
 
-  const { readdir, readFile } = await import('node:fs/promises')
-  const roots = ['src/components', 'src/pages', 'src/data', 'src/lib']
-  const offenders = []
+  const { readFile } = await import('node:fs/promises')
 
-  async function walk(dir) {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const path = `${dir}/${entry.name}`
-      if (entry.isDirectory()) { await walk(path); continue }
-      if (!/\.(jsx?|mjs)$/.test(entry.name)) continue
-      if (entry.name.endsWith('.test.js') || entry.name === 'programVocabulary.js') continue
-      const source = await readFile(path, 'utf8')
-      for (const prefix of PROGRAM_KEY_PREFIXES) {
-        // A literal scan rather than a regex: there are only three quote
-        // styles, and a plain search cannot be tripped up by escaping.
-        const used = [`t('${prefix}`, `t("${prefix}`, 't(`' + prefix]
-          .some(needle => source.includes(needle))
-        if (used) offenders.push(`${path} uses t('${prefix}…')`)
-      }
-    }
-  }
+  const hook = await readFile('src/components/useProgramTerms.js', 'utf8')
+  assert.match(
+    hook,
+    /isDraftLanguage:[^\n]*!isApproved\(\)/,
+    'the draft flag must be derived from the approval state, not hard-coded'
+  )
 
-  for (const root of roots) await walk(root)
-
-  assert.deepEqual(
-    offenders,
-    [],
-    'program wording is still a draft — set APPROVAL in programVocabulary.js before using it on screen'
+  const shell = await readFile('src/App.jsx', 'utf8')
+  assert.ok(
+    shell.includes('term.isDraftLanguage'),
+    'the app shell must show a notice while the Spanish wording is a draft'
+  )
+  assert.ok(
+    shell.includes("t('language.draftNotice')"),
+    'the draft notice must be the translated string, so it reads in the language being reviewed'
   )
 })

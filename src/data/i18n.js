@@ -42,6 +42,7 @@ const UI_STRINGS = {
   en: {
     'language.label': 'Language',
     'language.switchTo': 'Switch to {name}',
+    'language.draftNotice': 'The Spanish wording is still a draft under review. Tell Liz if anything reads wrongly — nothing here changes a record.',
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Food Service Attendance Portal',
@@ -89,6 +90,7 @@ const UI_STRINGS = {
   es: {
     'language.label': 'Idioma',
     'language.switchTo': 'Cambiar a {name}',
+    'language.draftNotice': 'La traducción al español todavía es un borrador en revisión. Avise a Liz si algo no suena bien — nada de esto cambia un registro.',
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Portal de Asistencia de Servicio de Alimentos',

@@ -16,6 +16,7 @@ import FoodDayCelebration, { FoodDayBanner } from './components/FoodDayCelebrati
 import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
+import { useProgramTerms } from './components/useProgramTerms.js'
 import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
@@ -54,6 +55,7 @@ function AppShell() {
     syncStatus,
   } = useAuth()
   const { t } = useLanguage()
+  const term = useProgramTerms()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const schoolRecognitionOnly = role === 'school' && canEditRecognition && !canEditAttendance
 
@@ -242,6 +244,12 @@ function AppShell() {
           )}
         </div>
       </nav>
+
+      {term.isDraftLanguage && (
+        <div className="print:hidden border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-xs font-semibold text-amber-900">
+          {t('language.draftNotice')}
+        </div>
+      )}
 
       {TEST_ENVIRONMENT_LABEL && (
         <div className="print:hidden border-b border-fuchsia-300 bg-fuchsia-700 px-4 py-2 text-center text-xs font-black uppercase tracking-[0.16em] text-white shadow-sm">
