@@ -572,14 +572,20 @@ export const GRADE_ACCENTS = {
     bar: 'from-[#ad741e] to-[#f1cd57]',
     tab: 'bg-[#ad741e]',
     chip: 'border-amber-300 bg-amber-50 text-[#8a5a12]',
+    note: 'border-amber-200 bg-amber-50 text-amber-900',
   },
+  // Blue, and deliberately not a neighbour of the All-Star gold. An orange
+  // first attempt sat too close to the gold to register at a glance, which
+  // defeated the point: the two programmes have to be tellable apart across a
+  // room, not on close inspection.
   manager: {
     label: 'ACE Coach',
-    rank: 'bg-[#2a1708] text-[#ffb05c]',
-    count: 'text-[#b4531b]',
-    bar: 'from-[#b4531b] to-[#f0954a]',
-    tab: 'bg-[#b4531b]',
-    chip: 'border-orange-300 bg-orange-50 text-[#8c3f10]',
+    rank: 'bg-[#0d2a57] text-[#9ecbff]',
+    count: 'text-[#1a56c4]',
+    bar: 'from-[#1a56c4] to-[#7cb6ff]',
+    tab: 'bg-[#1a56c4]',
+    chip: 'border-[#9ecbff] bg-[#eaf3ff] text-[#12407f]',
+    note: 'border-[#9ecbff] bg-[#eaf3ff] text-[#12407f]',
   },
 }
 

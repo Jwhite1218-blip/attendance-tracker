@@ -1106,7 +1106,7 @@ function MonthlyDrawing({
           <h2 className="all-star-display text-xl uppercase text-gray-950">All-Star of the Month</h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">Each Star of the Day equals one entry. More daily stars mean a greater chance of selection.</p>
           {managerEntriesHeld > 0 && (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+            <p className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${gradeAccent(true).note}`}>
               {managerEntriesHeld} star{managerEntriesHeld === 1 ? '' : 's'} earned by Worker Leads, Managers or the Director
               {' '}are not in this drawing — they are recognised in the manager pool instead.
             </p>
