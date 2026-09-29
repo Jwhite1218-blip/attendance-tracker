@@ -1,5 +1,10 @@
+import { createRequire } from 'node:module'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// Read at config time so the badge across the top of every page and
+// package.json can never disagree about what version this is.
+const { version } = createRequire(import.meta.url)('./package.json')
 
 // One id per deploy: Netlify sets COMMIT_REF during builds; local builds get a
 // timestamp so two of them never look identical. The same id is baked into the
@@ -24,5 +29,6 @@ export default defineConfig({
   ],
   define: {
     __BUILD_ID__: JSON.stringify(buildId),
+    __APP_VERSION__: JSON.stringify(version),
   },
 })

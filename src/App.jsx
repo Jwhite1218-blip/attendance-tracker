@@ -17,6 +17,7 @@ import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
+import ReleaseBadge from './components/ReleaseBadge.jsx'
 import { useProgramTerms } from './components/useProgramTerms.js'
 import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
@@ -29,15 +30,21 @@ export default function App() {
   const location = useLocation()
   if (location.pathname.startsWith('/school-stars/')) {
     return (
+      <>
+      <ReleaseBadge />
       <Routes>
         <Route path="/school-stars/:token" element={<PublicSchoolLeaderboard />} />
       </Routes>
+      </>
     )
   }
   return (
+    <>
+    <ReleaseBadge />
     <PinGate>
       <AppShell />
     </PinGate>
+    </>
   )
 }
 
