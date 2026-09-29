@@ -8,6 +8,7 @@ import { addEmployeeNote, getEmployeeByKey, setEmployeeActive } from '../data/em
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { LOCATION_MAP } from '../data/locations.js'
+import { openStarCardWindow, starCardFromRecognition } from '../lib/starCardPrinting.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
@@ -68,6 +69,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const term = useProgramTerms()
   const [showAllRecognition, setShowAllRecognition] = useState(false)
   const [openRecognitionId, setOpenRecognitionId] = useState(null)
+  const [printError, setPrintError] = useState(null)
   const access = useAuth()
   const { role, displayName, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
@@ -103,6 +105,17 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     [empKey, dataVersion]
   )
   const openRecognition = recognitionRecords.find(record => record.id === openRecognitionId) || null
+  // Reprinting from the record itself, so a card can be replaced long after
+  // the day it was given without re-entering anything.
+  const handlePrintRecognition = () => {
+    if (!openRecognition) return
+    setPrintError(null)
+    const cardName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
+    const card = starCardFromRecognition(openRecognition, cardName)
+    if (!openStarCardWindow([card])) {
+      setPrintError('Your browser blocked the print window. Allow pop-ups for this site, then try again.')
+    }
+  }
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
   const starLevel = getStarLevel(starCount)
@@ -423,12 +436,28 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 and what they wrote, rather than only that one was given. */}
             {openRecognition && (
               <div className="border-t border-[#e8c65c]/25 bg-[#17130d] px-4 py-4">
-                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#e8c65c]">
-                  {term.recognitionLabel(
-                    openRecognition.type,
-                    RECOGNITION_TYPE_MAP[openRecognition.type]?.label || openRecognition.type
-                  )} · {openRecognition.date}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#e8c65c]">
+                    {term.recognitionLabel(
+                      openRecognition.type,
+                      RECOGNITION_TYPE_MAP[openRecognition.type]?.label || openRecognition.type
+                    )} · {openRecognition.date}
+                  </p>
+                  {/* Only the daily star has a card — the physical board is a
+                      Star of the Day board, and a nomination is not an award. */}
+                  {openRecognition.type === 'star-of-day' && (
+                    <button
+                      type="button"
+                      onClick={handlePrintRecognition}
+                      className="flex-none rounded-lg border border-[#e8c65c]/50 bg-[#e8c65c]/10 px-3 py-1.5 text-xs font-bold text-[#f4d87d] hover:bg-[#e8c65c]/20 print:hidden"
+                    >
+                      Print star card
+                    </button>
+                  )}
+                </div>
+                {printError && (
+                  <p role="status" className="mt-2 text-xs font-semibold text-red-300">{printError}</p>
+                )}
 
                 {openRecognition.criteria?.length > 0 && (
                   <p className="mt-2 flex flex-wrap gap-1.5">
@@ -963,6 +992,7 @@ function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
   const term = useProgramTerms()
   const [showAllRecognition, setShowAllRecognition] = useState(false)
   const [openRecognitionId, setOpenRecognitionId] = useState(null)
+  const [printError, setPrintError] = useState(null)
   const rows = buildEmployeeHistoryRows(attendance)
 
   return (

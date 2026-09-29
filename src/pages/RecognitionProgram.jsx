@@ -3,13 +3,8 @@ import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import AllStarBanner from '../components/AllStarBanner.jsx'
-import aramarkMark from '../assets/aramark-mark.png'
-import starOutline from '../assets/star-outline.png'
-import cardScriptFont from '../assets/fonts/sacramento.woff2'
-import cardLabelFont from '../assets/fonts/bebas-neue.woff2'
-import cardDisplayFont from '../assets/fonts/antonio-bold.woff2'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
-import { buildStarCardHtml } from '../data/starCard.js'
+import { openStarCardWindow, starCardPreviewHtml } from '../lib/starCardPrinting.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import {
   ANNUAL_AWARD_CATEGORIES,
@@ -106,53 +101,11 @@ function formatDate(dateKey) {
 // Opens the card in its own window and sends it straight to the print dialog.
 // The card is written into a fresh document rather than printed from this page
 // so the app's own layout can never bleed into the printed sheet.
-// The popup is a document.write'd about:blank with no base URL of its own, so
-// the card's fonts and artwork have to be named absolutely. They stay on this
-// origin because the site's CSP has no font-src and falls back to 'self',
-// which rules out inlining them as data: URIs the way the bulk sheet does.
-const CARD_ASSETS = {
-  script: new URL(cardScriptFont, window.location.origin).href,
-  label: new URL(cardLabelFont, window.location.origin).href,
-  display: new URL(cardDisplayFont, window.location.origin).href,
-  logo: new URL(aramarkMark, window.location.origin).href,
-  star: new URL(starOutline, window.location.origin).href,
-}
 
-function openStarCardSheet(cards) {
-  const printWindow = window.open('', '_blank', 'width=880,height=780')
-  if (!printWindow) return false
-  printWindow.document.open()
-  printWindow.document.write(buildStarCardHtml(cards, { pad: true, assets: CARD_ASSETS }))
-  printWindow.document.close()
-  printWindow.focus()
-  setTimeout(() => {
-    try {
-      printWindow.print()
-    } catch {
-      // The sheet is on screen either way; the person can print it themselves.
-    }
-  }, 400)
-  return true
-}
 
-function openStarCardPrintWindow(card) {
-  const printWindow = window.open('', '_blank', 'width=880,height=780')
-  if (!printWindow) return false
-  printWindow.document.open()
-  printWindow.document.write(buildStarCardHtml([card], { pad: false, assets: CARD_ASSETS }))
-  printWindow.document.close()
-  printWindow.focus()
-  // A document.write'd page has no load event to wait on, so give the layout a
-  // tick to settle before the dialog opens over it.
-  setTimeout(() => {
-    try {
-      printWindow.print()
-    } catch {
-      // The window is still open and printable by hand if the dialog is refused.
-    }
-  }, 300)
-  return true
-}
+
+
+
 
 function emptyRecognitionForm(type) {
   return { employeeId: '', type, date: localDateKey(), criteria: [], note: '', sourceName: '' }
@@ -379,7 +332,7 @@ export default function RecognitionProgram() {
       setFeedback({ type: 'error', message: 'There are no Star of the Day cards to print in this view.' })
       return
     }
-    if (!openStarCardSheet(cards)) {
+    if (!openStarCardWindow(cards, { pad: true })) {
       setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
     }
   }
@@ -387,7 +340,7 @@ export default function RecognitionProgram() {
   const handlePrintCard = surface => {
     const card = confirmations[surface]?.card
     if (!card) return
-    if (!openStarCardPrintWindow(card)) {
+    if (!openStarCardWindow([card])) {
       setFeedback({
         type: 'error',
         message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print star card again.',
@@ -1454,7 +1407,7 @@ function StarCardPreview({ preview, submitting, onConfirm, onBack }) {
           <iframe
             title="Star of the Day card preview"
             className="h-[336px] w-[384px] max-w-full rounded-md border border-gray-300 bg-white shadow-sm"
-            srcDoc={buildStarCardHtml([preview.card], { pad: false, fit: true, assets: CARD_ASSETS })}
+            srcDoc={starCardPreviewHtml(preview.card)}
           />
         </div>
 
