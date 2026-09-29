@@ -1,9 +1,10 @@
 // The strip across the very top of every page.
 //
-// Two things need saying and neither is decoration: this is pre-release
-// software, and Warren is using it at no cost with no licence in place. Both
-// are easy to forget once a thing looks finished and people rely on it daily,
-// which is exactly when the misunderstanding gets expensive.
+// One job: make it obvious this is not finished. Nothing about cost, payment
+// or licensing — the app sits in front of district staff all day, and a note
+// about money on every screen reads as a demand whatever the wording. The
+// point is only that nobody mistakes a work in progress for the finished
+// thing.
 //
 // The version comes from package.json through __APP_VERSION__, so bumping it
 // is one edit in one place. The build id sits in the tooltip — when somebody
@@ -21,10 +22,10 @@ export default function ReleaseBadge() {
           Beta {__APP_VERSION__}
         </span>
         <span className="ml-2 hidden text-[#e8c65c]/70 sm:inline">
-          Pre-release · provided at no cost by Localis Collective
+          Demo only · still in development
         </span>
         <span className="ml-2 text-[#e8c65c]/70 sm:hidden">
-          Pre-release · no-cost pilot
+          Demo only
         </span>
       </p>
     </div>
