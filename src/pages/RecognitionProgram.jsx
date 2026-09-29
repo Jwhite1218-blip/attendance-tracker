@@ -228,6 +228,9 @@ export default function RecognitionProgram() {
   const boardMonths = schoolYearMonthKeys(schoolYearStart).filter(month => month <= thisMonth)
   const drawingScope = role === 'school' ? locationId : (scopeLocation !== 'all' ? scopeLocation : drawingLocation)
   const splitApplies = drawingMonth >= MANAGER_SPLIT_STARTS_ON
+  const drawingEntriesBeforeSplit = drawingScope
+    ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth)
+    : []
   const drawingEntries = drawingScope
     ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth, splitApplies ? managerIds : null)
     : []
@@ -608,6 +611,7 @@ export default function RecognitionProgram() {
               setDrawingMonth={setDrawingMonth}
               drawingScope={drawingScope}
               entries={drawingEntries}
+              managerEntriesHeld={drawingEntriesBeforeSplit.length - drawingEntries.length}
               monthlyWinner={monthlyWinner}
               monthlyWinnerEmployee={monthlyWinnerEmployee}
               drawingAvailability={drawingAvailability}
@@ -1085,6 +1089,7 @@ function MonthlyDrawing({
   setDrawingMonth,
   drawingScope,
   entries,
+  managerEntriesHeld = 0,
   monthlyWinner,
   monthlyWinnerEmployee,
   drawingAvailability,
@@ -1098,6 +1103,12 @@ function MonthlyDrawing({
         <div>
           <h2 className="all-star-display text-xl uppercase text-gray-950">All-Star of the Month</h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">Each Star of the Day equals one entry. More daily stars mean a greater chance of selection.</p>
+          {managerEntriesHeld > 0 && (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900">
+              {managerEntriesHeld} star{managerEntriesHeld === 1 ? '' : 's'} earned by Worker Leads, Managers or the Director
+              {' '}are not in this drawing — they are recognised in the manager pool instead.
+            </p>
+          )}
         </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
