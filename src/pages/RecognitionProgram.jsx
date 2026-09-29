@@ -24,6 +24,8 @@ import {
   toStarCardEntries,
   buildingRecognitionSummary,
   schoolYearMonthKeys,
+  managerEmployeeIds,
+  splitLeaderboardByGrade,
   addRecognition,
   drawMonthlyAllStar,
   existingMonthlyWinner,
@@ -78,6 +80,11 @@ function employeeListName(employee) {
   if (!lastName) return firstName
   return firstName ? `${lastName}, ${firstName}` : lastName
 }
+
+// September was already mid-draw when the manager split was agreed, so the
+// exclusion starts with October. Changing eligibility in a month buildings
+// may already have drawn would make a recorded winner look wrong later.
+const MANAGER_SPLIT_STARTS_ON = '2026-10'
 
 function formatMonth(monthKey) {
   if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) return monthKey
@@ -190,6 +197,10 @@ export default function RecognitionProgram() {
     () => new Map(employees.map(employee => [employeeKey(employee), employee])),
     [employees]
   )
+  // The eighteen who run the kitchens. Read from the roster rather than
+  // stored on records, so every star they have already earned counts in
+  // their own pool without a single live record being rewritten.
+  const managerIds = useMemo(() => managerEmployeeIds(employees), [employees])
   const availableLocations = useMemo(() => {
     const ids = new Set(employees.map(employee => employee.location).filter(Boolean))
     return LOCATIONS.filter(location => ids.has(location.id))
@@ -239,6 +250,8 @@ export default function RecognitionProgram() {
     .filter(entry => entry.count > 0)
     .sort((left, right) => right.count - left.count || employeeName(left.employee).localeCompare(employeeName(right.employee)))
 
+  const { managers: managerLeaderboard, staff: staffLeaderboard } =
+    splitLeaderboardByGrade(leaderboard, managerIds)
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
   const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
@@ -253,7 +266,10 @@ export default function RecognitionProgram() {
   // that have not happened yet is just noise.
   const boardMonths = schoolYearMonthKeys(schoolYearStart).filter(month => month <= thisMonth)
   const drawingScope = role === 'school' ? locationId : (scopeLocation !== 'all' ? scopeLocation : drawingLocation)
-  const drawingEntries = drawingScope ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth) : []
+  const splitApplies = drawingMonth >= MANAGER_SPLIT_STARTS_ON
+  const drawingEntries = drawingScope
+    ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth, splitApplies ? managerIds : null)
+    : []
   const monthlyWinner = drawingScope ? existingMonthlyWinner(records, drawingScope, drawingMonth) : null
   const monthlyWinnerEmployee = monthlyWinner ? employeeMap.get(String(monthlyWinner.employeeId)) : null
   const drawingAvailability = monthlyDrawingStatus(drawingMonth)
@@ -407,7 +423,7 @@ export default function RecognitionProgram() {
       if (!drawingScope) throw new Error('Choose a building for the monthly drawing.')
       if (!drawingAvailability.isOpen) throw new Error(`The drawing opens during the final week of ${formatMonth(drawingMonth)}.`)
       if (monthlyWinner) throw new Error(`${formatMonth(drawingMonth)} already has a recorded winner for this building.`)
-      const result = drawMonthlyAllStar(records, drawingScope, drawingMonth)
+      const result = drawMonthlyAllStar(records, drawingScope, drawingMonth, undefined, splitApplies ? managerIds : null)
       if (!result) throw new Error('This building has no Star of the Day entries for that month.')
       const winner = employeeMap.get(String(result.employeeId))
       if (!winner) throw new Error('The selected employee is not available in this roster.')
@@ -522,7 +538,16 @@ export default function RecognitionProgram() {
               onPrintCard={() => handlePrintCard('star')}
             />
 
-            <StarLeaderboard leaderboard={leaderboard} schoolYearStart={schoolYearStart} />
+            <StarLeaderboard leaderboard={staffLeaderboard} schoolYearStart={schoolYearStart} />
+
+            <StarLeaderboard
+              leaderboard={managerLeaderboard}
+              schoolYearStart={schoolYearStart}
+              eyebrow="Building leads and district"
+              title="Manager Leaderboard"
+              blurb="Worker Leads, Managers and the Director are recognised in their own pool."
+              emptyNote="No manager has been recognised yet this school year."
+            />
 
             <BuildingStarCounts summary={buildingCounts} months={boardMonths} schoolYearStart={schoolYearStart} />
             {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
@@ -837,7 +862,14 @@ function RecognitionEntryForm({
 
 // Sits directly under Star of the Day: the board only ever counts earned stars,
 // so the number a manager sees here always matches the award they just gave.
-function StarLeaderboard({ leaderboard, schoolYearStart }) {
+function StarLeaderboard({
+  leaderboard,
+  schoolYearStart,
+  eyebrow = 'Earn your stars',
+  title = 'School-Year Leaderboard',
+  blurb = 'Counts Star of the Day only. Nominations and shout-outs are tracked separately.',
+  emptyNote = 'Record the first Star of the Day to begin this school year.',
+}) {
   // Condensed to a top ten at Liz's request, but never a dead end: a manager
   // looking for their own people can open the rest.
   const [showAll, setShowAll] = useState(false)
@@ -847,9 +879,9 @@ function StarLeaderboard({ leaderboard, schoolYearStart }) {
     <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
-          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
-          <p className="mt-1 text-sm text-gray-500">Counts Star of the Day only. Nominations and shout-outs are tracked separately.</p>
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">{eyebrow}</p>
+          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">{title}</h2>
+          <p className="mt-1 text-sm text-gray-500">{blurb}</p>
         </div>
         <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
       </div>
@@ -895,7 +927,7 @@ function StarLeaderboard({ leaderboard, schoolYearStart }) {
         <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-5 py-8 text-center">
           <p className="text-2xl" aria-hidden="true">☆</p>
           <p className="mt-2 text-sm font-bold text-gray-800">The All-Star board is ready.</p>
-          <p className="mt-1 text-xs text-gray-500">Record the first Star of the Day to begin this school year.</p>
+          <p className="mt-1 text-xs text-gray-500">{emptyNote}</p>
         </div>
       )}
 

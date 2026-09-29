@@ -4,6 +4,7 @@ import employees from './employees.json' with { type: 'json' }
 import {
   MANAGER_GRADE_POSITIONS,
   drawManagerAllStar,
+  drawMonthlyAllStar,
   getManagerDrawingEntries,
   getMonthlyDrawingEntries,
   isManagerGrade,
@@ -116,4 +117,24 @@ test('the leaderboard splits into two boards with nobody lost', () => {
   assert.equal(managers.length, 1)
   assert.equal(staff.length, 2)
   assert.equal(managers.length + staff.length, entries.length)
+})
+
+test('the building draw itself cannot land on an excluded manager', () => {
+  // Filtering the entry list is not enough on its own — the draw has to use
+  // the filtered list, or a manager can still be picked as the winner.
+  const records = [
+    star('lead', '2026-10-01', 'StonyBrkMS'),
+    star('lead', '2026-10-02', 'StonyBrkMS'),
+    star('cook', '2026-10-03', 'StonyBrkMS'),
+  ]
+  const managers = new Set(['lead'])
+  for (const roll of [0, 0.25, 0.5, 0.75, 0.999]) {
+    const winner = drawMonthlyAllStar(records, 'StonyBrkMS', '2026-10', roll, managers)
+    assert.equal(winner.employeeId, 'cook', `roll ${roll} picked a manager`)
+  }
+})
+
+test('a building whose only stars went to managers draws nobody', () => {
+  const records = [star('lead', '2026-10-01', 'StonyBrkMS')]
+  assert.equal(drawMonthlyAllStar(records, 'StonyBrkMS', '2026-10', 0, new Set(['lead'])), null)
 })

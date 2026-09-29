@@ -270,8 +270,8 @@ export function getMonthlyDrawingEntries(records, locationId, monthKey, excluded
   )
 }
 
-export function drawMonthlyAllStar(records, locationId, monthKey, randomValue = Math.random()) {
-  const entries = getMonthlyDrawingEntries(records, locationId, monthKey)
+export function drawMonthlyAllStar(records, locationId, monthKey, randomValue = Math.random(), excludedEmployeeIds = null) {
+  const entries = getMonthlyDrawingEntries(records, locationId, monthKey, excludedEmployeeIds)
   if (!entries.length) return null
   const boundedRandom = Math.max(0, Math.min(Number(randomValue) || 0, 0.999999999))
   const winningEntry = entries[Math.floor(boundedRandom * entries.length)]
