@@ -7,6 +7,9 @@ import {
   topLeaderboardEntries,
   RECOGNITION_TYPES,
   recognitionAccent,
+  RECOGNITION_CRITERIA,
+  CRITERION_LABELS,
+  criterionLabel,
 } from './recognitionStore.js'
 
 const star = (employeeId, date, locationId, extra = {}) => ({
@@ -161,4 +164,41 @@ test('the accent cannot disagree with whether a star is actually earned', () => 
 test('an unknown type still gets a usable look', () => {
   const accent = recognitionAccent('not-a-type')
   assert.ok(accent.glyph && accent.chip && accent.mark)
+})
+
+// --- Shout-Out wording matches the printed card -----------------------------
+
+test('every Shout-Out reason carries the name from the printed card', () => {
+  const reasons = RECOGNITION_CRITERIA['star-shout-out'].filter(value => value !== 'Other')
+  for (const value of reasons) {
+    const label = criterionLabel(value)
+    assert.ok(CRITERION_LABELS[value], `${value} has no card wording`)
+    assert.notEqual(label.name, value, `${value} still shows its stored value as the name`)
+    assert.ok(label.description, `${value} has no explanation`)
+  }
+})
+
+test('the reasons read down in the order the card prints them', () => {
+  assert.deepEqual(
+    RECOGNITION_CRITERIA['star-shout-out'].map(value => criterionLabel(value).name),
+    ['Compassionate Service', 'Community Contributor', 'Effective Communicator', 'Resilient Leader', 'Other']
+  )
+})
+
+test('the card names are keyed by the value already stored on records', () => {
+  // The point of keying on the stored string is that nothing recorded has to
+  // change and past shout-outs pick up the names too. If a key here ever stops
+  // matching an allowed reason, old records quietly lose their name.
+  for (const key of Object.keys(CRITERION_LABELS)) {
+    assert.ok(
+      RECOGNITION_CRITERIA['star-shout-out'].includes(key),
+      `${key} is no longer a reason anyone can choose`
+    )
+  }
+})
+
+test('a reason with no card wording still reads as itself', () => {
+  assert.equal(criterionLabel('Other').name, 'Other')
+  assert.equal(criterionLabel('Taking initiative to learn new skills or tasks').name,
+    'Taking initiative to learn new skills or tasks')
 })

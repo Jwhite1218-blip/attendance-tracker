@@ -57,7 +57,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 148px;
+  width: clamp(150px, 15vw, 210px);
   max-width: 100%;
   aspect-ratio: 620 / 205;
   background-repeat: no-repeat;
@@ -66,10 +66,14 @@
   filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
 }
 
+/* The six categories are the point of the banner, so they are sized to be
+   read across a kitchen rather than squinted at. Near-black on the gold
+   rather than mid-brown, which is what made them recede. */
 .allstar-banner__ribbon span {
-  font-size: 11px;
+  font-size: clamp(12px, 1.15vw, 16px);
   line-height: 1;
-  color: #3a2a06;
+  letter-spacing: 0.04em;
+  color: #241703;
   text-transform: uppercase;
   transform: translateY(1px);
 }
@@ -107,7 +111,7 @@
 
 .allstar-banner__starwrap {
   position: relative;
-  width: clamp(150px, 27vw, 232px);
+  width: clamp(168px, 30vw, 280px);
   margin-top: -4px;
 }
 
@@ -117,30 +121,40 @@
   height: auto;
 }
 
-/* Sits in the hollow middle of the star artwork. */
+/* Sits in the hollow middle of the star artwork.
+   A five-point star is at its widest around 52% of its height, and the clear
+   space there is a little under half the star's width. The block is capped to
+   that so a four-figure count still lands inside the outline instead of
+   crossing the gold. */
 .allstar-banner__count {
   position: absolute;
-  top: 46%;
+  top: 52%;
   left: 50%;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
+  width: 46%;
   line-height: 1;
+  text-align: center;
 }
 
 .allstar-banner__count b {
-  font-size: clamp(26px, 4.6vw, 44px);
+  display: block;
+  max-width: 100%;
+  font-size: clamp(22px, 3.6vw, 38px);
   font-weight: 400;
   color: #ffe9a8;
   text-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+  overflow-wrap: anywhere;
 }
 
 .allstar-banner__count span {
-  margin-top: 3px;
-  font-size: 9px;
+  margin-top: 4px;
+  font-size: clamp(7px, 0.62vw, 9px);
+  line-height: 1.25;
   text-transform: uppercase;
-  color: rgba(255, 233, 168, 0.8);
+  color: rgba(255, 233, 168, 0.85);
 }
 
 .allstar-banner__tagline {
@@ -231,8 +245,8 @@
 
   .allstar-banner__ribbons--right { align-items: center; }
   .allstar-banner__core { order: 1; }
-  .allstar-banner__ribbon { width: 108px; }
-  .allstar-banner__ribbon span { font-size: 9px; }
+  .allstar-banner__ribbon { width: 136px; }
+  .allstar-banner__ribbon span { font-size: 11px; }
 }
 
 /* On a phone the full poster pushes the entry form a screen and a half down,

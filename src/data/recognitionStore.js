@@ -94,10 +94,10 @@ export const RECOGNITION_CRITERIA = {
     'Other',
   ],
   'star-shout-out': [
-    'Creating a positive cafeteria environment for students',
+    'Showing patience or kindness when helping students',
     'Participating in school functions beyond regular duties',
     'Working with teachers and communicating effectively',
-    'Showing patience or kindness when helping students',
+    'Creating a positive cafeteria environment for students',
     'Other',
   ],
   'warren-employee-month': [
@@ -406,4 +406,38 @@ export const DEFAULT_RECOGNITION_ACCENT = {
 
 export function recognitionAccent(typeId) {
   return RECOGNITION_ACCENTS[typeId] || DEFAULT_RECOGNITION_ACCENT
+}
+
+// Liz's printed Shout-Out card names each reason and then explains it:
+// "COMPASSIONATE SERVICE — Shows patience or kindness when helping students".
+// The app showed only the explanation, so a manager holding the card and a
+// manager looking at the screen were choosing from two lists that did not look
+// like each other.
+//
+// Keyed by the value already stored on records, so nothing recorded has to
+// change and the history of past shout-outs picks up the names too.
+export const CRITERION_LABELS = {
+  'Showing patience or kindness when helping students': {
+    name: 'Compassionate Service',
+    description: 'Shows patience or kindness when helping students',
+  },
+  'Participating in school functions beyond regular duties': {
+    name: 'Community Contributor',
+    description: 'Participates in school activities beyond job duties',
+  },
+  'Working with teachers and communicating effectively': {
+    name: 'Effective Communicator',
+    description: 'Works with teachers & staff effectively',
+  },
+  'Creating a positive cafeteria environment for students': {
+    name: 'Resilient Leader',
+    description: 'Creating a positive cafeteria environment for all',
+  },
+}
+
+// Falls back to the stored value as its own name, so a reason with no card
+// wording — the Shooting Star list, or anything added later — still reads
+// correctly rather than rendering blank.
+export function criterionLabel(value) {
+  return CRITERION_LABELS[value] || { name: value, description: '' }
 }

@@ -15,6 +15,7 @@ import {
   ANNUAL_AWARD_CATEGORIES,
   RECOGNITION_CRITERIA,
   RECOGNITION_CRITERIA_DESCRIPTIONS,
+  criterionLabel,
   RECOGNITION_TYPE_MAP,
   RECOGNITION_TYPES,
   STAR_LEVELS,
@@ -722,8 +723,18 @@ function RecognitionEntryForm({
                       onChange={() => onToggleCriterion(surface, criterion)}
                       className="mt-0.5 h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-400"
                     />
+                    {/* Named first, then explained — the same shape as the
+                        printed card, so choosing on screen and choosing on
+                        paper feel like the same task. */}
                     <span>
-                      <span className="block font-semibold text-gray-800">{criterion}</span>
+                      <span className="block font-semibold uppercase tracking-wide text-[#9a651b]">
+                        {criterionLabel(criterion).name}
+                      </span>
+                      {criterionLabel(criterion).description && (
+                        <span className="mt-0.5 block text-sm font-medium leading-snug text-gray-800">
+                          {criterionLabel(criterion).description}
+                        </span>
+                      )}
                       {!compact && RECOGNITION_CRITERIA_DESCRIPTIONS[criterion] && (
                         <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{term.reasonDescription(criterion, RECOGNITION_CRITERIA_DESCRIPTIONS[criterion])}</span>
                       )}
@@ -1178,7 +1189,7 @@ function RecentRecognition({ records, employeeMap, type, onTypeChange, onPrintSh
                       </div>
                       <span className="flex-none text-[11px] text-gray-400">{formatDate(record.date)}</span>
                     </div>
-                    {record.criteria?.length > 0 && <p className="mt-1.5 text-xs text-gray-500">{record.criteria.join(' - ')}</p>}
+                    {record.criteria?.length > 0 && <p className="mt-1.5 text-xs text-gray-500">{record.criteria.map(value => criterionLabel(value).name).join(' · ')}</p>}
                     {record.note && <p className="mt-1 text-xs italic text-gray-600">“{record.note}”</p>}
                     <p className="mt-1.5 text-[10px] text-gray-400">
                       {LOCATION_MAP[record.locationId]?.name || record.locationId}
