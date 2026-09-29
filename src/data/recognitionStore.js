@@ -258,11 +258,15 @@ export function getNextStarLevel(count) {
   return STAR_LEVELS.find(level => Number(count) < level.minimum) || null
 }
 
-export function getMonthlyDrawingEntries(records, locationId, monthKey) {
+// excludedEmployeeIds carries the manager-grade roster once the split is
+// switched on. Left optional so the building drawing behaves exactly as it
+// always has until a caller passes it.
+export function getMonthlyDrawingEntries(records, locationId, monthKey, excludedEmployeeIds = null) {
   return records.filter(record =>
     record.type === 'star-of-day'
     && record.locationId === locationId
     && String(record.date || '').startsWith(`${monthKey}-`)
+    && !(excludedEmployeeIds && excludedEmployeeIds.has(String(record.employeeId)))
   )
 }
 
@@ -440,4 +444,76 @@ export const CRITERION_LABELS = {
 // correctly rather than rendering blank.
 export function criterionLabel(value) {
   return CRITERION_LABELS[value] || { name: value, description: '' }
+}
+
+// --- the manager / hourly split --------------------------------------------
+//
+// Liz's ask: the people who run the kitchens are recognised in their own pool
+// rather than competing with the staff they supervise. Eighteen people —
+// fifteen Worker Leads, two Managers and the Director.
+//
+// Membership is read from the roster's position rather than stamped on each
+// record. That is what "their accumulated stars need to be changed over"
+// becomes in practice: nothing is rewritten, no live record is touched, and
+// every star these eighteen have already earned simply counts in the manager
+// pool from the moment the split is switched on.
+//
+// The trade-off, worth knowing: if somebody is promoted from Cook to Lead,
+// the stars they earned as a Cook move pools with them. Stamping the position
+// onto each record at the time it was given would avoid that, but it would
+// mean rewriting live history to get the backdating Liz asked for.
+export const MANAGER_GRADE_POSITIONS = [
+  'Food Service Worker Lead',
+  'Food Service Manager',
+  'Food Service Director',
+]
+
+export function isManagerGrade(employee) {
+  return MANAGER_GRADE_POSITIONS.includes(String(employee?.position || '').trim())
+}
+
+export function managerEmployeeIds(employees) {
+  return new Set(
+    (Array.isArray(employees) ? employees : [])
+      .filter(isManagerGrade)
+      .map(employee => String(employee.kronos_id || employee.id || ''))
+      .filter(Boolean)
+  )
+}
+
+// District-wide on purpose. Eleven of the fourteen buildings that have a
+// manager-grade person have exactly one, so a per-building manager drawing
+// would draw the same single name every month and would not be a drawing.
+export function getManagerDrawingEntries(records, monthKey, managerIds) {
+  if (!managerIds || !managerIds.size) return []
+  return (Array.isArray(records) ? records : []).filter(record =>
+    record.type === 'star-of-day'
+    && managerIds.has(String(record.employeeId))
+    && String(record.date || '').startsWith(`${monthKey}-`)
+  )
+}
+
+export function drawManagerAllStar(records, monthKey, managerIds, randomValue = Math.random()) {
+  const entries = getManagerDrawingEntries(records, monthKey, managerIds)
+  if (!entries.length) return null
+  const boundedRandom = Math.max(0, Math.min(Number(randomValue) || 0, 0.999999999))
+  const winningEntry = entries[Math.floor(boundedRandom * entries.length)]
+  return {
+    employeeId: winningEntry.employeeId,
+    entryCount: entries.filter(entry => entry.employeeId === winningEntry.employeeId).length,
+    totalEntries: entries.length,
+  }
+}
+
+// Splits any leaderboard into the two pools, so each board only ranks people
+// against others doing the same job.
+export function splitLeaderboardByGrade(entries, managerIds) {
+  const managers = []
+  const staff = []
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const id = String(entry?.employee?.kronos_id || entry?.employee?.id || '')
+    if (managerIds && managerIds.has(id)) managers.push(entry)
+    else staff.push(entry)
+  }
+  return { managers, staff }
 }
