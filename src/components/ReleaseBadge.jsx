@@ -21,10 +21,10 @@ export default function ReleaseBadge() {
           Beta {__APP_VERSION__}
         </span>
         <span className="ml-2 hidden text-[#e8c65c]/70 sm:inline">
-          Pre-release · provided at no cost by Localis Collective · not a licensed product
+          Pre-release · provided at no cost by Localis Collective
         </span>
         <span className="ml-2 text-[#e8c65c]/70 sm:hidden">
-          Pre-release · unlicensed pilot
+          Pre-release · no-cost pilot
         </span>
       </p>
     </div>
