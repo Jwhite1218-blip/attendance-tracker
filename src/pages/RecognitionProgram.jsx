@@ -77,10 +77,15 @@ function employeeListName(employee) {
   return firstName ? `${lastName}, ${firstName}` : lastName
 }
 
-// September was already mid-draw when the manager split was agreed, so the
-// exclusion starts with October. Changing eligibility in a month buildings
-// may already have drawn would make a recorded winner look wrong later.
-const MANAGER_SPLIT_STARTS_ON = '2026-10'
+// The split applies to every month. The earlier worry — that switching it
+// on mid-September would rewrite a month buildings had already drawn — does
+// not hold: handleMonthlyDrawing refuses a month that already has a winner,
+// so a recorded result can never change. Only buildings that have not drawn
+// yet are affected, which is the new rule doing its job. Leaving it until
+// October would have been worse: the Manager Leaderboard is live now, so a
+// September draw could still hand the building award to a lead standing in
+// the manager pool on the same screen.
+const MANAGER_SPLIT_STARTS_ON = '2026-07'
 
 function formatMonth(monthKey) {
   if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) return monthKey

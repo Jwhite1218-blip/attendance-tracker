@@ -273,6 +273,7 @@ function AppShell() {
 
       <main id="main-content">
         <FoodDayBanner pathname={location.pathname} homePath={homePath} />
+        <RouteErrorBoundary routeKey={location.pathname}>
         <Routes>
           <Route path={FOOD_DAY_PATH} element={<FoodDayCelebration homePath={homePath} canRecognize={recognitionAdminAccess} />} />
           <Route path="/" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
@@ -290,6 +291,7 @@ function AppShell() {
           <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
           <Route path="/backup-recovery" element={lizAdminAccess ? <BackupRecovery /> : <Navigate to={homePath} replace />} />
         </Routes>
+        </RouteErrorBoundary>
       </main>
     </div>
   )
