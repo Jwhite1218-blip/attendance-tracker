@@ -15,6 +15,7 @@ import {
   RECOGNITION_TYPES,
   STAR_LEVELS,
   recognitionAccent,
+  gradeAccent,
   topLeaderboardEntries,
   toStarCardEntries,
   buildingRecognitionSummary,
@@ -565,7 +566,7 @@ export default function RecognitionProgram() {
             />
             {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
                 shorter main column left beside the taller side column. */}
-            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} type={historyType} onTypeChange={setHistoryType} onPrintSheet={handlePrintSheet} />
+            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} managerIds={managerIds} type={historyType} onTypeChange={setHistoryType} onPrintSheet={handlePrintSheet} />
           </div>
 
           <div className="space-y-6">
@@ -906,6 +907,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
     },
   }
   const active = boards[pool]
+  const grade = gradeAccent(pool === 'managers')
   const shown = showAll ? active.entries : topLeaderboardEntries(active.entries, 10)
   const hidden = active.entries.length - shown.length
 
@@ -933,7 +935,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
             aria-selected={pool === key}
             onClick={() => selectPool(key)}
             className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-              pool === key ? 'bg-[#ad741e] text-white' : 'text-[#8a5a12] hover:bg-amber-100'
+              pool === key ? `${gradeAccent(key === 'managers').tab} text-white` : 'text-[#8a5a12] hover:bg-amber-100'
             }`}
           >
             {board.label}
@@ -955,7 +957,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
                   to={`/employee/${employeeKey(entry.employee)}`}
                   className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-amber-50"
                 >
-                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#211b12] text-xs font-black text-[#ffd75c]">
+                  <span className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-xs font-black ${grade.rank}`}>
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1">
@@ -964,7 +966,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
                     </span>
                     <span className="mt-1 block h-1 overflow-hidden rounded-full bg-gray-100">
                       <span
-                        className="block h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]"
+                        className={`block h-full rounded-full bg-gradient-to-r ${grade.bar}`}
                         style={{ width: `${progress}%` }}
                       />
                     </span>
@@ -974,7 +976,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
                     </span>
                   </span>
                   <span className="flex-none text-right">
-                    <span className="block text-lg font-black leading-none text-[#ad741e]">{entry.count}</span>
+                    <span className={`block text-lg font-black leading-none ${grade.count}`}>{entry.count}</span>
                     <span className="block text-[9px] font-bold uppercase tracking-wide text-gray-400">stars</span>
                   </span>
                 </Link>
@@ -1227,7 +1229,7 @@ function AceBucksCard() {
   )
 }
 
-function RecentRecognition({ records, employeeMap, type, onTypeChange, onPrintSheet }) {
+function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChange, onPrintSheet }) {
   const term = useProgramTerms()
   const [visibleCount, setVisibleCount] = useState(10)
   const filtered = records.filter(record => type === 'all' || record.type === type)
@@ -1272,9 +1274,16 @@ function RecentRecognition({ records, employeeMap, type, onTypeChange, onPrintSh
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <Link to={`/employee/${record.employeeId}`} className="text-sm font-bold text-gray-900 hover:text-[#9a651b]">
-                          {employeeName(employee) || record.employeeId}
-                        </Link>
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <Link to={`/employee/${record.employeeId}`} className="text-sm font-bold text-gray-900 hover:text-[#9a651b]">
+                            {employeeName(employee) || record.employeeId}
+                          </Link>
+                          {managerIds?.has(String(record.employeeId)) && (
+                            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${gradeAccent(true).chip}`}>
+                              {gradeAccent(true).label}
+                            </span>
+                          )}
+                        </span>
                         <span className={`mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${accent.chip}`}>
                           {term.recognitionLabel(record.type, type?.label || record.type)}
                           {!accent.earns && <span className="font-medium opacity-70">· no star</span>}

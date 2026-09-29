@@ -552,3 +552,37 @@ export function buildingMonthlyRecipients(records, startYear, locationId) {
           || left.employeeId.localeCompare(right.employeeId)),
     }))
 }
+
+// Two independent things are being signalled on the recognition screens, and
+// they must not fight each other:
+//
+//   recognitionAccent() — WHAT the recognition is (daily star, nomination,
+//     shout-out). Owns the glyph and the chip.
+//   gradeAccent()       — WHO earned it (staff or manager). Owns the star
+//     colour on the boards, and a chip beside the name in the history.
+//
+// Managers get the ACE orange of the coach programme rather than the All-Star
+// gold, so which board you are looking at is obvious at a glance without
+// reading the tab.
+export const GRADE_ACCENTS = {
+  staff: {
+    label: 'Staff',
+    rank: 'bg-[#211b12] text-[#ffd75c]',
+    count: 'text-[#ad741e]',
+    bar: 'from-[#ad741e] to-[#f1cd57]',
+    tab: 'bg-[#ad741e]',
+    chip: 'border-amber-300 bg-amber-50 text-[#8a5a12]',
+  },
+  manager: {
+    label: 'ACE Coach',
+    rank: 'bg-[#2a1708] text-[#ffb05c]',
+    count: 'text-[#b4531b]',
+    bar: 'from-[#b4531b] to-[#f0954a]',
+    tab: 'bg-[#b4531b]',
+    chip: 'border-orange-300 bg-orange-50 text-[#8c3f10]',
+  },
+}
+
+export function gradeAccent(isManager) {
+  return isManager ? GRADE_ACCENTS.manager : GRADE_ACCENTS.staff
+}
