@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildingRecognitionSummary,
+  buildingMonthlyRecipients,
   schoolYearMonthKeys,
   toStarCardEntries,
   topLeaderboardEntries,
@@ -201,4 +202,54 @@ test('a reason with no card wording still reads as itself', () => {
   assert.equal(criterionLabel('Other').name, 'Other')
   assert.equal(criterionLabel('Taking initiative to learn new skills or tasks').name,
     'Taking initiative to learn new skills or tasks')
+})
+
+// --- who got the stars, per building per month ------------------------------
+
+test('a building breaks down into months, and months into people', () => {
+  const rows = buildingMonthlyRecipients([
+    star('1', '2026-09-03', 'StonyBrkMS'),
+    star('1', '2026-09-10', 'StonyBrkMS'),
+    star('2', '2026-09-11', 'StonyBrkMS'),
+    star('3', '2026-10-02', 'StonyBrkMS'),
+    star('4', '2026-09-04', 'CrestonMS'),
+  ], 2026, 'StonyBrkMS')
+
+  // Newest month first: the month being asked about is usually this one.
+  assert.deepEqual(rows.map(row => row.monthKey), ['2026-10', '2026-09'])
+
+  const september = rows.find(row => row.monthKey === '2026-09')
+  assert.equal(september.total, 3)
+  assert.deepEqual(september.recipients, [
+    { employeeId: '1', count: 2 },
+    { employeeId: '2', count: 1 },
+  ])
+})
+
+test('the breakdown totals agree with the counts table', () => {
+  // Two views of the same thing disagreeing is worse than either being absent.
+  const records = [
+    star('1', '2026-09-03', 'StonyBrkMS'),
+    star('1', '2026-09-10', 'StonyBrkMS'),
+    star('2', '2026-10-11', 'StonyBrkMS'),
+  ]
+  const summary = buildingRecognitionSummary(records, 2026).find(e => e.locationId === 'StonyBrkMS')
+  const rows = buildingMonthlyRecipients(records, 2026, 'StonyBrkMS')
+
+  assert.equal(rows.reduce((sum, row) => sum + row.total, 0), summary.total)
+  for (const row of rows) assert.equal(row.total, summary.months[row.monthKey])
+})
+
+test('only that building, only earned stars, only this school year', () => {
+  const rows = buildingMonthlyRecipients([
+    star('1', '2026-09-03', 'CrestonMS'),
+    { ...star('2', '2026-09-04', 'StonyBrkMS'), type: 'shooting-star' },
+    star('3', '2026-03-05', 'StonyBrkMS'),
+  ], 2026, 'StonyBrkMS')
+  assert.deepEqual(rows, [])
+})
+
+test('a building nobody has recognised returns nothing rather than throwing', () => {
+  assert.deepEqual(buildingMonthlyRecipients([], 2026, 'StonyBrkMS'), [])
+  assert.deepEqual(buildingMonthlyRecipients(null, 2026, null), [])
 })

@@ -517,3 +517,38 @@ export function splitLeaderboardByGrade(entries, managerIds) {
   }
   return { managers, staff }
 }
+
+// Who actually got the stars in a building, month by month.
+//
+// The counts table answers "how many"; this answers "who", which is the
+// question a manager asks next. Same rule as every other figure on the page:
+// Star of the Day only, this school year only, counted for the building the
+// person works in.
+export function buildingMonthlyRecipients(records, startYear, locationId) {
+  const months = new Map()
+
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!recognitionEarnsStar(record)) continue
+    if (!isRecognitionInSchoolYear(record, startYear)) continue
+    if (String(record.locationId || '') !== String(locationId || '')) continue
+    const monthKey = String(record.date || '').slice(0, 7)
+    if (!/^\d{4}-\d{2}$/.test(monthKey)) continue
+
+    if (!months.has(monthKey)) months.set(monthKey, new Map())
+    const people = months.get(monthKey)
+    const employeeId = String(record.employeeId)
+    people.set(employeeId, (people.get(employeeId) || 0) + 1)
+  }
+
+  // Newest month first — the month someone is asking about is usually this one.
+  return [...months.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([monthKey, people]) => ({
+      monthKey,
+      total: [...people.values()].reduce((sum, count) => sum + count, 0),
+      recipients: [...people.entries()]
+        .map(([employeeId, count]) => ({ employeeId, count }))
+        .sort((left, right) => right.count - left.count
+          || left.employeeId.localeCompare(right.employeeId)),
+    }))
+}

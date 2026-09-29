@@ -16,6 +16,7 @@ import FoodDayCelebration, { FoodDayBanner } from './components/FoodDayCelebrati
 import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
+import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
 import { useProgramTerms } from './components/useProgramTerms.js'
 import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'

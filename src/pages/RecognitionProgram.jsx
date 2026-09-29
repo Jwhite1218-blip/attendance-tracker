@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
@@ -18,6 +18,7 @@ import {
   topLeaderboardEntries,
   toStarCardEntries,
   buildingRecognitionSummary,
+  buildingMonthlyRecipients,
   schoolYearMonthKeys,
   managerEmployeeIds,
   splitLeaderboardByGrade,
@@ -552,7 +553,13 @@ export default function RecognitionProgram() {
               onPrintCard={() => handlePrintCard('star')}
             />
 
-            <BuildingStarCounts summary={buildingCounts} months={boardMonths} schoolYearStart={schoolYearStart} />
+            <BuildingStarCounts
+              summary={buildingCounts}
+              months={boardMonths}
+              schoolYearStart={schoolYearStart}
+              records={schoolYearRecords}
+              employeeMap={employeeMap}
+            />
             {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
                 shorter main column left beside the taller side column. */}
             <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} type={historyType} onTypeChange={setHistoryType} onPrintSheet={handlePrintSheet} />
@@ -1311,7 +1318,14 @@ function AnnualCelebration() {
 
 // Stars earned per building, month by month, with the school-year total.
 // Counts Star of the Day only, matching every other figure on this page.
-function BuildingStarCounts({ summary, months, schoolYearStart }) {
+function BuildingStarCounts({ summary, months, schoolYearStart, records, employeeMap }) {
+  // Clicking a building answers the question the counts prompt: not how
+  // many, but who.
+  const [openLocationId, setOpenLocationId] = useState(null)
+  const breakdown = useMemo(
+    () => (openLocationId ? buildingMonthlyRecipients(records, schoolYearStart, openLocationId) : []),
+    [openLocationId, records, schoolYearStart]
+  )
   if (!summary.length) return null
   const districtTotal = summary.reduce((total, entry) => total + entry.total, 0)
 
@@ -1341,29 +1355,84 @@ function BuildingStarCounts({ summary, months, schoolYearStart }) {
             </tr>
           </thead>
           <tbody>
-            {summary.map(entry => (
-              <tr key={entry.locationId} className="border-b border-gray-100 last:border-0">
-                <td className="py-2 pr-3 font-semibold text-gray-800">
-                  {LOCATION_MAP[entry.locationId]?.name || entry.locationId}
-                </td>
-                {months.map(month => {
-                  const count = entry.months[month] || 0
-                  return (
-                    <td
-                      key={month}
-                      className={`px-2 py-2 text-center tabular-nums ${count ? 'text-gray-700' : 'text-gray-300'}`}
-                    >
-                      {count || '—'}
+            {summary.map(entry => {
+              const open = openLocationId === entry.locationId
+              const buildingName = LOCATION_MAP[entry.locationId]?.name || entry.locationId
+              return (
+                <Fragment key={entry.locationId}>
+                  <tr
+                    className={`border-b border-gray-100 last:border-0 ${
+                      entry.total ? 'cursor-pointer hover:bg-amber-50/70' : ''
+                    } ${open ? 'bg-amber-50' : ''}`}
+                    onClick={() => entry.total && setOpenLocationId(open ? null : entry.locationId)}
+                  >
+                    <td className="py-2 pr-3 font-semibold text-gray-800">
+                      {entry.total ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          className="flex items-center gap-1.5 text-left hover:text-[#9a651b]"
+                        >
+                          <span className={`text-[10px] text-[#ad741e] transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true">▶</span>
+                          {buildingName}
+                        </button>
+                      ) : buildingName}
                     </td>
-                  )
-                })}
-                <td className={`pl-3 py-2 text-right font-black tabular-nums ${
-                  entry.total ? 'text-[#ad741e]' : 'text-gray-300'
-                }`}>
-                  {entry.total}
-                </td>
-              </tr>
-            ))}
+                    {months.map(month => {
+                      const count = entry.months[month] || 0
+                      return (
+                        <td
+                          key={month}
+                          className={`px-2 py-2 text-center tabular-nums ${count ? 'text-gray-700' : 'text-gray-300'}`}
+                        >
+                          {count || '—'}
+                        </td>
+                      )
+                    })}
+                    <td className={`pl-3 py-2 text-right font-black tabular-nums ${
+                      entry.total ? 'text-[#ad741e]' : 'text-gray-300'
+                    }`}>
+                      {entry.total}
+                    </td>
+                  </tr>
+
+                  {open && (
+                    <tr className="border-b border-gray-100 bg-[#fffaf0]">
+                      <td colSpan={months.length + 2} className="px-3 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9a651b]">
+                          {buildingName} · who earned them
+                        </p>
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {breakdown.map(month => (
+                            <div key={month.monthKey} className="rounded-lg border border-amber-200 bg-white p-2.5">
+                              <p className="flex items-baseline justify-between gap-2">
+                                <span className="text-xs font-bold text-gray-800">{formatMonth(month.monthKey)}</span>
+                                <span className="text-xs font-black text-[#ad741e]">{month.total}</span>
+                              </p>
+                              <ul className="mt-1.5 space-y-0.5">
+                                {month.recipients.map(person => (
+                                  <li key={person.employeeId} className="flex items-baseline justify-between gap-2 text-xs">
+                                    <Link
+                                      to={`/employee/${person.employeeId}`}
+                                      className="truncate text-gray-700 hover:text-[#9a651b] hover:underline"
+                                    >
+                                      {employeeName(employeeMap.get(String(person.employeeId))) || person.employeeId}
+                                    </Link>
+                                    <span className="flex-none tabular-nums text-gray-400">
+                                      {person.count > 1 ? `×${person.count}` : ''}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr className="border-t-2 border-gray-200">
