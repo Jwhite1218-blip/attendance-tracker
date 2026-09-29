@@ -27,6 +27,7 @@ import {
   managerEmployeeIds,
   splitLeaderboardByGrade,
   addRecognition,
+  createRecognitionRecord,
   drawMonthlyAllStar,
   existingMonthlyWinner,
   getAllRecognitions,
@@ -176,6 +177,7 @@ export default function RecognitionProgram() {
   const [historyType, setHistoryType] = useState('all')
   const [drawingLocation, setDrawingLocation] = useState(role === 'school' ? locationId : '')
   const [drawingMonth, setDrawingMonth] = useState(localDateKey().slice(0, 7))
+  const [pendingPreview, setPendingPreview] = useState(null)
   // Two separate entry surfaces. Star of the Day is the daily job and owns the
   // main column; nominations and shout-outs are occasional extras and live in
   // the side panel, so the two never compete for a manager's attention.
@@ -324,6 +326,53 @@ export default function RecognitionProgram() {
   // Prints every Star of the Day currently in view as a cut-and-pin sheet.
   // Nominations and shout-outs are skipped: the board is a Star of the Day
   // board, and toStarCardEntries drops them.
+  // Liz asked to see the card before it is recorded. Validation runs first,
+  // so a preview can never show a card that then fails to save — the point
+  // is to approve exactly what gets written and printed.
+  const beginSubmit = (surface, form, event) => {
+    event.preventDefault()
+    setFeedback(null)
+    clearConfirmation(surface)
+    try {
+      const employee = employeeMap.get(String(form.employeeId))
+      if (!employee) throw new Error('Choose an employee from your available roster.')
+      if (!recognitionTypeAllowedForRole(role, form.type, canManageRecognitionAwards)) {
+        throw new Error('Only a district administrator can record Warren Food Services Employee of the Month.')
+      }
+      const draft = createRecognitionRecord({
+        ...form,
+        locationId: employee.location,
+        recognizedBy: displayName || 'Authenticated manager',
+        recognizedByLocationId: role === 'school' ? locationId : DISTRICT_SUBMITTER_ID,
+      })
+      if (draft.type === 'star-of-day') {
+        setPendingPreview({
+          surface,
+          employeeName: employeeName(employee),
+          card: {
+            name: employeeName(employee),
+            date: draft.date,
+            criteria: draft.criteria,
+            message: draft.note,
+            recognizedBy: draft.recognizedBy,
+          },
+        })
+        return
+      }
+    } catch (error) {
+      setFeedback({ type: 'error', message: error.message })
+      return
+    }
+    submitRecognition(surface, form)
+  }
+
+  const confirmPreview = async () => {
+    if (!pendingPreview) return
+    const { surface } = pendingPreview
+    setPendingPreview(null)
+    await submitRecognition(surface, surface === 'star' ? starForm : bonusForm)
+  }
+
   const handlePrintSheet = visibleRecords => {
     const cards = toStarCardEntries(visibleRecords, id => employeeName(employeeMap.get(String(id))))
     if (!cards.length) {
@@ -347,7 +396,7 @@ export default function RecognitionProgram() {
   }
 
   const submitRecognition = async (surface, form, event) => {
-    event.preventDefault()
+    event?.preventDefault()
     setFeedback(null)
     clearConfirmation(surface)
     setSubmittingSurface(surface)
@@ -457,6 +506,13 @@ export default function RecognitionProgram() {
         </div>
       </div>
 
+      <StarCardPreview
+        preview={pendingPreview}
+        submitting={submittingSurface !== null}
+        onConfirm={confirmPreview}
+        onBack={() => setPendingPreview(null)}
+      />
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-10">
         <div className="rounded-2xl border border-[#d7b44b]/50 bg-white shadow-xl overflow-hidden">
           <div className="flex flex-col gap-4 border-b border-amber-100 bg-white px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -533,20 +589,9 @@ export default function RecognitionProgram() {
               confirmation={confirmations.star}
               onFieldChange={setFormValue}
               onToggleCriterion={toggleCriterion}
-              onSubmit={event => submitRecognition('star', starForm, event)}
+              onSubmit={event => beginSubmit('star', starForm, event)}
               onRetry={() => handleRetryConfirmation('star')}
               onPrintCard={() => handlePrintCard('star')}
-            />
-
-            <StarLeaderboard leaderboard={staffLeaderboard} schoolYearStart={schoolYearStart} />
-
-            <StarLeaderboard
-              leaderboard={managerLeaderboard}
-              schoolYearStart={schoolYearStart}
-              eyebrow="Building leads and district"
-              title="Manager Leaderboard"
-              blurb="Worker Leads, Managers and the Director are recognised in their own pool."
-              emptyNote="No manager has been recognised yet this school year."
             />
 
             <BuildingStarCounts summary={buildingCounts} months={boardMonths} schoolYearStart={schoolYearStart} />
@@ -560,6 +605,11 @@ export default function RecognitionProgram() {
                 login has no bonus surface, so the levels card already sat at the
                 top there; an admin saw the bonus form pushed above it and the two
                 views disagreed. */}
+            <LeaderboardPanel
+              staff={staffLeaderboard}
+              managers={managerLeaderboard}
+              schoolYearStart={schoolYearStart}
+            />
             <StarLevels />
             {bonusTypes.length > 0 && (
               <RecognitionEntryForm
@@ -575,7 +625,7 @@ export default function RecognitionProgram() {
                 confirmation={confirmations.bonus}
                 onFieldChange={setFormValue}
                 onToggleCriterion={toggleCriterion}
-                onSubmit={event => submitRecognition('bonus', bonusForm, event)}
+                onSubmit={event => beginSubmit('bonus', bonusForm, event)}
                 onRetry={() => handleRetryConfirmation('bonus')}
                 onPrintCard={() => handlePrintCard('bonus')}
               />
@@ -862,72 +912,111 @@ function RecognitionEntryForm({
 
 // Sits directly under Star of the Day: the board only ever counts earned stars,
 // so the number a manager sees here always matches the award they just gave.
-function StarLeaderboard({
-  leaderboard,
-  schoolYearStart,
-  eyebrow = 'Earn your stars',
-  title = 'School-Year Leaderboard',
-  blurb = 'Counts Star of the Day only. Nominations and shout-outs are tracked separately.',
-  emptyNote = 'Record the first Star of the Day to begin this school year.',
-}) {
+// Both boards in one panel, sized for the side column.
+//
+// Two full-width leaderboards stacked in the main column left a tall band of
+// dead space beside the shorter side column. As a single tabbed panel in the
+// rail they fill that space instead, and the two pools sit next to each other
+// where they can be compared rather than scrolled between.
+function LeaderboardPanel({ staff, managers, schoolYearStart }) {
+  const [pool, setPool] = useState('staff')
   // Condensed to a top ten at Liz's request, but never a dead end: a manager
   // looking for their own people can open the rest.
   const [showAll, setShowAll] = useState(false)
-  const shown = showAll ? leaderboard : topLeaderboardEntries(leaderboard, 10)
-  const hidden = leaderboard.length - shown.length
+
+  const boards = {
+    staff: {
+      label: 'Staff',
+      entries: staff,
+      empty: 'Record the first Star of the Day to begin this school year.',
+    },
+    managers: {
+      label: 'Managers',
+      entries: managers,
+      empty: 'No manager has been recognised yet this school year.',
+    },
+  }
+  const active = boards[pool]
+  const shown = showAll ? active.entries : topLeaderboardEntries(active.entries, 10)
+  const hidden = active.entries.length - shown.length
+
+  const selectPool = next => {
+    setPool(next)
+    setShowAll(false)
+  }
+
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">{eyebrow}</p>
-          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">{title}</h2>
-          <p className="mt-1 text-sm text-gray-500">{blurb}</p>
-        </div>
-        <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
+    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
+      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
+      <p className="mt-1 text-xs text-gray-500">
+        Star of the Day only · July {schoolYearStart} – June {schoolYearStart + 1}
+      </p>
+
+      {/* Worker Leads, Managers and the Director are recognised in their own
+          pool, so nobody is ranked against someone they supervise. */}
+      <div className="mt-3 flex rounded-lg border border-amber-200 bg-[#fffaf0] p-0.5" role="tablist">
+        {Object.entries(boards).map(([key, board]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={pool === key}
+            onClick={() => selectPool(key)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+              pool === key ? 'bg-[#ad741e] text-white' : 'text-[#8a5a12] hover:bg-amber-100'
+            }`}
+          >
+            {board.label}
+            <span className={`ml-1.5 font-semibold ${pool === key ? 'text-white/70' : 'text-[#b08a4a]'}`}>
+              {board.entries.length}
+            </span>
+          </button>
+        ))}
       </div>
 
-      {leaderboard.length ? (
-        <div className="mt-5 grid gap-3">
+      {shown.length ? (
+        <ol className="mt-3 space-y-0.5">
           {shown.map((entry, index) => {
             const progressTarget = entry.nextLevel?.minimum || entry.count
             const progress = progressTarget ? Math.min(100, (entry.count / progressTarget) * 100) : 100
             return (
-              <Link
-                key={employeeKey(entry.employee)}
-                to={`/employee/${employeeKey(entry.employee)}`}
-                className="group rounded-xl border border-gray-200 p-4 transition-all hover:border-amber-300 hover:shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-[#211b12] text-sm font-black text-[#ffd75c]">{index + 1}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-gray-900 group-hover:text-[#9a651b]">{employeeName(entry.employee)}</p>
-                        <p className="truncate text-xs text-gray-400">{LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-xl font-black text-[#ad741e]">{entry.count}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">stars</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
-                      <div className="h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]" style={{ width: `${progress}%` }} />
-                    </div>
-                    <p className="mt-1.5 text-[11px] font-semibold text-gray-500">
+              <li key={employeeKey(entry.employee)}>
+                <Link
+                  to={`/employee/${employeeKey(entry.employee)}`}
+                  className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-amber-50"
+                >
+                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#211b12] text-xs font-black text-[#ffd75c]">
+                    {index + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold text-gray-900 group-hover:text-[#9a651b]">
+                      {employeeName(entry.employee)}
+                    </span>
+                    <span className="mt-1 block h-1 overflow-hidden rounded-full bg-gray-100">
+                      <span
+                        className="block h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </span>
+                    <span className="mt-1 block truncate text-[10px] text-gray-400">
                       {entry.level ? `${entry.level.symbol} ${entry.level.name}` : 'Building toward Bronze Star'}
-                      {entry.nextLevel ? ` - ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ' - Highest published level'}
-                    </p>
-                  </div>
-                </div>
-              </Link>
+                      {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to go` : ''}
+                    </span>
+                  </span>
+                  <span className="flex-none text-right">
+                    <span className="block text-lg font-black leading-none text-[#ad741e]">{entry.count}</span>
+                    <span className="block text-[9px] font-bold uppercase tracking-wide text-gray-400">stars</span>
+                  </span>
+                </Link>
+              </li>
             )
           })}
-        </div>
+        </ol>
       ) : (
-        <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-5 py-8 text-center">
-          <p className="text-2xl" aria-hidden="true">☆</p>
-          <p className="mt-2 text-sm font-bold text-gray-800">The All-Star board is ready.</p>
-          <p className="mt-1 text-xs text-gray-500">{emptyNote}</p>
+        <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-6 text-center">
+          <p className="text-xl" aria-hidden="true">☆</p>
+          <p className="mt-1 text-xs text-gray-500">{active.empty}</p>
         </div>
       )}
 
@@ -935,16 +1024,16 @@ function StarLeaderboard({
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="mt-4 w-full rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50"
+          className="mt-3 w-full rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
         >
-          Show all {leaderboard.length} — {hidden} more below the top {shown.length}
+          Show all {active.entries.length} · {hidden} more
         </button>
       )}
-      {showAll && leaderboard.length > 10 && (
+      {showAll && active.entries.length > 10 && (
         <button
           type="button"
           onClick={() => setShowAll(false)}
-          className="mt-4 w-full rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50"
+          className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
         >
           Back to the top 10
         </button>
@@ -952,10 +1041,6 @@ function StarLeaderboard({
     </section>
   )
 }
-
-// Answers "which building is actually handing out stars" — Liz's ask to break
-// recognition down by the PIN that submitted it. The signed-in building stands
-// in for the PIN so no credential is ever stored on a record.
 function SubmissionsByBuilding({ counts, schoolYearStart }) {
   if (!counts.length) return null
   const total = counts.reduce((sum, entry) => sum + entry.count, 0)
@@ -1342,5 +1427,56 @@ function BuildingStarCounts({ summary, months, schoolYearStart }) {
         </p>
       )}
     </section>
+  )
+}
+
+// The card as it will actually print, shown before anything is recorded.
+// Built by the same function the printer uses, so what is approved here and
+// what comes out of the printer cannot drift apart.
+function StarCardPreview({ preview, submitting, onConfirm, onBack }) {
+  if (!preview) return null
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 print:hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="star-preview-title"
+    >
+      <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#d7b44b] bg-white shadow-2xl">
+        <div className="border-b border-amber-100 bg-[#fffaf0] px-5 py-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9a651b]">Check before recording</p>
+          <h2 id="star-preview-title" className="all-star-display mt-0.5 text-xl uppercase text-gray-950">
+            {preview.employeeName}
+          </h2>
+        </div>
+
+        <div className="flex justify-center bg-gray-100 px-4 py-4">
+          <iframe
+            title="Star of the Day card preview"
+            className="h-[336px] w-[384px] max-w-full rounded-md border border-gray-300 bg-white shadow-sm"
+            srcDoc={buildStarCardHtml([preview.card], { pad: false, fit: true, assets: CARD_ASSETS })}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row-reverse">
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={submitting}
+            className="flex-1 rounded-lg bg-[#ad741e] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#8a5a12] disabled:opacity-60"
+          >
+            {submitting ? 'Recording…' : 'Looks right — record it'}
+          </button>
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={submitting}
+            className="flex-1 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+          >
+            Go back and edit
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

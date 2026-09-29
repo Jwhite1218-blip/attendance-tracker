@@ -162,7 +162,7 @@ const STYLES = `
 // pad fills each page out to six cards so a part-full sheet still cuts cleanly;
 // a single card printed from the app leaves the rest of the page alone instead.
 // assets: { script, label, display, logo } — same-origin URLs, all optional.
-export function buildStarCardHtml(entries = [], { pad = true, screenNote = '', assets = {} } = {}) {
+export function buildStarCardHtml(entries = [], { pad = true, screenNote = '', assets = {}, fit = false } = {}) {
   const list = Array.isArray(entries) ? entries : []
   const sheets = []
 
@@ -179,6 +179,14 @@ export function buildStarCardHtml(entries = [], { pad = true, screenNote = '', a
   const note = screenNote
     ? `<div class="screen-note"><h1>Star of the Day cards</h1><p>${escapeHtml(screenNote)}</p></div>`
     : ''
+  // `fit` drops the letter-sheet framing so a single card can be shown at its
+  // own size inside a preview window. The card itself is untouched, which is
+  // the point: what the person approves is what comes out of the printer.
+  const fitRules = fit
+    ? `body { background: #fff; }
+  .sheet { width: auto; margin: 0; padding: 0; box-shadow: none; }
+  .grid { grid-template-columns: 4in; }`
+    : ''
   const artRules = [
     assets.logo ? `.brand { background-image: url("${escapeHtml(assets.logo)}"); }` : '',
     assets.star ? `.bigstar { background-image: url("${escapeHtml(assets.star)}"); }` : '',
@@ -193,6 +201,7 @@ export function buildStarCardHtml(entries = [], { pad = true, screenNote = '', a
   ${fontFaces(assets)}
 ${STYLES}
   ${artRules}
+  ${fitRules}
 </style>
 </head>
 <body>${note}${sheets.join('')}</body>

@@ -28,6 +28,7 @@ import {
   getNextStarLevel,
   getStarLevel,
   recognitionAccent,
+  criterionLabel,
   schoolYearStartFor,
 } from '../data/recognitionStore.js'
 import { Link } from 'react-router-dom'
@@ -66,6 +67,7 @@ function getMonthStats(attendance, year, monthIdx) {
 export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpdate }) {
   const term = useProgramTerms()
   const [showAllRecognition, setShowAllRecognition] = useState(false)
+  const [openRecognitionId, setOpenRecognitionId] = useState(null)
   const access = useAuth()
   const { role, displayName, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
@@ -100,6 +102,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     () => getAllRecognitions().filter(record => String(record.employeeId) === String(empKey)),
     [empKey, dataVersion]
   )
+  const openRecognition = recognitionRecords.find(record => record.id === openRecognitionId) || null
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
   const starLevel = getStarLevel(starCount)
@@ -391,8 +394,17 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             }`}>
               {(showAllRecognition ? recognitionRecords : recognitionRecords.slice(0, 4)).map(record => {
                 const accent = recognitionAccent(record.type)
+                const open = openRecognitionId === record.id
                 return (
-                  <div key={record.id} className="bg-[#211c14] px-4 py-3">
+                  <button
+                    key={record.id}
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => setOpenRecognitionId(open ? null : record.id)}
+                    className={`bg-[#211c14] px-4 py-3 text-left transition-colors hover:bg-[#2b241a] ${
+                      open ? 'ring-1 ring-inset ring-[#e8c65c]/60' : ''
+                    }`}
+                  >
                     <p className="flex items-center gap-1.5 text-xs font-bold text-white">
                       <span className={accent.mark} aria-hidden="true">{accent.glyph}</span>
                       {term.recognitionLabel(record.type, RECOGNITION_TYPE_MAP[record.type]?.label || record.type)}
@@ -400,10 +412,73 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                     <p className="mt-1 text-[10px] text-white/45">
                       {record.date}{record.criteria?.[0] ? ` - ${term.reason(record.criteria[0])}` : ''}
                     </p>
-                  </div>
+                    <p className="mt-1 text-[10px] font-semibold text-[#e8c65c]/70">
+                      {open ? 'Hide details' : 'Who gave it, and why'}
+                    </p>
+                  </button>
                 )
               })}
             </div>
+            {/* Liz wanted to be able to click a star and see who filled it out
+                and what they wrote, rather than only that one was given. */}
+            {openRecognition && (
+              <div className="border-t border-[#e8c65c]/25 bg-[#17130d] px-4 py-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#e8c65c]">
+                  {term.recognitionLabel(
+                    openRecognition.type,
+                    RECOGNITION_TYPE_MAP[openRecognition.type]?.label || openRecognition.type
+                  )} · {openRecognition.date}
+                </p>
+
+                {openRecognition.criteria?.length > 0 && (
+                  <p className="mt-2 flex flex-wrap gap-1.5">
+                    {openRecognition.criteria.map(value => (
+                      <span
+                        key={value}
+                        className="rounded-full border border-[#e8c65c]/40 bg-[#e8c65c]/10 px-2 py-0.5 text-[10px] font-bold text-[#f4d87d]"
+                      >
+                        {criterionLabel(value).name}
+                      </span>
+                    ))}
+                  </p>
+                )}
+
+                {openRecognition.note
+                  ? <p className="mt-3 text-sm italic leading-relaxed text-white/85">“{openRecognition.note}”</p>
+                  : <p className="mt-3 text-xs text-white/40">No message was written on this one.</p>}
+
+                <dl className="mt-3 grid gap-x-6 gap-y-1 text-[11px] sm:grid-cols-2">
+                  {openRecognition.sourceName && (
+                    <div className="flex gap-1.5">
+                      <dt className="text-white/40">Submitted by</dt>
+                      <dd className="font-semibold text-white/80">{openRecognition.sourceName}</dd>
+                    </div>
+                  )}
+                  <div className="flex gap-1.5">
+                    <dt className="text-white/40">Recorded by</dt>
+                    <dd className="font-semibold text-white/80">{openRecognition.recognizedBy || 'Not recorded'}</dd>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <dt className="text-white/40">Building</dt>
+                    <dd className="font-semibold text-white/80">
+                      {LOCATION_MAP[openRecognition.locationId]?.name || openRecognition.locationId}
+                    </dd>
+                  </div>
+                  {openRecognition.recognizedByLocationId && (
+                    <div className="flex gap-1.5">
+                      <dt className="text-white/40">Given by</dt>
+                      <dd className="font-semibold text-white/80">
+                        {LOCATION_MAP[openRecognition.recognizedByLocationId]?.name
+                          || (openRecognition.recognizedByLocationId === 'district'
+                            ? 'District office'
+                            : openRecognition.recognizedByLocationId)}
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            )}
+
             {recognitionRecords.length > 4 && (
               <button
                 type="button"
@@ -887,6 +962,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
   const term = useProgramTerms()
   const [showAllRecognition, setShowAllRecognition] = useState(false)
+  const [openRecognitionId, setOpenRecognitionId] = useState(null)
   const rows = buildEmployeeHistoryRows(attendance)
 
   return (
