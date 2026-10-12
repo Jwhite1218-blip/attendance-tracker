@@ -40,7 +40,10 @@ test.beforeEach(() => {
 
 test('Liz qualifying codes exclude approved and protected leave', () => {
   for (const code of ['UNEX', 'LI', 'EO', 'NCNS']) assert.equal(isQualifyingCode(code), true)
-  for (const code of ['RTO', 'RTO.5', 'M', 'BER', 'JUR']) assert.equal(isQualifyingCode(code), false)
+  for (const code of ['RTO', 'RTO.5', 'M', 'BER', 'OTH']) assert.equal(isQualifyingCode(code), false)
+  // 'JUR' was renamed to 'OTH' on 2026-10-11. Days already marked under the
+  // old code must keep resolving, and must not start counting as occurrences.
+  assert.equal(isQualifyingCode('JUR'), false)
 })
 
 test('third occurrence starts formal tracking and fourth requires a verbal warning', async () => {

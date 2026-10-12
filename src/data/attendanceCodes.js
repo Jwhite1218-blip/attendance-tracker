@@ -67,12 +67,10 @@ export const ATTENDANCE_CODES = [
     hex: { bg: '#AB3F94', text: '#FFFFFF', border: '#843072' },
   },
   {
-    // Stored as 'JUR' on purpose. This was the jury-duty code and Liz asked
-    // for it to become a general "other" on 2026-10-11; renaming the stored
-    // value would orphan every record already written under it, and the badge
-    // would vanish from those days. The code is an identifier, not a label —
-    // only what people read has changed.
-    code: 'JUR',
+    // Was the jury-duty code until Liz asked for a general "other" on
+    // 2026-10-11. The stored value changed with it; days already marked JUR
+    // are carried across by the alias below rather than being left orphaned.
+    code: 'OTH',
     label: 'OTHER',
     shortLabel: 'OTHER',
     description: 'An approved absence that does not fit any other code',
@@ -92,6 +90,7 @@ export const CLEAR_ATTENDANCE = {
 // Safe one-to-one migrations from earlier tracker versions. Ambiguous combined
 // codes remain available as legacy display records instead of being guessed.
 export const LEGACY_CODE_ALIASES = {
+  JUR: 'OTH',
   U: 'UNEX',
   UP: 'UNEX',
   CO: 'UNEX',
@@ -128,7 +127,7 @@ const LEGACY_DISPLAY_CODES = [
   {
     code: 'O',
     label: 'LEGACY OTHER ATTENDANCE EXCEPTION',
-    shortLabel: 'OTHER',
+    shortLabel: 'O',
     hex: { bg: '#64748B', text: '#FFFFFF', border: '#475569' },
   },
 ]
@@ -154,6 +153,6 @@ export const CODE_CATEGORIES = {
   early_out: ['EO'],
   unexcused_call_in: ['UNEX', 'CC'],
   protected_leave: ['M', 'BER'],
-  other: ['JUR'],
+  other: ['OTH'],
   legacy: ['LE', 'L/EQ', 'B/J', 'O'],
 }
