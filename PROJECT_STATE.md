@@ -12,8 +12,9 @@ approval workflow.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `d2672de189e262fc09e9cb3ee1c8b46c979876e9`
-- Test suite: 218 passing (`npm test`)
+- Verified production commit: `0dba804fc967467ee729ce1e3195c2a657eb73fb`
+- Test suite: 219 passing (`npm test`)
+- Confirmed live: `/version.json` returns that commit, 2026-10-11
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
@@ -35,6 +36,17 @@ A migration appearing to succeed proves nothing about which database it hit.
 select state_key, updated_at from public.legacy_state_entries
 order by updated_at desc limit 10;
 ```
+
+## Writing production data
+Nothing in this repository can write production state directly. Shared state
+is written only by an authenticated admin session in the browser, through the
+Netlify state function. There is no server-side or CLI path, and the Supabase
+connector cannot reach the production project (above).
+
+So any bulk data task — backfilling training hours, correcting a roster field
+across many staff — is built as an **import screen that Jon or Liz runs while
+signed in**, with a preview before it commits and unmatched rows listed rather
+than dropped. Plan for that shape rather than for a script.
 
 ## Current milestone
 Keep the live attendance workflow stable while making every review/test change
@@ -150,6 +162,14 @@ Eastern time; the manager dashboard would have shown yesterday's date all day.
 5. Whether a manager's stars should still count in their building's "Stars by
    month" total while being off that building's leaderboard and out of its
    drawing.
+6. **Training backfill.** Liz is emailing what she already holds. Until it is
+   loaded every member of staff reads as "short", which is correct — the
+   2026-27 counter started in July and nothing has been entered. If her
+   history is mostly district-wide events it is five or six manual entries
+   with "All employees" ticked; if it is per-person and uneven it needs an
+   importer. SheetJS is already bundled for the exports, so reading .xlsx
+   costs no new dependency. Matching her names to personnel IDs is the part
+   that needs care.
 
 ## Open, waiting on Jon
 1. **Deploy previews are publicly reachable and accept real district PINs**
