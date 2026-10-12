@@ -1,6 +1,6 @@
 import { CODE_MAP } from '../data/attendanceCodes.js'
 import { useProgramTerms } from './useProgramTerms.js'
-import { getAttendanceStageLabel } from '../data/hrFlags.js'
+import { ATTENDANCE_SEVERITY_CLASS, attendanceSeverityOf, getAttendanceStageLabel } from '../data/hrFlags.js'
 import { LOCATION_MAP } from '../data/locations.js'
 
 // flaggedEmployees: [{ ...hrFlags status, employee }]. Shared by the district
@@ -44,7 +44,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
             className="w-full py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 text-left hover:bg-red-50/40 transition-colors -mx-1 px-1 rounded"
           >
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-red-600">{f.employee.first_name} {f.employee.last_name}</p>
+              <p className={`text-sm font-semibold ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverityOf(f)]}`}>{f.employee.first_name} {f.employee.last_name}</p>
               <p className="text-xs text-gray-500 mt-0.5">
                 {showLocation && `${LOCATION_MAP[f.employee.location]?.name || f.employee.location} · `}{f.employee.position}
               </p>

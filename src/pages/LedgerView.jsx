@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
-import { isFlagged } from '../data/hrFlags.js'
+import { ATTENDANCE_SEVERITY_CLASS, attendanceSeverity } from '../data/hrFlags.js'
 
 function employeeKey(employee) {
   return String(employee?.kronos_id || employee?.id || '')
@@ -135,7 +135,7 @@ export default function LedgerView() {
                 <span className="text-sm font-bold text-brand-700">{selectedEmployee.first_name?.[0]}{selectedEmployee.last_name?.[0]}</span>
               </div>
               <div className="min-w-0">
-                <p className={`font-semibold truncate ${isFlagged(selectedKey) ? 'text-red-600' : 'text-gray-900'}`}>
+                <p className={`font-semibold truncate ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(selectedKey)]}`}>
                   {selectedEmployee.first_name} {selectedEmployee.last_name}
                 </p>
                 <p className="text-xs text-gray-500 truncate">

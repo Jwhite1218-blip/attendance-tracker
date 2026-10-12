@@ -3,10 +3,12 @@ import test from 'node:test'
 import { configureClientAccess, flushPendingWrites } from './sharedStore.js'
 import { saveBlackoutDateRange } from './blackoutDates.js'
 import {
+  attendanceSeverityOf,
   checkAndFlag,
   getEmployeeAttendanceStatus,
   isFlagged,
   isQualifyingCode,
+  mainPageFlagged,
   splitFlaggedByEmploymentStatus,
 } from './hrFlags.js'
 import { installTestBrowserStorage } from './testBrowserStorage.js'
@@ -244,4 +246,48 @@ test('inactive employees leave the follow-up watch list but keep their flag', ()
 test('splitting flagged employees tolerates an empty or missing list', () => {
   assert.deepEqual(splitFlaggedByEmploymentStatus([]), { active: [], inactive: [] })
   assert.deepEqual(splitFlaggedByEmploymentStatus(undefined), { active: [], inactive: [] })
+})
+
+// Liz, 2026-10-10: yellow at the third occurrence, red at the fourth, and only
+// the fourth reaches the district main page.
+test('severity turns yellow at the third occurrence and red at the fourth', () => {
+  assert.equal(attendanceSeverityOf(null), 'none')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 0 }), 'none')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 2 }), 'none')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 3 }), 'tracking')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 4 }), 'action')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 12 }), 'action')
+})
+
+test('a seniority reset is red immediately, whatever the occurrence count', () => {
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 2, seniorityReset: true }), 'action')
+  assert.equal(attendanceSeverityOf({ occurrenceCount: 3, seniorityReset: true }), 'action')
+})
+
+test('the main page list drops third occurrences and keeps fourth and up', () => {
+  const third = { empId: 'a', occurrenceCount: 3 }
+  const fourth = { empId: 'b', occurrenceCount: 4 }
+  const reset = { empId: 'c', occurrenceCount: 2, seniorityReset: true }
+  assert.deepEqual(
+    mainPageFlagged([third, fourth, reset]).map(entry => entry.empId),
+    ['b', 'c']
+  )
+  assert.deepEqual(mainPageFlagged([third]), [])
+  assert.deepEqual(mainPageFlagged(null), [])
+})
+
+// The watch list a building manager sees is deliberately the longer one: the
+// third occurrence is the point where someone can still intervene.
+test('the building watch list keeps third occurrences that the main page hides', async () => {
+  const employeeId = 'severity-building-list'
+  const start = `${SCHOOL_YEAR_START}-09-0`
+  await checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
+    [`${start}1`, 'UNEX'], [`${start}2`, 'UNEX'], [`${start}3`, 'UNEX'],
+  ))
+  flushPendingWrites()
+  const status = getEmployeeAttendanceStatus(employeeId)
+  assert.equal(status.occurrenceCount, 3)
+  assert.equal(attendanceSeverityOf(status), 'tracking')
+  assert.equal(isFlagged(employeeId), true, 'still on the building watch list')
+  assert.deepEqual(mainPageFlagged([status]), [], 'but not on the main page')
 })

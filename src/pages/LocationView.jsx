@@ -6,7 +6,7 @@ import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
-import { getAllFlaggedEmployees, isFlagged } from '../data/hrFlags.js'
+import { ATTENDANCE_SEVERITY_CLASS, attendanceSeverity, getAllFlaggedEmployees } from '../data/hrFlags.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getWeekDates } from '../data/weekDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
@@ -313,7 +313,7 @@ export default function LocationView() {
                     <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900'}`}>
+                    <p className={`text-sm font-medium flex items-center gap-1 ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(emp.kronos_id || emp.id)]}`}>
                       {emp.first_name} {emp.last_name}
                     </p>
                     <p className="text-xs text-gray-500 truncate">{emp.position}</p>
@@ -435,7 +435,7 @@ export default function LocationView() {
                           <span className="text-xs font-semibold text-brand-600">{emp.first_name?.[0]}{emp.last_name?.[0]}</span>
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-sm font-medium transition-colors truncate flex items-center gap-1 ${isFlagged(emp.kronos_id || emp.id) ? 'text-red-600' : 'text-gray-900 group-hover:text-brand-700'}`}>
+                          <p className={`text-sm font-medium transition-colors truncate flex items-center gap-1 ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(emp.kronos_id || emp.id)]} ${attendanceSeverity(emp.kronos_id || emp.id) === 'none' ? 'group-hover:text-brand-700' : ''}`}>
                             {emp.first_name} {emp.last_name}
                           </p>
                           <p className="text-xs text-gray-500 truncate">{emp.position}</p>

@@ -3,7 +3,7 @@ import { useProgramTerms } from '../components/useProgramTerms.js'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
-import { getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
+import { ATTENDANCE_SEVERITY_CHIP, ATTENDANCE_SEVERITY_CLASS, attendanceSeverity, getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
 import { addEmployeeNote, getEmployeeByKey, setEmployeeActive } from '../data/employeeLocations.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
@@ -12,7 +12,7 @@ import { openStarCardWindow, starCardFromRecognition } from '../lib/starCardPrin
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
-import { formatBirthday } from '../data/employeeFields.js'
+import { formatBirthday, formatPhone } from '../data/employeeFields.js'
 import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import {
@@ -213,6 +213,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const hireDate = employee?.hire_date
   const birthdate = employee?.birthdate
   const tShirtSize = employee?.t_shirt_size
+  const phone = employee?.phone
   const yearsOfService = serviceDate
     ? Math.floor((new Date() - new Date(serviceDate)) / (1000 * 60 * 60 * 24 * 365))
     : null
@@ -257,7 +258,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               </span>
             </div>
             <div className="min-w-0">
-              <h2 className={`text-lg sm:text-xl font-bold ${isFlagged(empKey) ? 'text-red-600' : 'text-gray-900'}`}>
+              <h2 className={`text-lg sm:text-xl font-bold ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(empKey)]}`}>
                 {employee?.first_name} {employee?.last_name}
               </h2>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500">
@@ -271,7 +272,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   {employee?.active === false ? 'Inactive' : 'Active'} employee
                 </span>
                 {attendanceStatus && (
-                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${isFlagged(empKey) ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${ATTENDANCE_SEVERITY_CHIP[attendanceSeverity(empKey)]}`}>
                     {term.stageLabel(attendanceStatus)}
                   </span>
                 )}
@@ -366,6 +367,16 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           <div>
             <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Birthdate</p>
             <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{formatBirthday(birthdate)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Phone</p>
+            {/* A manager chasing a no-show is usually holding a phone, so the
+                number is the link rather than text to copy out by hand. */}
+            <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">
+              {phone
+                ? <a href={`tel:${String(phone).replace(/\D/g, '')}`} className="text-brand-700 hover:underline">{formatPhone(phone)}</a>
+                : '—'}
+            </p>
           </div>
           {lizAdminAccess && (
             <div>

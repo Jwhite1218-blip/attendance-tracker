@@ -159,6 +159,46 @@ export function getEmployeeAttendanceStatus(empId) {
     .find(status => String(status.empId) === String(empId) && status.schoolYearStart === currentYear) || null
 }
 
+// Liz, 2026-10-10: the third occurrence turns the name yellow wherever the
+// employee appears, but it stays off the district main page. Only the fourth —
+// the point where a verbal warning has to be given — is escalated to the front
+// page in red. A seniority reset is red immediately whatever the count, because
+// two back-to-back no-call/no-shows is already a union matter.
+//
+//   'none'     — not being tracked
+//   'tracking' — 3rd occurrence. Yellow name, building view only.
+//   'action'   — 4th occurrence or a seniority reset. Red, and on the main page.
+export const ATTENDANCE_SEVERITY_CLASS = {
+  none: 'text-gray-900',
+  tracking: 'text-amber-600',
+  action: 'text-red-600',
+}
+
+export const ATTENDANCE_SEVERITY_CHIP = {
+  none: 'bg-gray-100 text-gray-600',
+  tracking: 'bg-amber-50 text-amber-700',
+  action: 'bg-red-50 text-red-700',
+}
+
+export function attendanceSeverityOf(status) {
+  if (!status) return 'none'
+  if (status.seniorityReset) return 'action'
+  if (status.occurrenceCount >= VERBAL_WARNING_THRESHOLD) return 'action'
+  if (status.occurrenceCount >= TRACKING_THRESHOLD) return 'tracking'
+  return 'none'
+}
+
+export function attendanceSeverity(empId) {
+  return attendanceSeverityOf(getEmployeeAttendanceStatus(empId))
+}
+
+// The district main page carries only what needs acting on today. The building
+// view keeps the full watch list, so a third occurrence is still visible to the
+// manager who can do something about it.
+export function mainPageFlagged(flaggedWithEmployees) {
+  return (flaggedWithEmployees || []).filter(entry => attendanceSeverityOf(entry) === 'action')
+}
+
 export function isFlagged(empId) {
   const status = getEmployeeAttendanceStatus(empId)
   return !!status && (status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset)

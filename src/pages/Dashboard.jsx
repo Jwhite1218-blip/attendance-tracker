@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
-import { getAllFlaggedEmployees, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
+import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
@@ -32,7 +32,10 @@ export default function Dashboard() {
   // Inactive staff keep their flag but leave the watch list — see
   // splitFlaggedByEmploymentStatus. Their status shows on the /staff page and
   // returns to the main list if they are reactivated.
-  const { active: flaggedEmployees } = splitFlaggedByEmploymentStatus(allFlaggedEmployees)
+  const { active: activeFlaggedEmployees } = splitFlaggedByEmploymentStatus(allFlaggedEmployees)
+  // Third occurrences are tracked and visible in the building view, but the
+  // district front page lists only the fourth and up — see mainPageFlagged.
+  const flaggedEmployees = mainPageFlagged(activeFlaggedEmployees)
 
   const openEmployeeRecord = employee => {
     const employeeId = employee.kronos_id || employee.id
