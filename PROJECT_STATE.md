@@ -209,3 +209,9 @@ Eastern time; the manager dashboard would have shown yesterday's date all day.
 4. Whether building managers should be able to log their own training (safety
    briefs and huddles are building-level events). Currently administrator-only,
    which matches the entry form Liz described.
+5. **Attendance code badge colours are muddy**, deferred 2026-10-11 — nobody
+   has complained, so left alone. `LI` (#EC9126) against `EO` (#E8A32B) is a
+   1.12 contrast ratio and effectively one colour under a deuteranopia
+   simulation; `UNEX` (#E56E6A) against `LI` is 1.28. The two-letter labels
+   are carrying the distinction on their own. These hexes look like Liz's own
+   colour convention, so changing them is her call, not a tidy-up.
