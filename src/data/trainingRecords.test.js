@@ -109,18 +109,23 @@ test('hours add up per employee and reset with the school year', () => {
   assert.equal(trainingHoursFor(records, '1001'), 7.5, 'all years when unscoped')
 })
 
-// Liz's note names 12 hours for the Director and 6 for Cooks and Food Service
-// Workers, and says nothing about the fifteen Leads or two Managers.
-test('a position with no stated requirement reports as unset, never as met', () => {
+// Three tiers, per Liz 2026-10-11: 12 for the Director, 10 for Managers and
+// Worker Leads, 6 for Cooks and Food Service Workers.
+test('every position on the roster has a stated requirement', () => {
   assert.equal(requiredHoursFor({ position: 'Food Service Director' }), 12)
+  assert.equal(requiredHoursFor({ position: 'Food Service Manager' }), 10)
+  assert.equal(requiredHoursFor({ position: 'Food Service Worker Lead' }), 10)
   assert.equal(requiredHoursFor({ position: 'Cook' }), 6)
   assert.equal(requiredHoursFor({ position: 'Food Service Worker' }), 6)
-  assert.equal(requiredHoursFor({ position: 'Food Service Worker Lead' }), null)
-  assert.equal(requiredHoursFor({ position: 'Food Service Manager' }), null)
-  assert.equal(requiredHoursFor({ position: 'Something New' }), null)
+  assert.equal(requiredHoursFor({ position: '  Food Service Worker Lead  ' }), 10, 'whitespace is tolerated')
+})
+
+// A job title nobody has set hours for must never be reported as compliant.
+test('an unknown position reports as unset rather than defaulting to a tier', () => {
+  assert.equal(requiredHoursFor({ position: 'Executive Chef' }), null)
   assert.equal(requiredHoursFor({}), null)
 
-  const [row] = trainingSummaryForEmployees([], [{ id: '1', position: 'Food Service Worker Lead' }], 2026)
+  const [row] = trainingSummaryForEmployees([], [{ id: '1', position: 'Executive Chef' }], 2026)
   assert.equal(row.status, 'unset')
   assert.equal(row.remaining, null)
 })
@@ -159,7 +164,7 @@ test('the by-school report groups and counts without losing anybody', () => {
   const employees = [
     { id: '1', kronos_id: '1', position: 'Cook', location: 'CrestonMS', last_name: 'Zeta' },
     { id: '2', kronos_id: '2', position: 'Cook', location: 'CrestonMS', last_name: 'Alpha' },
-    { id: '3', kronos_id: '3', position: 'Food Service Worker Lead', location: 'StonyBrkMS', last_name: 'Lead' },
+    { id: '3', kronos_id: '3', position: 'Executive Chef', location: 'StonyBrkMS', last_name: 'Unknown' },
     { id: '4', kronos_id: '4', position: 'Cook', location: '', last_name: 'Nowhere' },
   ]
   const records = [training({ hours: 6, employeeIds: ['1'] })]
@@ -174,7 +179,7 @@ test('the by-school report groups and counts without losing anybody', () => {
     { met: creston.metCount, short: creston.shortCount, unset: creston.unsetCount, hours: creston.totalHours },
     { met: 1, short: 1, unset: 0, hours: 6 }
   )
-  assert.equal(groups[1].unsetCount, 1, 'a Lead counts as unset, not as compliant')
+  assert.equal(groups[1].unsetCount, 1, 'an unknown title counts as unset, not as compliant')
 })
 
 test('hours read the way people write them', () => {

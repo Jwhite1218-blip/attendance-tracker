@@ -121,7 +121,11 @@ building, so someone who has moved shows what they earned at each stop.
 **Professional Standards training.** New admin-only `/training` page. One
 record per event carrying the employees it covered; hours in quarter-hour
 increments, restarting each July; report grouped by school against the
-requirement. `POSITION_TRAINING_HOURS` is deliberately incomplete — see below.
+requirement. All three tiers are set: 12 hours for the Director, 10 for Food Service
+Managers and Worker Leads, 6 for Cooks and Food Service Workers (Liz,
+2026-10-11). The admin team tracks its training separately and is deliberately
+not in this roster. An unlisted job title still reports as "no requirement
+set" rather than defaulting to a tier.
 
 **Defects found and fixed while verifying.** A bare `YYYY-MM-DD` passed to the
 shared `formatDate` parsed as UTC midnight and rendered as the previous day in
@@ -136,20 +140,14 @@ Eastern time; the manager dashboard would have shown yesterday's date all day.
    there a manager drawing, does it print a card, and whether employee
    milestone names change from Bronze/Silver/Gold to Rookie All-Star/Rising
    Star/MVP/Hall of Fame/All-Star Legend.
-2. **Training hours for 17 staff.** Her note gives 12 hours for Program
-   Directors (FSD, RDM) and 6 for Program Staff (Cooks, FSWs, Support Admin),
-   which leaves the fifteen Food Service Worker Leads and two Food Service
-   Managers unnamed; RDM/OM/FM/MM/HRM are not positions in this roster at all.
-   They report as "no requirement set" rather than defaulting to a compliance
-   number nobody stated. One line in `POSITION_TRAINING_HOURS` fixes it.
-3. **Approval workflow.** "Other admin logins can request to edit/transfer with
+2. **Approval workflow.** "Other admin logins can request to edit/transfer with
    my approval?" — still a question in her own notes, so unspecified.
    `pending-approvals-v1` is already admitted by the SQL allowlist, so building
    it needs no further migration.
-4. **Spanish sign-off** on the sixty drafted terms.
-5. Whether "other" belongs on the printed card, and whether the card should be
+3. **Spanish sign-off** on the sixty drafted terms.
+4. Whether "other" belongs on the printed card, and whether the card should be
    bilingual.
-6. Whether a manager's stars should still count in their building's "Stars by
+5. Whether a manager's stars should still count in their building's "Stars by
    month" total while being off that building's leaderboard and out of its
    drawing.
 

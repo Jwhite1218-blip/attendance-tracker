@@ -42,19 +42,24 @@ export const TRAINING_HOUR_OPTIONS = Array.from({ length: 48 }, (_, index) => (i
 
 // Annual requirement by roster position, restarting each July.
 //
-// Liz's note gives 12 hours for Program Directors (FSD, RDM) and 6 for Program
-// Staff (Cooks, FSWs, Support Admin). That leaves the fifteen Food Service
-// Worker Leads and two Food Service Managers unnamed, and RDM/OM/FM/MM/HRM are
-// not positions in this roster at all.
+// Liz's note of 2026-10-10 gave two tiers — 12 hours for Program Directors and
+// 6 for Program Staff — which left the fifteen Food Service Worker Leads and
+// two Food Service Managers unnamed. She confirmed on 2026-10-11 that both
+// take the middle tier at 10 hours, matching the USDA manager tier.
 //
-// `null` means "no requirement has been set" and is shown that way rather than
-// being quietly rounded to the nearest tier. USDA does define a middle manager
-// tier, but guessing a compliance number is worse than showing a gap, so these
-// stay null until Liz says what they are. Changing one is a one-line edit.
+// The admin team (RDM, OM, FM, MM, HRM in her note) tracks its training
+// separately and is deliberately not in this roster, so there is nothing to
+// add for them here.
+//
+// `null` still means "no requirement has been set", and a position not listed
+// at all resolves to null rather than defaulting to a tier. Every current
+// position is covered, so that path only matters when a new job title appears
+// — at which point it shows as unset rather than silently reporting someone
+// as compliant against a number nobody chose.
 export const POSITION_TRAINING_HOURS = {
   'Food Service Director': 12,
-  'Food Service Manager': null,
-  'Food Service Worker Lead': null,
+  'Food Service Manager': 10,
+  'Food Service Worker Lead': 10,
   'Cook': 6,
   'Food Service Worker': 6,
 }
