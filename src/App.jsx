@@ -2,6 +2,7 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import ManagerHome from './pages/ManagerHome.jsx'
+import Training from './pages/Training.jsx'
 import DailyReport from './pages/DailyReport.jsx'
 import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
@@ -97,6 +98,7 @@ function AppShell() {
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
     { path: '/ledger', label: t('nav.employeeRecords') },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: t('nav.blackoutCalendar') }] : []),
+    ...(role === 'admin' ? [{ path: '/training', label: t('nav.training') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
     ...(lizAdminAccess ? [{ path: '/backup-recovery', label: t('nav.backupRecovery') }] : []),
@@ -299,6 +301,7 @@ function AppShell() {
           {/* Reached from the Dashboard button rather than the nav: roster
               housekeeping is occasional and does not belong on the front page. */}
           <Route path="/staff" element={role === 'admin' ? <StaffAdmin /> : <Navigate to={homePath} replace />} />
+          <Route path="/training" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Training />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />

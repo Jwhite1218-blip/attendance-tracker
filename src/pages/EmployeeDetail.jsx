@@ -14,6 +14,7 @@ import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday, formatPhone } from '../data/employeeFields.js'
 import TransferModal from '../components/TransferModal.jsx'
+import { assignmentTimeline } from '../data/assignmentHistory.js'
 import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import {
@@ -127,6 +128,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const starsByLocation = useMemo(
     () => employeeStarsByLocation(recognitionRecords, empKey),
     [recognitionRecords, empKey]
+  )
+  // Only administrators receive this key from the server, so a school session
+  // would render an empty list rather than a wrong one — but gate it anyway so
+  // the heading does not appear with nothing under it.
+  const assignmentStops = useMemo(
+    () => (role === 'admin' ? assignmentTimeline(empKey, employee?.location) : []),
+    [role, empKey, employee?.location, dataVersion]
   )
   const starLevel = getStarLevel(starCount)
   const nextStarLevel = getNextStarLevel(starCount)
@@ -370,6 +378,33 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             </div>
           </div>
         </div>
+
+        {assignmentStops.length > 1 && (
+          <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
+            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Schools worked</p>
+            <ol className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              {assignmentStops.map((stop, index) => (
+                <li key={`${stop.locationId}-${index}`} className="flex items-center gap-1.5">
+                  {index > 0 && <span className="text-gray-300" aria-hidden="true">&rarr;</span>}
+                  <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${
+                    stop.until === null ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {LOCATION_MAP[stop.locationId]?.name || stop.locationId}
+                    {stop.since && (
+                      <span className="ml-1 text-[10px] font-normal opacity-70">
+                        {String(stop.since).slice(0, 10)}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ol>
+            {/* The first stop is inferred from the earliest recorded move —
+                nothing was logging transfers before 2026-10-11, so an older
+                move cannot be shown. */}
+            <p className="mt-1 text-[10px] text-gray-400">Transfers recorded from 11 Oct 2026. Earlier moves were not logged.</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
           {hireDate && (

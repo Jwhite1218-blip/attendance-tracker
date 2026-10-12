@@ -4,6 +4,7 @@
 import { normalizeBirthday, normalizePhone } from './employeeFields.js'
 import { validateInactiveDetails } from './employmentStatus.js'
 import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
+import { recordAssignmentChange } from './assignmentHistory.js'
 
 const LOCATION_STORAGE_KEY = 'employee-location-overrides'
 const RECORD_STORAGE_KEY = 'employee-record-overrides'
@@ -121,10 +122,15 @@ export function getEffectiveLocation(empId) {
   return getEmployeeByKey(empId)?.location || null
 }
 
-export function transferEmployee(empKey, newLocationId) {
+// The history entry and the override are written together: a transfer whose
+// previous school went unrecorded is the exact gap Liz asked us to close, so
+// the "from" is read before the override replaces it.
+export function transferEmployee(empKey, newLocationId, actor = '') {
+  const previousLocationId = getEffectiveLocation(empKey)
   const overrides = getLocationOverrides()
   overrides[String(empKey)] = newLocationId
   saveLocationOverrides(overrides)
+  recordAssignmentChange(empKey, previousLocationId, newLocationId, actor)
 }
 
 export function getRosterForLocation(locationId) {

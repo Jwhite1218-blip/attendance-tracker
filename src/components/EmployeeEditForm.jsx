@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useAuth } from './PinGate.jsx'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { transferEmployee, updateEmployeeRecord } from '../data/employeeLocations.js'
 import { normalizeBirthday, normalizePhone, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
 
 export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
+  const { displayName } = useAuth()
   const [form, setForm] = useState({
     first_name: employee.first_name || '',
     last_name: employee.last_name || '',
@@ -29,7 +31,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
       if (!form.first_name.trim() || !form.last_name.trim()) throw new Error('First and last name are required.')
       if (!form.location) throw new Error('Choose a location.')
       const empKey = employee.kronos_id || employee.id
-      if (form.location !== employee.location) transferEmployee(empKey, form.location)
+      if (form.location !== employee.location) transferEmployee(empKey, form.location, displayName)
       const saved = updateEmployeeRecord(empKey, {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),

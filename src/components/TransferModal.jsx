@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useAuth } from './PinGate.jsx'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations, transferEmployee } from '../data/employeeLocations.js'
 
 export default function TransferModal({ employee, onClose, onTransferred }) {
+  const { displayName } = useAuth()
   const [selectedLocation, setSelectedLocation] = useState('')
   const empKey = employee?.kronos_id || employee?.id
   const currentLoc = employee?.location
@@ -13,7 +15,7 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
 
   const handleTransfer = () => {
     if (!selectedLocation) return
-    transferEmployee(empKey, selectedLocation)
+    transferEmployee(empKey, selectedLocation, displayName)
     onTransferred?.()
     onClose()
   }
