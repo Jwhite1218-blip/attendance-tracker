@@ -3,6 +3,8 @@ export const LOCATION_OVERRIDES_KEY = 'employee-location-overrides'
 export const RECORD_OVERRIDES_KEY = 'employee-record-overrides'
 export const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
 export const EMPLOYEE_NOTES_KEY = 'employee-manager-notes-v1'
+export const ASSIGNMENT_HISTORY_KEY = 'employee-assignment-history-v1'
+export const TRAINING_KEY = 'training-records-v1'
 export const RECOGNITION_KEY = 'all-star-recognition-v1'
 export const HR_STATUS_KEY = 'hr-attendance-progress-v2'
 export const LEGACY_HR_STATUS_KEY = 'hr-flags'
@@ -11,6 +13,11 @@ export const ROSTER_KEYS = new Set([
   LOCATION_OVERRIDES_KEY,
   RECORD_OVERRIDES_KEY,
   CUSTOM_EMPLOYEES_KEY,
+  // Assignment history is written by the same act that changes a location, so
+  // it carries the same permission as the transfer itself. Keeping it here
+  // rather than on its own line means a future change to roster permissions
+  // cannot leave the history writable when the transfer is not.
+  ASSIGNMENT_HISTORY_KEY,
 ])
 
 // Canonical list of every non-attendance state key the application is allowed
@@ -24,7 +31,9 @@ export const MANAGED_FIXED_STATE_KEYS = Object.freeze([
   RECORD_OVERRIDES_KEY,
   CUSTOM_EMPLOYEES_KEY,
   EMPLOYEE_NOTES_KEY,
+  ASSIGNMENT_HISTORY_KEY,
   RECOGNITION_KEY,
+  TRAINING_KEY,
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
 ])
@@ -61,6 +70,11 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   if (isAttendanceState) return true
   if (isRecognitionState) return true
   if (key === EMPLOYEE_NOTES_KEY) return session.canEditAttendance !== false
+  // Professional Standards hours are a compliance record kept at district
+  // level: the entry form selects across every school at once. A read-only
+  // admin must not write them, hence the roster-management bar rather than
+  // canEditAttendance.
+  if (key === TRAINING_KEY) return session.canManageRoster === true
   if (ROSTER_KEYS.has(key)) return session.canManageRoster === true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false

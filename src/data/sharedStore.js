@@ -6,7 +6,9 @@ const FIXED_STORAGE_KEYS = new Set([
   'employee-record-overrides',
   'employee-manager-notes-v1',
   'employee-custom-records',
+  'employee-assignment-history-v1',
   'all-star-recognition-v1',
+  'training-records-v1',
   'hr-attendance-progress-v2',
   'hr-flags',
 ])
@@ -41,7 +43,14 @@ export function canWriteManagedKeyForAccess(access, key) {
       && access.canEditRecognition === true
   }
   if (key === 'attendance-blackout-dates') return access.canManageBlackouts === true
-  if (key === 'employee-location-overrides') return access.canManageRoster === true
+  // A transfer writes the location override and the history entry together,
+  // so they share one permission — see ROSTER_KEYS in permissions.mjs.
+  if (key === 'employee-location-overrides' || key === 'employee-assignment-history-v1') {
+    return access.canManageRoster === true
+  }
+  if (key === 'training-records-v1') {
+    return access.role === 'admin' && access.canManageRoster === true
+  }
   if (key === 'employee-manager-notes-v1') return access.canWriteEmployeeNotes === true
   if (key === 'employee-record-overrides' || key === 'employee-custom-records') {
     return access.role === 'admin'
