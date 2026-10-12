@@ -135,3 +135,16 @@ export function setAttendanceNote(empId, dateKey, note) {
   if (!current) return getEmployeeYearAttendance(empId, calendarYearOf(dateKey))
   return setAttendanceRecord(empId, dateKey, { code: current.code, note })
 }
+
+// Every attendance record for an employee from this calendar year forward,
+// flattened into one map. Requested time off is the only thing that looks
+// ahead, and a December RTO booked in October lives in next year's bucket.
+export function readFutureAttendance(employee, referenceDate = new Date()) {
+  const empKey = employee.kronos_id || employee.id
+  const currentYear = referenceDate.getFullYear()
+  const years = new Set([
+    currentYear,
+    ...getEmployeeAttendanceYears(empKey).filter(year => year >= currentYear),
+  ])
+  return Object.assign({}, ...[...years].map(year => getEmployeeYearAttendance(empKey, year)))
+}

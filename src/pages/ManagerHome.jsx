@@ -10,13 +10,16 @@
 // Everything here is scoped to the manager's own building. The district
 // Dashboard is a different page and stays administrator-only — a manager must
 // never see another school's staff.
-import { useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { useMemo, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import { useLanguage } from '../components/LanguageProvider.jsx'
 import { LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
-import { getAttendanceCode } from '../data/attendanceStore.js'
+import { getAttendanceCode, getAttendanceRecord, readFutureAttendance } from '../data/attendanceStore.js'
+import { buildSchoolInsights, collectWeekExceptions } from '../data/dashboardInsights.js'
+import { getWeekDates } from '../data/weekDates.js'
+import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
 import { attendanceSeverityOf, getAllFlaggedEmployees } from '../data/hrFlags.js'
 import { getAllRecognitions, recognitionEarnsStar } from '../data/recognitionStore.js'
 import { translateCount } from '../data/i18n.js'
@@ -27,6 +30,8 @@ function todayKey() {
 }
 
 export default function ManagerHome() {
+  const navigate = useNavigate()
+  const [activeInsight, setActiveInsight] = useState(null)
   const { locationId, canEditRecognition, dataVersion } = useAuth()
   const { locale, t, formatDate } = useLanguage()
   const school = LOCATION_MAP[locationId]
@@ -65,6 +70,37 @@ export default function ManagerHome() {
     )).length
   }, [roster, dataVersion])
 
+  // The same four cards as the attendance tracker, for the current week.
+  // Liz, 2026-10-11: they should be on the school's dashboard too, not only
+  // on the overview. One component and one set of builders, so the two
+  // screens cannot disagree about what a school's month looks like.
+  const dates = useMemo(() => getWeekDates(0), [])
+  const weekAttendance = useMemo(() => {
+    const map = {}
+    for (const employee of roster) {
+      const empKey = employee.kronos_id || employee.id
+      for (const dateKey of dates) {
+        const record = getAttendanceRecord(empKey, dateKey)
+        if (record) map[`${empKey}-${dateKey}`] = record
+      }
+    }
+    return map
+  }, [roster, dates, dataVersion])
+
+  const schoolInsights = useMemo(
+    () => buildSchoolInsights(roster, readFutureAttendance),
+    [roster, dataVersion]
+  )
+  const weekExceptions = useMemo(
+    () => collectWeekExceptions(roster, dates, weekAttendance),
+    [roster, dates, weekAttendance]
+  )
+  const weekLabel = `${formatDate(dates[0], { dateStyle: 'medium' })} – ${formatDate(dates[6], { dateStyle: 'medium' })}`
+
+  const openEmployeeRecord = employee => {
+    navigate(`/employee/${encodeURIComponent(employee.kronos_id || employee.id)}`)
+  }
+
   const tiles = [
     { label: t('managerHome.onRoster'), value: roster.length },
     { label: t('managerHome.markedToday'), value: markedToday },
@@ -93,6 +129,15 @@ export default function ManagerHome() {
           ))}
         </dl>
       </header>
+
+      <SchoolDashboardInsights
+        activeInsight={activeInsight}
+        onInsightChange={setActiveInsight}
+        onEmployeeSelect={openEmployeeRecord}
+        weekExceptions={weekExceptions}
+        weekLabel={weekLabel}
+        {...schoolInsights}
+      />
 
       {needsAttention > 0 && (
         <Link

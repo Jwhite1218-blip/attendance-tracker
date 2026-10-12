@@ -56,3 +56,35 @@ export function getUpcomingRequestedTimeOff(employees, getAttendanceRecords, ref
     }))
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareEmployees(a, b))
 }
+
+// The four cards a school sees, assembled in one place.
+//
+// LocationView and the manager's Dashboard both show them, and they must not
+// drift: two screens disagreeing about how many birthdays a school has this
+// month is worse than neither showing it.
+//
+// readAttendanceForEmployee is injected rather than imported so this stays a
+// pure function — attendanceStore reaches for localStorage, which would make
+// it untestable under Node.
+export function buildSchoolInsights(roster, readAttendanceForEmployee, referenceDate = new Date()) {
+  return {
+    monthName: referenceDate.toLocaleDateString('en-US', { month: 'long' }),
+    birthdays: getCurrentMonthBirthdays(roster, referenceDate),
+    anniversaries: getCurrentMonthAnniversaries(roster, referenceDate),
+    requestedTimeOff: getUpcomingRequestedTimeOff(roster, readAttendanceForEmployee, referenceDate),
+  }
+}
+
+// Every marked exception for a set of days, oldest first.
+export function collectWeekExceptions(roster, dates, attendance) {
+  const list = []
+  ;(roster || []).forEach(employee => {
+    ;(dates || []).forEach(dateKey => {
+      const record = (attendance || {})[`${employee.kronos_id || employee.id}-${dateKey}`]
+      if (record?.code) {
+        list.push({ employee, dateKey, code: record.code, note: record.note })
+      }
+    })
+  })
+  return list.sort((left, right) => left.dateKey.localeCompare(right.dateKey))
+}
