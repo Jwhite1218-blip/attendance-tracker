@@ -67,10 +67,15 @@ export const ATTENDANCE_CODES = [
     hex: { bg: '#AB3F94', text: '#FFFFFF', border: '#843072' },
   },
   {
+    // Stored as 'JUR' on purpose. This was the jury-duty code and Liz asked
+    // for it to become a general "other" on 2026-10-11; renaming the stored
+    // value would orphan every record already written under it, and the badge
+    // would vanish from those days. The code is an identifier, not a label —
+    // only what people read has changed.
     code: 'JUR',
-    label: 'JURY DUTY',
-    shortLabel: 'JUR',
-    description: 'Jury-duty leave',
+    label: 'OTHER',
+    shortLabel: 'OTHER',
+    description: 'An approved absence that does not fit any other code',
     color: 'leave',
     hex: { bg: '#8B5AA5', text: '#FFFFFF', border: '#68417D' },
   },
@@ -148,6 +153,7 @@ export const CODE_CATEGORIES = {
   late_in: ['LI'],
   early_out: ['EO'],
   unexcused_call_in: ['UNEX', 'CC'],
-  protected_leave: ['M', 'BER', 'JUR'],
+  protected_leave: ['M', 'BER'],
+  other: ['JUR'],
   legacy: ['LE', 'L/EQ', 'B/J', 'O'],
 }
