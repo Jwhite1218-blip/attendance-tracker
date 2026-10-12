@@ -11,7 +11,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
   if (!flaggedEmployees.length) return null
 
   return (
-    <div className="bg-white rounded-xl border border-red-200 p-5 mb-8">
+    <div id="hr-follow-up" className="scroll-mt-24 bg-white rounded-xl border border-red-200 p-5 mb-8">
       <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
       <p className="text-xs text-gray-400 mb-1">
         Active employees only. Occurrences are counted per school year (July–June).
