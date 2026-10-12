@@ -10,6 +10,22 @@ const CHEF_ACCESS = Object.freeze({
   canManageRoster: false,
   canManageBlackouts: false,
 })
+// District office staff who work across every school but do not run the
+// programme: all buildings, attendance and recognition, but no roster edits,
+// no blackout calendar, and no district award draws. This is the tier the
+// header calls "Administrator (limited)".
+//
+// Written out rather than cloned, because unlike a peer administrator there
+// is no existing entry at this tier to copy from.
+const LIMITED_ADMIN_ACCESS = Object.freeze({
+  role: 'admin',
+  canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRecognitionAwards: false,
+  recognitionOnly: false,
+  canManageRoster: false,
+  canManageBlackouts: false,
+})
 const PRESENTATION_PILOT_ACCESS = Object.freeze({
   role: 'admin',
   canEditAttendance: true,
@@ -296,6 +312,51 @@ function withPeerAdministrators(configuration) {
   return { ...configuration, codes, peerAdminsApplied }
 }
 
+// Additional district-office logins, added the same additive way and for the
+// same reason: ATTENDANCE_ACCESS_CODES_JSON cannot be read back, so an entry
+// in it cannot be edited — only the whole set rebuilt from memory.
+//
+// This is the answer to "that PIN only shows the admin location": rather than
+// changing a building login in place, issue one at this tier and retire the
+// old one. A PIN already in use is refused and logged, so this can never take
+// over a credential somebody is using.
+function withLimitedAdministrators(configuration) {
+  const raw = environmentValue('ATTENDANCE_LIMITED_ADMIN_PINS_JSON').trim()
+  if (!raw) return { ...configuration, limitedAdminsApplied: 0 }
+
+  let entries
+  try {
+    entries = JSON.parse(raw)
+  } catch {
+    console.error(JSON.stringify({ event: 'limited-admin-pins-skipped', reason: 'invalid-json' }))
+    return { ...configuration, limitedAdminsApplied: 0 }
+  }
+  if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
+    console.error(JSON.stringify({ event: 'limited-admin-pins-skipped', reason: 'invalid-shape' }))
+    return { ...configuration, limitedAdminsApplied: 0 }
+  }
+
+  const codes = { ...configuration.codes }
+  let limitedAdminsApplied = 0
+  for (const [pin, rawDisplayName] of Object.entries(entries)) {
+    const displayName = String(rawDisplayName || '').trim().slice(0, 80)
+    let problem = ''
+    if (!/^[0-9]{4,8}$/.test(pin)) problem = 'invalid-format'
+    else if (!displayName) problem = 'missing-display-name'
+    else if (codes[pin]) problem = 'pin-conflict'
+
+    if (problem) {
+      console.error(JSON.stringify({ event: 'limited-admin-pin-skipped', reason: problem }))
+      continue
+    }
+
+    codes[pin] = { ...LIMITED_ADMIN_ACCESS, displayName }
+    limitedAdminsApplied += 1
+  }
+
+  return { ...configuration, codes, limitedAdminsApplied }
+}
+
 function accessCodeConfiguration() {
   const rawCodes = environmentValue('ATTENDANCE_ACCESS_CODES_JSON')
   if (!rawCodes) throw new Error('Attendance access codes are not configured.')
@@ -306,7 +367,7 @@ function accessCodeConfiguration() {
   }
   const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
   if (!replacementPin) {
-    return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes))), replacementApplied: false }
+    return { ...withLimitedAdministrators(withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes)))), replacementApplied: false }
   }
   let problem = ''
   if (!/^\d{4,8}$/.test(replacementPin)) {
@@ -326,13 +387,13 @@ function accessCodeConfiguration() {
   // health check remains observable without locking every other user out.
   if (problem) {
     console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
-    return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes))), replacementApplied: false }
+    return { ...withLimitedAdministrators(withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes)))), replacementApplied: false }
   }
 
   const replacedCodes = { ...codes }
   delete replacedCodes[currentPin]
   replacedCodes[replacementPin] = lizAccess
-  return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(replacedCodes))), replacementApplied: true }
+  return { ...withLimitedAdministrators(withPeerAdministrators(withPresentationPilotAccess(withChefAccess(replacedCodes)))), replacementApplied: true }
 }
 
 export function getAccessCodes() {

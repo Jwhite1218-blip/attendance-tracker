@@ -136,7 +136,8 @@ test('the admin team titles carry their own hours', () => {
   for (const title of ['OM', 'FM', 'MM', 'HRM']) {
     assert.equal(requiredHoursFor({ position: title }), 6, title)
   }
-  assert.equal(requiredHoursFor({ position: 'Office Manager' }), null, 'spelled out is a different string')
+  assert.equal(requiredHoursFor({ position: 'District Office Manager' }), 6, 'the spelled-out title matches too')
+  assert.equal(requiredHoursFor({ position: 'Office Manager' }), null, 'an unmapped spelling still reads as unset')
 })
 
 // A job title nobody has set hours for must never be reported as compliant.

@@ -65,8 +65,11 @@ export const POSITION_TRAINING_HOURS = {
   'Food Service Worker Lead': 10,
   'Cook': 6,
   'Food Service Worker': 6,
-  // Admin team
+  // Admin team. Both the abbreviation Liz writes and the spelled-out title,
+  // because matching is on the exact roster string and nobody should have to
+  // remember which spelling the tracker wants.
   'RDM': 12,
+  'District Office Manager': 6,
   'RN': 10,
   'Chef': 10,
   'OM': 6,

@@ -45,7 +45,12 @@ function withPeers(peers, codes = BASE_CODES) {
     ATTENDANCE_LIZ_REPLACEMENT_PIN: undefined,
     ATTENDANCE_CHEF_PIN: undefined,
     ATTENDANCE_RECOGNITION_PILOT_PINS_JSON: undefined,
+    ATTENDANCE_LIMITED_ADMIN_PINS_JSON: undefined,
   }
+}
+
+function withLimited(entries, codes = BASE_CODES) {
+  return { ...withPeers(undefined, codes), ATTENDANCE_LIMITED_ADMIN_PINS_JSON: JSON.stringify(entries) }
 }
 
 test('a peer administrator gets exactly Liz\'s capabilities under their own name', () => {
@@ -124,5 +129,50 @@ test('with no Liz entry to copy, nothing is added rather than a profile invented
 test('unset leaves the roster exactly as configured', () => {
   withEnvironment(withPeers(undefined), () => {
     assert.deepEqual(Object.keys(getAccessCodes()).sort(), ['1111', '2222'])
+  })
+})
+
+// The second tier: every school, but not the programme. This is what a
+// district-office login needs, and it is how a building-scoped PIN gets
+// replaced rather than edited in place.
+test('a limited administrator reaches every school but cannot run the programme', () => {
+  withEnvironment(withLimited({ 555555: 'District Office Manager' }), () => {
+    const access = accessForPin('555555')
+    assert.ok(access, 'the PIN signs in')
+    assert.equal(access.role, 'admin')
+    assert.equal(access.locationId, null, 'not tied to one building')
+    assert.equal(access.displayName, 'District Office Manager')
+    assert.equal(access.canEditAttendance, true)
+    assert.equal(access.canEditRecognition, true)
+    assert.equal(access.canManageRoster, false)
+    assert.equal(access.canManageBlackouts, false)
+    assert.equal(access.canManageRecognitionAwards, false, 'district award draws stay with Liz')
+  })
+})
+
+test('a limited administrator cannot take over a PIN already in use', () => {
+  withEnvironment(withLimited({ 2222: 'Impostor', 1111: 'Also impostor' }), () => {
+    assert.equal(accessForPin('2222').displayName, 'Creston Manager')
+    assert.equal(accessForPin('2222').locationId, 'CrestonMS')
+    assert.equal(accessForPin('1111').canManageRoster, true, 'Liz is untouched')
+  })
+})
+
+test('both additive tiers can be set at once without interfering', () => {
+  withEnvironment({
+    ...withPeers({ 777777: 'Deputy' }),
+    ATTENDANCE_LIMITED_ADMIN_PINS_JSON: JSON.stringify({ 888888: 'Office' }),
+  }, () => {
+    assert.equal(accessForPin('777777').canManageRoster, true, 'a peer keeps the full tier')
+    assert.equal(accessForPin('888888').canManageRoster, false, 'limited stays limited')
+    assert.equal(Object.keys(getAccessCodes()).length, 4)
+  })
+})
+
+test('a broken limited-admin variable leaves every login working', () => {
+  withEnvironment({ ...withPeers(undefined), ATTENDANCE_LIMITED_ADMIN_PINS_JSON: 'not json' }, () => {
+    assert.ok(accessForPin('1111'))
+    assert.ok(accessForPin('2222'))
+    assert.equal(Object.keys(getAccessCodes()).length, 2)
   })
 })
