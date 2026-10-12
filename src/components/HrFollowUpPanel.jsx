@@ -28,10 +28,10 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
             <span className="font-semibold text-amber-700">Formal attendance tracking</span> — reached at the 3rd occurrence. The employee is now formally being tracked for attendance.
           </p>
           <p>
-            <span className="font-semibold text-amber-700">Verbal warning required</span> — reached at the 4th occurrence. A verbal warning needs to be given and documented.
+            <span className="font-semibold text-red-900">Verbal warning required</span> — reached at the 4th occurrence. A verbal warning needs to be given and documented.
           </p>
           <p>
-            <span className="font-semibold text-red-700">Union seniority reset</span> — triggered by two no-call/no-shows (NCNS) on back-to-back scheduled workdays. An unexcused call-in (UNEX) does not trigger this: it still counts as an occurrence, but the employee did call. Under the union agreement a reset changes the employee&apos;s seniority standing, so it is flagged separately and listed first. Weekends and district holidays do not break the streak — two NCNS days on either side of them still count as back-to-back.
+            <span className="font-semibold text-red-900">Union seniority reset</span> — triggered by two no-call/no-shows (NCNS) on back-to-back scheduled workdays. An unexcused call-in (UNEX) does not trigger this: it still counts as an occurrence, but the employee did call. Under the union agreement a reset changes the employee&apos;s seniority standing, so it is flagged separately and listed first. Weekends and district holidays do not break the streak — two NCNS days on either side of them still count as back-to-back.
           </p>
         </div>
       </details>
@@ -48,7 +48,7 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
               <p className="text-xs text-gray-500 mt-0.5">
                 {showLocation && `${LOCATION_MAP[f.employee.location]?.name || f.employee.location} · `}{f.employee.position}
               </p>
-              <p className={`text-xs font-semibold mt-1.5 ${f.seniorityReset ? 'text-red-700' : 'text-amber-700'}`}>
+              <p className={`text-xs font-semibold mt-1.5 ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverityOf(f)]}`}>
                 {term.stageLabel(f)} · {f.occurrenceCount} occurrence{f.occurrenceCount === 1 ? '' : 's'} · {f.schoolYearStart}–{f.schoolYearStart + 1}
               </p>
               <div className="flex flex-wrap gap-1.5 mt-2">

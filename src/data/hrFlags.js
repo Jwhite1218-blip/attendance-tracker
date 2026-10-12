@@ -168,16 +168,29 @@ export function getEmployeeAttendanceStatus(empId) {
 //   'none'     — not being tracked
 //   'tracking' — 3rd occurrence. Yellow name, building view only.
 //   'action'   — 4th occurrence or a seniority reset. Red, and on the main page.
+// Liz, 2026-10-11: the two were too close to tell apart on the attendance
+// screens. amber-600 against red-600 is only a 1.52 contrast ratio with each
+// other — adjacent hues at nearly the same darkness, which is the worst case
+// for red-green colour blindness, where they become almost the same colour.
+//
+// Gold against deep crimson instead: they now differ in darkness as well as
+// hue (ratio 2.00, and a doubled separation under a deuteranopia simulation),
+// so the difference survives both a glance across a kitchen and a printout.
+// Both still clear AA on white — 5.0 and 10.0 — which rules out the lighter
+// ambers that would have separated better but been hard to read.
+//
+// The chips carry the same split, with the serious one filled more strongly
+// so the two differ in weight and not only in colour.
 export const ATTENDANCE_SEVERITY_CLASS = {
   none: 'text-gray-900',
-  tracking: 'text-amber-600',
-  action: 'text-red-600',
+  tracking: 'text-amber-700',
+  action: 'text-red-900',
 }
 
 export const ATTENDANCE_SEVERITY_CHIP = {
   none: 'bg-gray-100 text-gray-600',
-  tracking: 'bg-amber-50 text-amber-700',
-  action: 'bg-red-50 text-red-700',
+  tracking: 'bg-amber-50 text-amber-800',
+  action: 'bg-red-100 text-red-900',
 }
 
 export function attendanceSeverityOf(status) {
