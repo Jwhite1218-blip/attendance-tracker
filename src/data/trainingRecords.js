@@ -156,6 +156,62 @@ export function addTrainingRecord(input, options = {}) {
   return record
 }
 
+// Editing revalidates through createTrainingRecord rather than patching the
+// stored object, so a correction cannot produce a record the form would have
+// refused — half an hour, no areas, nobody attending. Identity and authorship
+// are preserved; who changed it and when are added alongside, because these
+// are compliance records and "it said six hours last week" is a question
+// somebody will eventually ask.
+export function updateTrainingRecord(recordId, input, options = {}) {
+  const records = readTrainingMap()
+  const existing = records[String(recordId)]
+  if (!existing) throw new Error('That training record no longer exists.')
+
+  const updated = createTrainingRecord(input, {
+    id: existing.id,
+    createdAt: existing.createdAt,
+    createdBy: existing.createdBy,
+  })
+  updated.updatedAt = new Date().toISOString()
+  updated.updatedBy = String(options.updatedBy || '').trim().slice(0, 80)
+
+  records[existing.id] = updated
+  writeSharedStorage(TRAINING_STORAGE_KEY, records)
+  return updated
+}
+
+// Which way the attendee list was chosen, worked out from the list itself so
+// reopening a record shows the same shape it was entered in. A record covering
+// everyone reopens as "all employees" rather than as 146 individually ticked
+// boxes — and, more usefully, a record covering whole buildings reopens with
+// those buildings selected.
+export function inferAttendeeScope(employeeIds, employees) {
+  const selected = new Set((employeeIds || []).map(String))
+  const roster = employees || []
+  if (!roster.length || !selected.size) return { scope: 'people', schools: [] }
+
+  const everyone = roster.every(employee => selected.has(String(employee.kronos_id || employee.id)))
+  if (everyone && selected.size === roster.length) return { scope: 'all', schools: [] }
+
+  const byLocation = new Map()
+  for (const employee of roster) {
+    const locationId = String(employee.location || '')
+    if (!byLocation.has(locationId)) byLocation.set(locationId, [])
+    byLocation.get(locationId).push(String(employee.kronos_id || employee.id))
+  }
+
+  const schools = []
+  for (const [locationId, ids] of byLocation) {
+    const picked = ids.filter(id => selected.has(id)).length
+    // A partly-selected building means this was not a by-school choice.
+    if (picked === 0) continue
+    if (picked !== ids.length) return { scope: 'people', schools: [] }
+    if (locationId) schools.push(locationId)
+  }
+
+  return schools.length ? { scope: 'schools', schools } : { scope: 'people', schools: [] }
+}
+
 export function removeTrainingRecord(recordId) {
   const records = readTrainingMap()
   if (!records[String(recordId)]) return false
@@ -232,6 +288,65 @@ export function trainingSummaryByLocation(records, employees, startYear = null) 
         String(left.employee.last_name || '').localeCompare(String(right.employee.last_name || ''))),
     }))
     .sort((left, right) => left.locationId.localeCompare(right.locationId))
+}
+
+// ---------------------------------------------------------------------------
+// The report Liz hands to the state.
+//
+// Three sheets, because three different questions get asked of this data:
+// whether a building is covered, whether a named person is covered, and what
+// was actually delivered. Pure row builders — SheetJS stays in the UI layer.
+
+export function buildTrainingSummarySheet(groups, locationName = id => id) {
+  return (groups || []).map(group => ({
+    School: group.locationId === 'unassigned' ? 'No school assigned' : locationName(group.locationId),
+    Staff: group.staffCount,
+    'Hours recorded': group.totalHours,
+    'Requirement met': group.metCount,
+    'Still short': group.shortCount,
+    'No requirement set': group.unsetCount,
+  }))
+}
+
+export function buildTrainingEmployeeSheet(groups, locationName = id => id) {
+  return (groups || []).flatMap(group => group.rows.map(row => ({
+    School: group.locationId === 'unassigned' ? 'No school assigned' : locationName(group.locationId),
+    'Last name': row.employee.last_name || '',
+    'First name': row.employee.first_name || '',
+    Position: row.employee.position || '',
+    'Hours earned': row.earned,
+    'Hours required': row.required == null ? '' : row.required,
+    'Hours remaining': row.remaining == null ? '' : row.remaining,
+    Status: row.status === 'met' ? 'Met' : row.status === 'short' ? 'Short' : 'No requirement set',
+  })))
+}
+
+export function buildTrainingLogSheet(records, resolveName = id => id) {
+  return (records || []).map(record => ({
+    Date: record.date,
+    Training: record.title,
+    Hours: record.hours,
+    Type: TRAINING_TYPE_MAP[record.type]?.label || record.type,
+    Areas: (record.areas || []).map(area => TRAINING_AREA_MAP[area]?.label || area).join(', '),
+    Trainer: record.trainer || '',
+    Attended: (record.employeeIds || []).length,
+    Employees: (record.employeeIds || []).map(resolveName).join('; '),
+  }))
+}
+
+// A dated, labelled header so a printed or emailed copy says what it covers
+// without anyone having to remember.
+export function buildTrainingReportHeader(startYear, generatedAt = new Date()) {
+  return [
+    ['USDA Professional Standards — training hours'],
+    [`School year ${startYear}-${startYear + 1} (1 July ${startYear} to 30 June ${startYear + 1})`],
+    [`Generated ${generatedAt.toISOString().slice(0, 10)}`],
+    [],
+  ]
+}
+
+export function trainingReportFilename(startYear) {
+  return `professional-standards-${startYear}-${startYear + 1}.xlsx`
 }
 
 export function formatTrainingHours(value) {

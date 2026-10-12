@@ -3,6 +3,13 @@ import test from 'node:test'
 import { configureClientAccess, flushPendingWrites } from './sharedStore.js'
 import {
   addTrainingRecord,
+  buildTrainingEmployeeSheet,
+  buildTrainingLogSheet,
+  buildTrainingReportHeader,
+  buildTrainingSummarySheet,
+  inferAttendeeScope,
+  trainingReportFilename,
+  updateTrainingRecord,
   createTrainingRecord,
   formatTrainingHours,
   getAllTrainingRecords,
@@ -194,4 +201,106 @@ test('corrupt stored training reads as empty rather than throwing', () => {
   assert.deepEqual(getAllTrainingRecords(), [])
   localStorage.setItem('training-records-v1', '[1,2,3]')
   assert.deepEqual(getAllTrainingRecords(), [])
+})
+
+test('an edit keeps the record identity and authorship, and stamps who changed it', () => {
+  const saved = addTrainingRecord(VALID, { createdBy: 'Liz' })
+  flushPendingWrites()
+
+  const edited = updateTrainingRecord(saved.id, { ...VALID, hours: 2, title: 'Allergen awareness (revised)' }, { updatedBy: 'Marrese' })
+  flushPendingWrites()
+
+  assert.equal(edited.id, saved.id, 'same record, not a new one')
+  assert.equal(edited.createdAt, saved.createdAt)
+  assert.equal(edited.createdBy, 'Liz', 'original author preserved')
+  assert.equal(edited.updatedBy, 'Marrese')
+  assert.match(edited.updatedAt, /^\d{4}-\d{2}-\d{2}T/)
+
+  const all = getAllTrainingRecords()
+  assert.equal(all.length, 1, 'edited in place rather than duplicated')
+  assert.equal(all[0].hours, 2)
+})
+
+// A correction must not be able to produce a record the form would refuse.
+test('an edit is validated as strictly as a new entry', () => {
+  const saved = addTrainingRecord(VALID, { createdBy: 'Liz' })
+  flushPendingWrites()
+  assert.throws(() => updateTrainingRecord(saved.id, { ...VALID, hours: 0.37 }), /15-minute increments/)
+  assert.throws(() => updateTrainingRecord(saved.id, { ...VALID, employeeIds: [] }), /who attended/)
+  assert.throws(() => updateTrainingRecord('no-such-record', VALID), /no longer exists/)
+  flushPendingWrites()
+  assert.equal(getAllTrainingRecords()[0].hours, VALID.hours, 'a refused edit changes nothing')
+})
+
+test('editing the hours moves the totals it already gave', () => {
+  const employees = [{ id: '1001', kronos_id: '1001', position: 'Cook', location: 'CrestonMS' }]
+  const saved = addTrainingRecord({ ...VALID, hours: 6 }, { createdBy: 'Liz' })
+  flushPendingWrites()
+  assert.equal(trainingSummaryForEmployees(getAllTrainingRecords(), employees, 2026)[0].status, 'met')
+
+  updateTrainingRecord(saved.id, { ...VALID, hours: 1 }, { updatedBy: 'Liz' })
+  flushPendingWrites()
+  const [row] = trainingSummaryForEmployees(getAllTrainingRecords(), employees, 2026)
+  assert.equal(row.earned, 1)
+  assert.equal(row.status, 'short')
+})
+
+// Reopening a record should show the shape it was entered in, not 146 ticks.
+test('attendee scope is inferred back from the saved list', () => {
+  const roster = [
+    { id: '1', location: 'A' }, { id: '2', location: 'A' },
+    { id: '3', location: 'B' }, { id: '4', location: 'B' },
+  ]
+  assert.deepEqual(inferAttendeeScope(['1', '2', '3', '4'], roster), { scope: 'all', schools: [] })
+  assert.deepEqual(inferAttendeeScope(['1', '2'], roster), { scope: 'schools', schools: ['A'] })
+  assert.deepEqual(inferAttendeeScope(['1', '2', '3'], roster), { scope: 'people', schools: [] })
+  assert.deepEqual(inferAttendeeScope(['1', '3'], roster), { scope: 'people', schools: [] })
+  assert.deepEqual(inferAttendeeScope([], roster), { scope: 'people', schools: [] })
+  assert.deepEqual(inferAttendeeScope(['1'], []), { scope: 'people', schools: [] })
+})
+
+test('the report builds three sheets that answer three different questions', () => {
+  const employees = [
+    { id: '1', kronos_id: '1', position: 'Cook', location: 'CrestonMS', last_name: 'Alpha', first_name: 'Ann' },
+    { id: '2', kronos_id: '2', position: 'Food Service Worker Lead', location: 'CrestonMS', last_name: 'Beta', first_name: 'Bo' },
+  ]
+  const records = [training({ hours: 6, employeeIds: ['1'] })]
+  const groups = trainingSummaryByLocation(records, employees, 2026)
+  const name = id => (id === 'CrestonMS' ? 'Creston MS' : id)
+
+  const [summary] = buildTrainingSummarySheet(groups, name)
+  assert.equal(summary.School, 'Creston MS')
+  assert.deepEqual(
+    { staff: summary.Staff, hours: summary['Hours recorded'], met: summary['Requirement met'] },
+    { staff: 2, hours: 6, met: 1 }
+  )
+
+  const people = buildTrainingEmployeeSheet(groups, name)
+  assert.equal(people.length, 2)
+  assert.equal(people[0].Status, 'Met')
+  assert.equal(people[1]['Hours required'], 10, 'a Lead needs ten hours')
+  assert.equal(people[1].Status, 'Short')
+
+  const [log] = buildTrainingLogSheet(records, id => `Person ${id}`)
+  assert.equal(log.Training, 'Allergen awareness')
+  assert.equal(log.Type, 'In-Service')
+  assert.equal(log.Areas, 'Nutrition')
+  assert.equal(log.Attended, 1)
+  assert.equal(log.Employees, 'Person 1')
+})
+
+test('the report says on its face what period it covers', () => {
+  const header = buildTrainingReportHeader(2026, new Date('2027-01-05T12:00:00Z'))
+  assert.match(header[1][0], /2026-2027/)
+  assert.match(header[1][0], /1 July 2026 to 30 June 2027/)
+  assert.match(header[2][0], /2027-01-05/)
+  assert.equal(trainingReportFilename(2026), 'professional-standards-2026-2027.xlsx')
+})
+
+// An unassigned group must still be labelled, not left blank in a state report.
+test('staff with no school are labelled rather than left empty', () => {
+  const employees = [{ id: '9', kronos_id: '9', position: 'Cook', location: '', last_name: 'Nowhere', first_name: 'Ned' }]
+  const groups = trainingSummaryByLocation([], employees, 2026)
+  assert.equal(buildTrainingSummarySheet(groups)[0].School, 'No school assigned')
+  assert.equal(buildTrainingEmployeeSheet(groups)[0].School, 'No school assigned')
 })

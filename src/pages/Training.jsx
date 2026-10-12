@@ -12,6 +12,7 @@ import { useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
+import { downloadWorkbook } from '../lib/exportWorkbook.js'
 import {
   TRAINING_AREAS,
   TRAINING_AREA_MAP,
@@ -19,11 +20,18 @@ import {
   TRAINING_TYPES,
   TRAINING_TYPE_MAP,
   addTrainingRecord,
+  buildTrainingEmployeeSheet,
+  buildTrainingLogSheet,
+  buildTrainingReportHeader,
+  buildTrainingSummarySheet,
   formatTrainingHours,
   getAllTrainingRecords,
+  inferAttendeeScope,
   removeTrainingRecord,
+  trainingReportFilename,
   trainingSchoolYearStart,
   trainingSummaryByLocation,
+  updateTrainingRecord,
 } from '../data/trainingRecords.js'
 
 const STATUS_STYLE = {
@@ -42,9 +50,12 @@ export default function Training() {
   const canRecord = role === 'admin' && canManageRoster === true
 
   const [schoolYear, setSchoolYear] = useState(() => trainingSchoolYearStart())
-  const [showForm, setShowForm] = useState(false)
+  const [formRecord, setFormRecord] = useState(null)
+  const [exporting, setExporting] = useState(false)
   const [savedCount, setSavedCount] = useState(0)
   const [openLocation, setOpenLocation] = useState(null)
+  // null = closed, 'new' = adding, a record = editing it.
+  const showForm = formRecord !== null
 
   const employees = useMemo(
     () => getEmployeesWithEffectiveLocations().filter(employee => employee.active !== false),
@@ -71,6 +82,36 @@ export default function Training() {
     }),
     [records, schoolYear]
   )
+
+  const employeeName = id => {
+    const employee = employees.find(person => String(person.kronos_id || person.id) === String(id))
+    return employee ? `${employee.last_name}, ${employee.first_name}` : String(id)
+  }
+
+  const exportReport = async () => {
+    setExporting(true)
+    try {
+      await downloadWorkbook(trainingReportFilename(schoolYear), [
+        {
+          name: 'By school',
+          headerRows: buildTrainingReportHeader(schoolYear),
+          rows: buildTrainingSummarySheet(groups, id => LOCATION_MAP[id]?.name || id),
+        },
+        {
+          name: 'By employee',
+          rows: buildTrainingEmployeeSheet(groups, id => LOCATION_MAP[id]?.name || id),
+        },
+        {
+          name: 'Training log',
+          rows: buildTrainingLogSheet(yearRecords, employeeName),
+        },
+      ])
+    } catch {
+      window.alert('Could not build the report. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (role !== 'admin') {
     return (
@@ -100,10 +141,19 @@ export default function Training() {
               <span className="px-2 py-2 text-gray-900">{schoolYear}&ndash;{schoolYear + 1}</span>
               <button type="button" onClick={() => setSchoolYear(year => year + 1)} className="px-2.5 py-2 text-gray-600 hover:bg-gray-50">&rarr;</button>
             </div>
+            <button
+              type="button"
+              onClick={exportReport}
+              disabled={exporting}
+              title="Download the full hours report as a spreadsheet"
+              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            >
+              {exporting ? 'Building…' : 'Run report (.xlsx)'}
+            </button>
             {canRecord && (
               <button
                 type="button"
-                onClick={() => setShowForm(true)}
+                onClick={() => setFormRecord('new')}
                 className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700"
               >
                 Add training
@@ -221,20 +271,30 @@ export default function Training() {
                 </p>
                 <p className="mt-0.5 text-[11px] text-gray-400">
                   {record.areas.map(area => TRAINING_AREA_MAP[area]?.label || area).join(' · ')}
+                  {record.updatedAt && ` · edited ${String(record.updatedAt).slice(0, 10)}${record.updatedBy ? ` by ${record.updatedBy}` : ''}`}
                 </p>
               </div>
               {canRecord && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!window.confirm(`Delete "${record.title}" and the hours it gave ${record.employeeIds.length} staff?`)) return
-                    removeTrainingRecord(record.id)
-                    setSavedCount(count => count + 1)
-                  }}
-                  className="flex-none rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-50"
-                >
-                  Delete
-                </button>
+                <div className="flex flex-none gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setFormRecord(record)}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-600 hover:bg-gray-50"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!window.confirm(`Delete "${record.title}" and the hours it gave ${record.employeeIds.length} staff?`)) return
+                      removeTrainingRecord(record.id)
+                      setSavedCount(count => count + 1)
+                    }}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               )}
             </li>
           ))}
@@ -242,11 +302,13 @@ export default function Training() {
       </section>
 
       {showForm && canRecord && (
-        <AddTrainingModal
+        <TrainingModal
+          key={formRecord === 'new' ? 'new' : formRecord.id}
+          record={formRecord === 'new' ? null : formRecord}
           employees={employees}
           actor={displayName}
-          onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); setSavedCount(count => count + 1) }}
+          onClose={() => setFormRecord(null)}
+          onSaved={() => { setFormRecord(null); setSavedCount(count => count + 1) }}
         />
       )}
     </div>
@@ -262,20 +324,30 @@ function Stat({ label, value }) {
   )
 }
 
-function AddTrainingModal({ employees, actor, onClose, onSaved }) {
-  const [form, setForm] = useState({
-    title: '',
-    date: todayKey(),
-    hours: '',
-    type: '',
-    areas: [],
-    trainer: '',
-  })
+// One form for both adding and correcting. `record` null means a new entry.
+// Reopening an existing one works out how its attendees were chosen, so a
+// training that covered three buildings comes back with those three selected
+// rather than as forty individually ticked boxes.
+function TrainingModal({ record, employees, actor, onClose, onSaved }) {
+  const editing = Boolean(record)
+  const [form, setForm] = useState(() => ({
+    title: record?.title || '',
+    date: record?.date || todayKey(),
+    hours: record?.hours != null ? String(record.hours) : '',
+    type: record?.type || '',
+    areas: record?.areas ? [...record.areas] : [],
+    trainer: record?.trainer || '',
+  }))
+  const inferred = useMemo(
+    () => (record ? inferAttendeeScope(record.employeeIds, employees) : { scope: 'all', schools: [] }),
+    [record, employees]
+  )
   // 'all' | 'schools' | 'people' — Liz: "Select all employees or select
   // specific schools or select employees individually".
-  const [scope, setScope] = useState('all')
-  const [selectedSchools, setSelectedSchools] = useState([])
-  const [selectedPeople, setSelectedPeople] = useState([])
+  const [scope, setScope] = useState(inferred.scope)
+  const [selectedSchools, setSelectedSchools] = useState(inferred.schools)
+  const [selectedPeople, setSelectedPeople] = useState(() =>
+    (record?.employeeIds || []).map(String))
   const [error, setError] = useState('')
 
   const update = (field, value) => {
@@ -299,11 +371,13 @@ function AddTrainingModal({ employees, actor, onClose, onSaved }) {
   const handleSubmit = event => {
     event.preventDefault()
     try {
-      addTrainingRecord({
+      const payload = {
         ...form,
         hours: Number(form.hours),
         employeeIds: attendees.map(employee => String(employee.kronos_id || employee.id)),
-      }, { createdBy: actor })
+      }
+      if (editing) updateTrainingRecord(record.id, payload, { updatedBy: actor })
+      else addTrainingRecord(payload, { createdBy: actor })
       onSaved()
     } catch (submitError) {
       setError(submitError.message || 'Unable to save this training.')
@@ -322,8 +396,14 @@ function AddTrainingModal({ employees, actor, onClose, onSaved }) {
       >
         <div className="sticky top-0 z-10 flex items-start justify-between border-b border-gray-100 bg-white p-5">
           <div>
-            <h2 id="add-training-title" className="text-lg font-bold text-gray-900">Add training</h2>
-            <p className="mt-1 text-xs text-gray-500">Counts toward Professional Standards hours for everyone selected.</p>
+            <h2 id="add-training-title" className="text-lg font-bold text-gray-900">
+              {editing ? 'Edit training' : 'Add training'}
+            </h2>
+            <p className="mt-1 text-xs text-gray-500">
+              {editing
+                ? 'Changing the hours or who attended updates everyone’s totals straight away.'
+                : 'Counts toward Professional Standards hours for everyone selected.'}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600" aria-label="Close">✕</button>
         </div>
@@ -494,7 +574,7 @@ function AddTrainingModal({ employees, actor, onClose, onSaved }) {
 
         <div className="sticky bottom-0 flex gap-2 border-t border-gray-100 bg-white p-5">
           <button type="submit" className="flex-1 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-            Save training
+            {editing ? 'Save changes' : 'Save training'}
           </button>
           <button type="button" onClick={onClose} className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">
             Cancel
