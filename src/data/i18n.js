@@ -61,6 +61,19 @@ const UI_STRINGS = {
     'nav.customReport': 'Custom Report',
     'nav.masterReport': 'Master Report',
     'nav.backupRecovery': 'Backup & Recovery',
+    'managerHome.eyebrow': 'Manager dashboard',
+    'managerHome.yourSchool': 'Your school',
+    'managerHome.onRoster': 'On roster',
+    'managerHome.markedToday': 'Marked today',
+    'managerHome.starsThisMonth': 'Stars this month',
+    'managerHome.needsAttention.one': '1 person needs attendance follow-up',
+    'managerHome.needsAttention.other': '{count} people need attendance follow-up',
+    'managerHome.needsAttentionHint': 'Third occurrence or later. Open the roster to see who.',
+    'managerHome.attendanceTracker': 'Attendance tracker',
+    'managerHome.attendanceTrackerHint': 'Mark the week and add comments for your team.',
+    'managerHome.recognitionHint': 'Record a star and see your building board.',
+    'managerHome.recordsHint': 'Full-year history for one person.',
+
     'nav.toggleMenu': 'Toggle menu',
     'nav.logout': 'Lock and log out',
 
@@ -110,6 +123,19 @@ const UI_STRINGS = {
     'nav.customReport': 'Reporte personalizado',
     'nav.masterReport': 'Reporte general',
     'nav.backupRecovery': 'Respaldo y recuperación',
+    'managerHome.eyebrow': 'Panel del gerente',
+    'managerHome.yourSchool': 'Su escuela',
+    'managerHome.onRoster': 'En la nómina',
+    'managerHome.markedToday': 'Registrados hoy',
+    'managerHome.starsThisMonth': 'Estrellas este mes',
+    'managerHome.needsAttention.one': '1 persona necesita seguimiento de asistencia',
+    'managerHome.needsAttention.other': '{count} personas necesitan seguimiento de asistencia',
+    'managerHome.needsAttentionHint': 'Tercera incidencia o posterior. Abra la nómina para ver quiénes son.',
+    'managerHome.attendanceTracker': 'Registro de asistencia',
+    'managerHome.attendanceTrackerHint': 'Marque la semana y agregue comentarios para su equipo.',
+    'managerHome.recognitionHint': 'Registre una estrella y vea el tablero de su escuela.',
+    'managerHome.recordsHint': 'Historial del año completo de una persona.',
+
     'nav.toggleMenu': 'Abrir o cerrar el menú',
     'nav.logout': 'Bloquear y cerrar sesión',
 
@@ -178,7 +204,15 @@ export function localeTag(locale) {
 }
 
 export function formatDate(locale, value, options = { dateStyle: 'medium' }) {
-  const date = value instanceof Date ? value : new Date(value)
+  // A bare 'YYYY-MM-DD' parses as UTC midnight, which renders as the previous
+  // day everywhere west of Greenwich — Warren is on Eastern time, so a date
+  // key for today would have printed yesterday on screen all day. Noon local
+  // is what the rest of the codebase uses for the same reason; a value that
+  // already carries a time is left exactly as given.
+  const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/
+  const date = value instanceof Date
+    ? value
+    : new Date(DATE_ONLY.test(String(value || '').trim()) ? `${String(value).trim()}T12:00:00` : value)
   if (Number.isNaN(date.valueOf())) return String(value ?? '')
   return date.toLocaleDateString(localeTag(locale), options)
 }

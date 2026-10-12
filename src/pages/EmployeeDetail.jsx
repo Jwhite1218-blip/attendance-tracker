@@ -13,6 +13,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday, formatPhone } from '../data/employeeFields.js'
+import TransferModal from '../components/TransferModal.jsx'
 import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import {
@@ -24,6 +25,7 @@ import {
 import { downloadWorkbook } from '../lib/exportWorkbook.js'
 import {
   RECOGNITION_TYPE_MAP,
+  employeeStarsByLocation,
   getAllRecognitions,
   getEmployeeStarCount,
   getNextStarLevel,
@@ -71,7 +73,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [openRecognitionId, setOpenRecognitionId] = useState(null)
   const [printError, setPrintError] = useState(null)
   const access = useAuth()
-  const { role, displayName, canEditAttendance, canWriteEmployeeNotes, dataVersion } = access
+  const { role, displayName, canEditAttendance, canManageRoster, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const [year, setYear] = useState(new Date().getFullYear())
@@ -89,6 +91,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [noteAdded, setNoteAdded] = useState(false)
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
   const [exportingHistory, setExportingHistory] = useState(false)
   const [visibleMonths, setVisibleMonths] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -118,6 +121,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
+  // Where the stars were earned, across every year on record rather than just
+  // this one: the question Liz asked is about someone who has moved schools,
+  // and a transfer in September would otherwise erase the answer each July.
+  const starsByLocation = useMemo(
+    () => employeeStarsByLocation(recognitionRecords, empKey),
+    [recognitionRecords, empKey]
+  )
   const starLevel = getStarLevel(starCount)
   const nextStarLevel = getNextStarLevel(starCount)
 
@@ -303,6 +313,16 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   </button>
                 </>
               )}
+              {role === 'admin' && canManageRoster && (
+                <button
+                  type="button"
+                  onClick={() => setShowTransfer(true)}
+                  title="Move this employee to another school"
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
+                >
+                  Transfer school
+                </button>
+              )}
               {lizAdminAccess && (
                 <button
                   type="button"
@@ -408,6 +428,27 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             Open All-Star board
           </Link>
         </div>
+        {/* Only worth showing for someone who has earned stars at more than one
+            school — for everybody else it just repeats the building already in
+            the header. */}
+        {starsByLocation.length > 1 && (
+          <div className="border-t border-white/10 px-4 py-3 sm:px-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8c65c]/80">Stars earned by school</p>
+            <p className="mt-0.5 text-[11px] text-white/50">All years on record. Stars stay with the school they were earned at.</p>
+            <ul className="mt-2 flex flex-wrap gap-2">
+              {starsByLocation.map(entry => (
+                <li key={entry.locationId} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5">
+                  <span className="text-xs font-semibold text-white/85">
+                    {entry.locationId === 'unassigned'
+                      ? 'No school recorded'
+                      : LOCATION_MAP[entry.locationId]?.name || entry.locationId}
+                  </span>
+                  <span className="ml-2 text-xs font-black text-[#ffd75c]">{entry.count}★</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {recognitionRecords.length > 0 && (
           <>
             {/* Four is a summary; the whole history is what a manager needs in
@@ -533,6 +574,14 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           </>
         )}
         </section>
+      )}
+
+      {role === 'admin' && canManageRoster && showTransfer && (
+        <TransferModal
+          employee={employee}
+          onClose={() => setShowTransfer(false)}
+          onTransferred={() => { setShowTransfer(false); onEmployeeUpdate?.() }}
+        />
       )}
 
       {lizAdminAccess && showEditEmployee && (

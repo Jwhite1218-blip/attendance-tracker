@@ -250,6 +250,25 @@ export function getEmployeeStarCount(records, employeeId, startYear) {
   ).length
 }
 
+// Liz, 2026-10-10: "can we track that so we know where they worked and where
+// they earned the stars?" The stars half needs no new storage — every
+// recognition record already carries the building it was given in, so an
+// employee who moved mid-year can be shown what they earned at each stop.
+// Pass startYear as null to count across every school year on record.
+export function employeeStarsByLocation(records, employeeId, startYear = null) {
+  const counts = new Map()
+  for (const record of records || []) {
+    if (String(record.employeeId) !== String(employeeId)) continue
+    if (startYear != null && !isRecognitionInSchoolYear(record, startYear)) continue
+    if (!recognitionEarnsStar(record)) continue
+    const locationId = String(record.locationId || '').trim() || 'unassigned'
+    counts.set(locationId, (counts.get(locationId) || 0) + 1)
+  }
+  return [...counts.entries()]
+    .map(([locationId, count]) => ({ locationId, count }))
+    .sort((left, right) => right.count - left.count || left.locationId.localeCompare(right.locationId))
+}
+
 export function getStarLevel(count) {
   return [...STAR_LEVELS].reverse().find(level => Number(count) >= level.minimum) || null
 }

@@ -1,0 +1,150 @@
+// The landing page for a building manager.
+//
+// Liz, 2026-10-10: "When logged in as manager — make the dashboard page visible
+// with buttons to see trackers?" A manager used to be dropped straight onto
+// their roster, which is the busiest screen in the app and gave them no sense
+// of where else they could go. This is the quiet page in front of it: their
+// school, three numbers worth knowing before the day starts, and a button per
+// tracker.
+//
+// Everything here is scoped to the manager's own building. The district
+// Dashboard is a different page and stays administrator-only — a manager must
+// never see another school's staff.
+import { useMemo } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../components/PinGate.jsx'
+import { useLanguage } from '../components/LanguageProvider.jsx'
+import { LOCATION_MAP } from '../data/locations.js'
+import { getRosterForLocation } from '../data/employeeLocations.js'
+import { getAttendanceCode } from '../data/attendanceStore.js'
+import { attendanceSeverityOf, getAllFlaggedEmployees } from '../data/hrFlags.js'
+import { getAllRecognitions, recognitionEarnsStar } from '../data/recognitionStore.js'
+import { translateCount } from '../data/i18n.js'
+
+function todayKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
+export default function ManagerHome() {
+  const { locationId, canEditRecognition, dataVersion } = useAuth()
+  const { locale, t, formatDate } = useLanguage()
+  const school = LOCATION_MAP[locationId]
+  const today = todayKey()
+
+  const roster = useMemo(
+    () => getRosterForLocation(locationId),
+    [locationId, dataVersion]
+  )
+
+  // "Marked today" counts exceptions recorded, not people present: a blank day
+  // is the normal case for someone who turned up, so this is a count of what
+  // the manager has entered rather than a completeness score. Labelling it as
+  // progress would imply nineteen entries were expected every morning.
+  const markedToday = useMemo(
+    () => roster.filter(employee => getAttendanceCode(employee.kronos_id || employee.id, today)).length,
+    [roster, today, dataVersion]
+  )
+
+  const starsThisMonth = useMemo(() => {
+    const monthPrefix = today.slice(0, 7)
+    return getAllRecognitions().filter(record => (
+      record.locationId === locationId
+      && String(record.date || '').startsWith(monthPrefix)
+      && recognitionEarnsStar(record)
+    )).length
+  }, [locationId, today, dataVersion])
+
+  // The watch list a manager can act on: their own roster, third occurrence and
+  // up. The district front page shows only fourth-and-up; a building manager
+  // sees the earlier stage because they are the one who can still intervene.
+  const needsAttention = useMemo(() => {
+    const rosterKeys = new Set(roster.map(employee => String(employee.kronos_id || employee.id)))
+    return getAllFlaggedEmployees().filter(status => (
+      rosterKeys.has(String(status.empId)) && attendanceSeverityOf(status) !== 'none'
+    )).length
+  }, [roster, dataVersion])
+
+  const tiles = [
+    { label: t('managerHome.onRoster'), value: roster.length },
+    { label: t('managerHome.markedToday'), value: markedToday },
+    { label: t('managerHome.starsThisMonth'), value: starsThisMonth },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <header className="rounded-xl border border-gray-200 bg-white p-5">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">
+          {t('managerHome.eyebrow')}
+        </p>
+        <h1 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">
+          {school?.name || t('managerHome.yourSchool')}
+        </h1>
+        <p className="mt-1 text-xs text-gray-500">{formatDate(today, { dateStyle: 'full' })}</p>
+
+        <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+          {tiles.map(tile => (
+            <div key={tile.label}>
+              <dd className="text-2xl font-black text-gray-900">{tile.value}</dd>
+              <dt className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:text-xs">
+                {tile.label}
+              </dt>
+            </div>
+          ))}
+        </dl>
+      </header>
+
+      {needsAttention > 0 && (
+        <Link
+          to={`/location/${encodeURIComponent(locationId)}#hr-follow-up`}
+          className="block rounded-xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100"
+        >
+          <p className="text-sm font-bold text-amber-900">
+            {translateCount(locale, 'managerHome.needsAttention', needsAttention)}
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">{t('managerHome.needsAttentionHint')}</p>
+        </Link>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <TrackerButton
+          to={`/location/${encodeURIComponent(locationId)}`}
+          glyph="🗓"
+          title={t('managerHome.attendanceTracker')}
+          description={t('managerHome.attendanceTrackerHint')}
+        />
+        {canEditRecognition && (
+          <TrackerButton
+            to="/recognition"
+            glyph="★"
+            title={t('nav.allStars')}
+            description={t('managerHome.recognitionHint')}
+          />
+        )}
+        <TrackerButton
+          to="/ledger"
+          glyph="👤"
+          title={t('nav.employeeRecords')}
+          description={t('managerHome.recordsHint')}
+        />
+      </div>
+    </div>
+  )
+}
+
+function TrackerButton({ to, glyph, title, description }) {
+  return (
+    <Link
+      to={to}
+      className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand-300 hover:bg-brand-50"
+    >
+      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-brand-100 text-lg text-brand-700" aria-hidden="true">
+        {glyph}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-gray-900">{title}</span>
+        <span className="mt-0.5 block text-xs text-gray-500">{description}</span>
+      </span>
+    </Link>
+  )
+}

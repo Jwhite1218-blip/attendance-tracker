@@ -1,6 +1,7 @@
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
+import ManagerHome from './pages/ManagerHome.jsx'
 import DailyReport from './pages/DailyReport.jsx'
 import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
@@ -79,7 +80,7 @@ function AppShell() {
         ? t('role.administrator')
         : t('role.administratorLimited')
 
-  const homePath = recognitionOnly ? '/recognition' : role === 'school' ? `/location/${locationId}` : '/'
+  const homePath = recognitionOnly ? '/recognition' : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
@@ -89,6 +90,10 @@ function AppShell() {
     // dashboard. Hiding it (d7997ee) removed a duplicate nav path but read to
     // managers as the button disappearing, so Liz asked for it back (2026-09-01).
     { path: homePath, label: t('nav.dashboard') },
+    // A manager's roster used to BE their dashboard. Now that the dashboard is
+    // a hub, the roster needs its own entry or the busiest screen in the app
+    // would be two clicks away.
+    ...(role === 'school' ? [{ path: `/location/${locationId}`, label: t('managerHome.attendanceTracker') }] : []),
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
     { path: '/ledger', label: t('nav.employeeRecords') },
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: t('nav.blackoutCalendar') }] : []),
@@ -284,7 +289,7 @@ function AppShell() {
         <RouteErrorBoundary routeKey={location.pathname}>
         <Routes>
           <Route path={FOOD_DAY_PATH} element={<FoodDayCelebration homePath={homePath} canRecognize={recognitionAdminAccess} />} />
-          <Route path="/" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Dashboard />} />
+          <Route path="/" element={recognitionOnly ? <Navigate to={homePath} replace /> : role === 'school' ? <ManagerHome /> : <Dashboard />} />
           <Route path="/location/:id" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LocationView />} />
           <Route path="/recognition" element={recognitionAdminAccess ? <RecognitionProgram /> : <Navigate to={homePath} replace />} />
           <Route path="/employee/:employeeId" element={recognitionOnly ? <Navigate to={homePath} replace /> : <EmployeeRecordPage />} />

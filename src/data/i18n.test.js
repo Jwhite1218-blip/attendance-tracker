@@ -175,3 +175,17 @@ test('unreviewed program wording always says it is unreviewed', async () => {
     'the draft notice must be the translated string, so it reads in the language being reviewed'
   )
 })
+
+// A bare date key is local, not UTC: parsed as UTC midnight it renders as the
+// previous day in every US timezone, so today's date on a dashboard would read
+// as yesterday for the whole day.
+test('a date-only key keeps its own day rather than shifting a day back', () => {
+  assert.match(formatDate('en', '2026-10-11', { dateStyle: 'full' }), /October 11, 2026/)
+  assert.match(formatDate('en', '2026-01-01', { dateStyle: 'full' }), /January 1, 2026/)
+  assert.match(formatDate('es', '2026-10-11', { dateStyle: 'full' }), /11 de octubre de 2026/)
+})
+
+test('a value that already carries a time is passed through untouched', () => {
+  assert.match(formatDate('en', '2026-09-25T12:00:00Z'), /Sep/)
+  assert.equal(formatDate('en', 'not-a-date'), 'not-a-date')
+})

@@ -60,8 +60,12 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
             className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white text-gray-700 mb-3"
           >
             <option value="">Select a location...</option>
+            {/* Every school except the one they are in. Filtering on a staff
+                count used to hide any building that happened to be empty,
+                which made it impossible to be the first transfer into a new
+                or seasonally closed kitchen. */}
             {LOCATIONS
-              .filter(l => l.id !== currentLoc && locCounts[l.id])
+              .filter(l => l.id !== currentLoc)
               .sort((a, b) => a.sort - b.sort)
               .map(l => (
                 <option key={l.id} value={l.id}>
