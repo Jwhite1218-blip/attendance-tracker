@@ -23,19 +23,39 @@ approval workflow.
 - Archived legacy site: `archive-attendance-stress-old` — team-only; do not build or deploy to it.
 
 ## The production database
-Supabase, in the **District 9** organisation — shown in the dashboard as
-*jwhite1218@icloud.com's Project*. **The Supabase MCP connector cannot see it**:
-it lists a different organisation entirely (MDB, Localis). Migrations must be
-run by Jon in that project's SQL editor, never through the connector.
+Supabase project **`gbjikeytzdlzjulrnjvo`** —
+`https://gbjikeytzdlzjulrnjvo.supabase.co`, `SUPABASE_DISTRICT_SLUG=warren-township`,
+org `dectbbejdlaqiwgrdxur`, shown in the dashboard as
+*jwhite1218@icloud.com's Project* under **District 9**. Confirmed 2026-10-11
+from Netlify's `SUPABASE_URL`, which is the only source of truth for where the
+app writes.
 
-A migration appearing to succeed proves nothing about which database it hit.
-`create or replace function` compiles plpgsql lazily, so
-`mutate_legacy_state_entry` creates cleanly in an empty project. Confirm with:
+**Address it by ref.** The Supabase connector does not list this project —
+`list_organizations` returns a different org entirely (MDB, holding *MDB* and
+*Localis*, neither of which is production). But `get_project`,
+`list_migrations` and `execute_sql` all work when given the ref explicitly. Do
+not conclude from a listing that the project is unreachable.
+
+*Localis* is active, paid, created 2026-08-16, attendance-shaped, and nothing
+is known to use it. Being a plausible-looking non-production database makes it
+a hazard; confirm before touching it.
+
+**Dashboard SQL does not register a migration row.** `list_migrations` shows
+only the three applied by CLI; the 2026-10-11 key migration was run in the
+dashboard and is absent from that list while fully applied. Verify by reading
+the function:
 
 ```sql
-select state_key, updated_at from public.legacy_state_entries
-order by updated_at desc limit 10;
+select pg_get_functiondef('public.mutate_legacy_state_entry(bigint, text, jsonb, text)'::regprocedure)
+  like '%training-records-v1%' as applied;
 ```
+
+Confirmed `true` for all three new keys on 2026-10-11, with
+`all-star-recognition-v1` still present.
+
+A migration appearing to succeed proves nothing about which database it hit:
+`create or replace function` compiles plpgsql lazily, so this function creates
+cleanly in an empty project.
 
 ## Writing production data
 Nothing in this repository can write production state directly. Shared state
@@ -182,8 +202,10 @@ Eastern time; the manager dashboard would have shown yesterday's date all day.
 2. **`feature/offline-working-mode`** is unmerged and stale. Re-apply it over
    main's `canWriteManagedKeyForAccess` rather than the reverse, or live school
    recognition access is silently reverted — the commit message explains.
-3. **The Supabase connector points at the wrong account** (see above). Worth
-   reconnecting so migrations can be verified rather than hand-run.
+3. **The Supabase connector does not list the production project**, though it
+   reaches it by ref. Worth reconnecting on the District 9 account so future
+   sessions are not misled by an incomplete listing. Also decide what the
+   *Localis* project is for, or remove it.
 4. Whether building managers should be able to log their own training (safety
    briefs and huddles are building-level events). Currently administrator-only,
    which matches the entry form Liz described.
