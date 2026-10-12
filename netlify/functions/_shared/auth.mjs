@@ -232,6 +232,70 @@ function withPresentationPilotAccess(configuration) {
   return { ...configuration, codes, presentationPilotsApplied }
 }
 
+// Additional administrators at Liz's level, added without touching
+// ATTENDANCE_ACCESS_CODES_JSON — that variable is secret-flagged and cannot be
+// read back, so changing one entry means reconstructing all of them from
+// memory, and a wrong profile locks somebody out silently.
+//
+// The capabilities are cloned from Liz's own live entry rather than written
+// out here, so the two can never drift apart: whatever her tier means today
+// is what a peer gets.
+//
+// Three deliberate refusals, each logged rather than guessed around:
+//   * a PIN already in use is skipped, so this can never replace a working
+//     credential — the same rule the chef and pilot additions follow;
+//   * `employeeId` is not copied, because it is one of the two things that
+//     identify Liz's entry;
+//   * a display name that reads as Liz is refused for the same reason. If a
+//     peer looked like Liz, ATTENDANCE_LIZ_REPLACEMENT_PIN would find two
+//     candidates and stop working.
+function withPeerAdministrators(configuration) {
+  const raw = environmentValue('ATTENDANCE_PEER_ADMIN_PINS_JSON').trim()
+  if (!raw) return { ...configuration, peerAdminsApplied: 0 }
+
+  let peers
+  try {
+    peers = JSON.parse(raw)
+  } catch {
+    console.error(JSON.stringify({ event: 'peer-admin-pins-skipped', reason: 'invalid-json' }))
+    return { ...configuration, peerAdminsApplied: 0 }
+  }
+  if (!peers || typeof peers !== 'object' || Array.isArray(peers)) {
+    console.error(JSON.stringify({ event: 'peer-admin-pins-skipped', reason: 'invalid-shape' }))
+    return { ...configuration, peerAdminsApplied: 0 }
+  }
+
+  const configuredEmployeeId = environmentValue('ATTENDANCE_LIZ_EMPLOYEE_ID').trim()
+  const template = Object.values(configuration.codes)
+    .find(access => isLizAdministrator(access, configuredEmployeeId))
+  if (!template) {
+    console.error(JSON.stringify({ event: 'peer-admin-pins-skipped', reason: 'no-template' }))
+    return { ...configuration, peerAdminsApplied: 0 }
+  }
+
+  const codes = { ...configuration.codes }
+  let peerAdminsApplied = 0
+  for (const [pin, rawDisplayName] of Object.entries(peers)) {
+    const displayName = String(rawDisplayName || '').trim().slice(0, 80)
+    let problem = ''
+    if (!/^\d{4,8}$/.test(pin)) problem = 'invalid-format'
+    else if (!displayName) problem = 'missing-display-name'
+    else if (codes[pin]) problem = 'pin-conflict'
+    else if (/\b(liz|elizabeth)\b/i.test(displayName)) problem = 'name-reads-as-liz'
+
+    if (problem) {
+      console.error(JSON.stringify({ event: 'peer-admin-pin-skipped', reason: problem }))
+      continue
+    }
+
+    const { employeeId: _identifiesLiz, ...capabilities } = template
+    codes[pin] = { ...capabilities, displayName }
+    peerAdminsApplied += 1
+  }
+
+  return { ...configuration, codes, peerAdminsApplied }
+}
+
 function accessCodeConfiguration() {
   const rawCodes = environmentValue('ATTENDANCE_ACCESS_CODES_JSON')
   if (!rawCodes) throw new Error('Attendance access codes are not configured.')
@@ -242,7 +306,7 @@ function accessCodeConfiguration() {
   }
   const replacementPin = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN').trim()
   if (!replacementPin) {
-    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
+    return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes))), replacementApplied: false }
   }
   let problem = ''
   if (!/^\d{4,8}$/.test(replacementPin)) {
@@ -262,13 +326,13 @@ function accessCodeConfiguration() {
   // health check remains observable without locking every other user out.
   if (problem) {
     console.error(JSON.stringify({ event: 'liz-pin-replacement-skipped', reason: problem }))
-    return { ...withPresentationPilotAccess(withChefAccess(codes)), replacementApplied: false }
+    return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(codes))), replacementApplied: false }
   }
 
   const replacedCodes = { ...codes }
   delete replacedCodes[currentPin]
   replacedCodes[replacementPin] = lizAccess
-  return { ...withPresentationPilotAccess(withChefAccess(replacedCodes)), replacementApplied: true }
+  return { ...withPeerAdministrators(withPresentationPilotAccess(withChefAccess(replacedCodes))), replacementApplied: true }
 }
 
 export function getAccessCodes() {

@@ -127,6 +127,18 @@ test('every position on the roster has a stated requirement', () => {
   assert.equal(requiredHoursFor({ position: '  Food Service Worker Lead  ' }), 10, 'whitespace is tolerated')
 })
 
+// Admin team titles, given 2026-10-11. None is in the roster yet, so these
+// only bite when those people are added — and they match on the exact string.
+test('the admin team titles carry their own hours', () => {
+  assert.equal(requiredHoursFor({ position: 'RDM' }), 12)
+  assert.equal(requiredHoursFor({ position: 'RN' }), 10)
+  assert.equal(requiredHoursFor({ position: 'Chef' }), 10)
+  for (const title of ['OM', 'FM', 'MM', 'HRM']) {
+    assert.equal(requiredHoursFor({ position: title }), 6, title)
+  }
+  assert.equal(requiredHoursFor({ position: 'Office Manager' }), null, 'spelled out is a different string')
+})
+
 // A job title nobody has set hours for must never be reported as compliant.
 test('an unknown position reports as unset rather than defaulting to a tier', () => {
   assert.equal(requiredHoursFor({ position: 'Executive Chef' }), null)

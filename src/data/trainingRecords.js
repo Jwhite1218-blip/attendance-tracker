@@ -42,26 +42,37 @@ export const TRAINING_HOUR_OPTIONS = Array.from({ length: 48 }, (_, index) => (i
 
 // Annual requirement by roster position, restarting each July.
 //
-// Liz's note of 2026-10-10 gave two tiers — 12 hours for Program Directors and
-// 6 for Program Staff — which left the fifteen Food Service Worker Leads and
-// two Food Service Managers unnamed. She confirmed on 2026-10-11 that both
-// take the middle tier at 10 hours, matching the USDA manager tier.
+// Food service staff, confirmed by Liz 2026-10-11: 12 hours for the Director,
+// 10 for Food Service Managers and Worker Leads, 6 for Cooks and Food Service
+// Workers.
 //
-// The admin team (RDM, OM, FM, MM, HRM in her note) tracks its training
-// separately and is deliberately not in this roster, so there is nothing to
-// add for them here.
+// Admin team, given 2026-10-11 and tracked here after all: RDM 12, RN 10,
+// Chef 10, and 6 for the office roles (OM, FM, MM, HRM).
 //
-// `null` still means "no requirement has been set", and a position not listed
-// at all resolves to null rather than defaulting to a tier. Every current
-// position is covered, so that path only matters when a new job title appears
-// — at which point it shows as unset rather than silently reporting someone
-// as compliant against a number nobody chose.
+// The admin titles are recorded under the abbreviations Liz uses. None of them
+// is in the roster yet — matching is on the exact `position` string, so if
+// those people are added with the title spelled out ("Office Manager" rather
+// than "OM") they will read as unset until the spelling here matches.
+//
+// `null` is not used any more, but a position absent from this table still
+// resolves to null rather than defaulting to a tier. That is what stops a new
+// job title from being silently reported as compliant against a number nobody
+// chose.
 export const POSITION_TRAINING_HOURS = {
+  // Food service
   'Food Service Director': 12,
   'Food Service Manager': 10,
   'Food Service Worker Lead': 10,
   'Cook': 6,
   'Food Service Worker': 6,
+  // Admin team
+  'RDM': 12,
+  'RN': 10,
+  'Chef': 10,
+  'OM': 6,
+  'FM': 6,
+  'MM': 6,
+  'HRM': 6,
 }
 
 export function requiredHoursFor(employee) {
