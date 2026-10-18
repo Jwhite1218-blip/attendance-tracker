@@ -215,8 +215,19 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
 // have to be true, and a missing key counts as off rather than as an error —
 // otherwise setting the flag before the key would take sign-in down.
 export function tableAuthEnabled() {
-  if (environmentValue('ATTENDANCE_TABLE_AUTH_ENABLED').trim().toLowerCase() !== 'true') return false
-  if (environmentValue('ATTENDANCE_STATE_BACKEND').trim() !== 'supabase') return false
+  // Flag absent or off is a deliberate state, so it stays silent. Anything
+  // else is a misconfiguration and says so: the first time this was switched
+  // on, the only evidence that it had not taken effect was the ABSENCE of a
+  // log line, which took three steps to work out. A wrong answer should
+  // explain itself.
+  const flag = environmentValue('ATTENDANCE_TABLE_AUTH_ENABLED').trim().toLowerCase()
+  if (flag !== 'true') return false
+
+  const backend = environmentValue('ATTENDANCE_STATE_BACKEND').trim()
+  if (backend !== 'supabase') {
+    logEvent('table-auth-disabled', { reason: 'backend-not-supabase', backend: backend || '(unset)' })
+    return false
+  }
   if (!hasPinKey()) {
     logEvent('table-auth-disabled', { reason: 'missing-pin-key' })
     return false

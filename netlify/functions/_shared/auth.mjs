@@ -455,6 +455,7 @@ export async function resolveAccessForPin(pin, { store: injectedStore = null } =
 
   if (useTable) {
     try {
+      console.error(JSON.stringify({ event: 'table-auth-active' }))
       const row = await store().findByPin(candidate)
       if (row) {
         const access = normalizeAccessProfile(profileFromRow(row))
