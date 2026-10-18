@@ -1,20 +1,24 @@
 # Attendance Tracker — Project State
 
-Last verified: 2026-10-11
+Last verified: 2026-10-18
 
 ## Current stage
 Production / live pilot. The recognition work was demonstrated to Liz's team on
 2026-09-29; her follow-up notes of 2026-10-10 are built and live apart from the
 approval workflow.
 
+Two pieces of work are in flight as of 2026-10-18, both aimed at the same
+thing — Liz changing the system without going through Jon. The settings half
+is finished. The access half is one phase in of three.
+
 ## Canonical source
 - Repository: `Jwhite1218-blip/attendance-tracker`
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `0dba804fc967467ee729ce1e3195c2a657eb73fb`
-- Test suite: 219 passing (`npm test`)
-- Confirmed live: `/version.json` returns that commit, 2026-10-11
+- Verified production commit: `942fd0aaab2beba8f488e0faa9f36bdfb42d1dad`
+- Test suite: 292 passing (`npm test`)
+- Confirmed live: `/version.json` returns that commit, 2026-10-18
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
@@ -81,6 +85,12 @@ traceable and isolated from production data.
   to undefined identifiers without complaint — a missing import shipped to
   production on 2026-09-28 with a green build and 192 passing tests. Scan for
   JSX components that are neither imported nor declared before shipping.
+- An environment variable change does not reach the functions until a
+  redeploy. A flag can be set perfectly and do nothing because the live build
+  predates it. Check `/version.json` against `git rev-parse HEAD` before
+  debugging any "the flag is not working" problem. Relatedly: the absence of
+  a log line is not a diagnosis — anything behind a flag logs when the flag
+  is on but blocked, and logs a positive signal when it is actually active.
 - A new shared state key must be added in three places — `src/data/sharedStore.js`,
   `netlify/functions/_shared/permissions.mjs`, and the SQL allowlist in a
   migration — and the migration must be applied *before* the feature ships, or
@@ -163,6 +173,50 @@ set" rather than defaulting to a tier.
 shared `formatDate` parsed as UTC midnight and rendered as the previous day in
 Eastern time; the manager dashboard would have shown yesterday's date all day.
 
+## Shipped 2026-10-18
+
+**Programme settings.** `/settings`, Liz's tier only, enforced server-side as
+well as in the page. Five things that were constants in source files and are
+now hers: star milestone names and thresholds, the occurrence stages,
+required training hours per position, the printed wording of recognition
+reasons, and the Spanish sign-off. Defaults live in `programDefaults.js`; a
+stored setting is an override, so anything absent or malformed falls back to
+the shipped value rather than leaving the district with no thresholds.
+Resetting a section deletes the override rather than writing today's default
+in as a value. Read by every session, including school and recognition-only
+ones — a session that did not receive them would silently run on defaults and
+show different milestones from the district office. Every write records who
+and when.
+
+**Access rework, Phase 1 of 3.** See `ACCESS_REDESIGN.md` for the full plan.
+Credentials are moving out of `ATTENDANCE_ACCESS_CODES_JSON` into an
+`access_profiles` table so Liz can reassign a PIN and edit what it reaches,
+herself. Four digits and the sign-in screen are unchanged — this moves where
+PINs live, not what they are.
+
+PINs are ENCRYPTED, not hashed (AES-256-GCM under `ATTENDANCE_PIN_KEY`, plus
+a deterministic HMAC column for the lookup). That is deliberate: hashing
+would make a PIN unreadable forever, so every forgotten code would become a
+forced reissue. Credentials are deliberately not in `legacy_state_entries`,
+because `state.mjs` exports every row of that table into a downloadable
+backup file.
+
+Live behaviour: sign-in checks the table, then falls back to the environment
+blob, and a successful blob sign-in writes that credential into the table on
+the spot — the one moment anybody holds the plaintext PIN. The district
+migrates itself as people work. `ATTENDANCE_TABLE_AUTH_ENABLED` is on in
+Production and `false` in every other context; setting it to `false` reverts
+to the previous behaviour entirely.
+
+Three things were found by reading the code before building, each of which
+would otherwise have been wasted or harmful work: rate limiting already
+exists in `session.mjs` (five PIN failures, a hundred IP attempts, fifteen
+minutes); revocation already partly exists; and `sessionFromRequest`
+re-resolves every live session against the environment blob, synchronously,
+so removing that blob in Phase 3 would have logged every signed-in user out
+at once. Table-sourced sessions now carry `profileId` instead of a
+credential fingerprint and skip that path. Both scenarios have tests.
+
 ## Open, waiting on Liz
 1. **ACE Bucks / Leadership Track.** No ACE Buck record type exists — manager
    "stars" are ordinary `star-of-day` records shown on a blue board labelled
@@ -193,23 +247,32 @@ Eastern time; the manager dashboard would have shown yesterday's date all day.
 
 ## Open, waiting on Jon
 1. **Deploy previews are publicly reachable and accept real district PINs**
-   (`ATTENDANCE_ACCESS_CODES_JSON` is scoped to all contexts). A password under
-   Visitor access, scoped to previews only, closes it. PIN work is deferred by
-   decision. Note that two additive PIN mechanisms already exist and need no
-   rebuild of the whole set: `ATTENDANCE_CHEF_PIN` and
-   `ATTENDANCE_RECOGNITION_PILOT_PINS_JSON`, both conflict-protected. Neither
-   can create a building-scoped PIN.
-2. **`feature/offline-working-mode`** is unmerged and stale. Re-apply it over
+   (`ATTENDANCE_ACCESS_CODES_JSON` is scoped to all contexts). A password
+   under Visitor access, scoped to previews only, closes it. Partly mitigated
+   on 2026-10-18: `ATTENDANCE_TABLE_AUTH_ENABLED` is `false` outside
+   Production, so no preview can sign anybody in against the table or migrate
+   a production credential into it. The blob exposure remains until the
+   variable is scoped to Production, or until Phase 3 removes it.
+2. **Access rework, Phase 2** is gated on the migration filling out. Check
+   `select display_name, role, location_id, source, last_used_at from
+   public.access_profiles order by last_used_at desc nulls last;` — when most
+   of the sixteen are present, the admin screen is worth building against
+   real rows. That query is also the first real inventory of who has access.
+3. **`ATTENDANCE_PIN_KEY` must be recorded outside Netlify.** It encrypts
+   every PIN and cannot be read back once secret-flagged. Losing it after
+   migration means reissuing every PIN in the district. It is the one piece
+   of this with no recovery path.
+4. **`feature/offline-working-mode`** is unmerged and stale. Re-apply it over
    main's `canWriteManagedKeyForAccess` rather than the reverse, or live school
    recognition access is silently reverted — the commit message explains.
-3. **The Supabase connector does not list the production project**, though it
+5. **The Supabase connector does not list the production project**, though it
    reaches it by ref. Worth reconnecting on the District 9 account so future
    sessions are not misled by an incomplete listing. Also decide what the
    *Localis* project is for, or remove it.
-4. Whether building managers should be able to log their own training (safety
+6. Whether building managers should be able to log their own training (safety
    briefs and huddles are building-level events). Currently administrator-only,
    which matches the entry form Liz described.
-5. **Attendance code badge colours are muddy**, deferred 2026-10-11 — nobody
+7. **Attendance code badge colours are muddy**, deferred 2026-10-11 — nobody
    has complained, so left alone. `LI` (#EC9126) against `EO` (#E8A32B) is a
    1.12 contrast ratio and effectively one colour under a deuteranopia
    simulation; `UNEX` (#E56E6A) against `LI` is 1.28. The two-letter labels
