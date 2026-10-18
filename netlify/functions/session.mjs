@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { getStore } from '@netlify/blobs'
 import {
   SESSION_COOKIE,
-  accessForPin,
+  resolveAccessForPin,
   createSessionToken,
   expiredSessionCookie,
   jsonResponse,
@@ -95,7 +95,7 @@ async function handleLogin(request, context, stores) {
 
   let access = null
   try {
-    if (/^\d{4,8}$/.test(pin)) access = accessForPin(pin)
+    if (/^\d{4,8}$/.test(pin)) access = await resolveAccessForPin(pin)
   } catch {
     return jsonResponse({ error: 'Secure login is temporarily unavailable.' }, 503)
   }

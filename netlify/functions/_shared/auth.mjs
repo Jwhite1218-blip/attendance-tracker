@@ -1,3 +1,4 @@
+import { getAccessStore, profileFromRow, tableAuthEnabled } from './access-store.mjs'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { LOCATIONS } from '../../../src/data/locations.js'
 
@@ -414,6 +415,84 @@ export function accessForPin(pin) {
   })
 }
 
+// The raw blob entry behind a PIN, before any capability is derived.
+// Self-migration stores this rather than the normalized profile, so a flag
+// the blob left to be derived stays derived in the table too — writing
+// today's derived answer in as an explicit value would freeze it.
+function rawAccessForPin(pin) {
+  const candidate = String(pin || '')
+  const match = Object.entries(getAccessCodes())
+    .find(([configuredPin]) => safeEqual(candidate, configuredPin))
+  return match?.[1] || null
+}
+
+function legacyCodesEnabled() {
+  return environmentValue('ATTENDANCE_LEGACY_CODES_ENABLED').trim().toLowerCase() !== 'false'
+}
+
+// Sign-in, during the move off the environment blob.
+//
+// Order matters and is the whole safety argument:
+//
+//   1. The table. If a PIN is there, that answer wins — Liz may have edited
+//      the profile since it migrated, and a stale blob must never override
+//      her.
+//   2. The blob, exactly as before. On a hit, the credential writes itself
+//      into the table, because a successful legacy sign-in is the only
+//      moment anybody holds the plaintext PIN.
+//
+// Self-migration can only ever follow an ALREADY SUCCESSFUL sign-in, so it
+// cannot create access that did not exist. Both steps are individually
+// switchable: ATTENDANCE_TABLE_AUTH_ENABLED turns off step 1,
+// ATTENDANCE_LEGACY_CODES_ENABLED turns off step 2.
+export async function resolveAccessForPin(pin, { store: injectedStore = null } = {}) {
+  const candidate = String(pin || '')
+  const useTable = tableAuthEnabled()
+  // Built lazily and only once: constructing it throws when Supabase is
+  // unconfigured, which must not happen on the blob-only path.
+  let accessStore = injectedStore
+  const store = () => (accessStore ||= getAccessStore())
+
+  if (useTable) {
+    try {
+      const row = await store().findByPin(candidate)
+      if (row) {
+        const access = normalizeAccessProfile(profileFromRow(row))
+        if (access) {
+          // Not awaited: a bookkeeping write must not slow a sign-in, and
+          // markUsed already swallows its own failures.
+          store().markUsed(row.id)
+          // profileId instead of credentialFingerprint — see
+          // sessionFromRequest for why the two must not both be present.
+          return { ...access, profileId: row.id }
+        }
+        console.error(JSON.stringify({ event: 'access-profile-unusable', profileId: row.id }))
+      }
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: 'table-auth-failed', reason: String(error?.message || error),
+      }))
+    }
+  }
+
+  if (!legacyCodesEnabled()) return null
+
+  const access = accessForPin(candidate)
+  if (!access) return null
+
+  if (useTable) {
+    try {
+      await store().migrateLegacyCredential(candidate, rawAccessForPin(candidate) || access)
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: 'self-migration-failed', reason: String(error?.message || error),
+      }))
+    }
+  }
+
+  return access
+}
+
 export function createSessionToken(access, now = Date.now(), sessionId = randomUUID()) {
   const payload = Buffer.from(JSON.stringify({
     ...access,
@@ -433,9 +512,18 @@ export function sessionFromRequest(request, now = Date.now()) {
 
     const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))
     if (!session.expiresAt || session.expiresAt <= now) return null
-    const pinConfigurationChanged = environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
+    // A session that came from access_profiles carries profileId and no
+    // credentialFingerprint. It must not be re-resolved against the
+    // environment blob: the blob does not contain it, the lookup would fail,
+    // and the session would be thrown away on its next request. Once the
+    // blob is gone entirely, accessCodeConfiguration() throws, so touching
+    // it here would log everybody out at once.
+    const tableSourced = Boolean(session.profileId) && !session.credentialFingerprint
+    const pinConfigurationChanged = !tableSourced && (
+      environmentValue('ATTENDANCE_LIZ_REPLACEMENT_PIN')
       || environmentValue('ATTENDANCE_CHEF_PIN')
       || environmentValue('ATTENDANCE_RECOGNITION_PILOT_PINS_JSON')
+    )
     const configuration = session.credentialFingerprint || pinConfigurationChanged
       ? accessCodeConfiguration()
       : null
