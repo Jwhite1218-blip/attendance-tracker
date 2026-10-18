@@ -1,423 +1,202 @@
-# Access redesign — getting PINs out of the environment
+# Access redesign — PINs out of the environment
 
-Status: **design, not yet approved.** Nothing in here is built.
-Written 2026-10-18. Supersedes nothing; the current system keeps running
-untouched until the cutover in Phase 4.
+Status: **design, not yet approved.** Nothing is built. The current system
+keeps running untouched until the cutover.
+Written 2026-10-18, rewritten the same day after Jon's correction.
 
----
+## Scope, in one line
 
-## 1. What is actually wrong
+Liz reassigns a PIN and edits what it can reach, herself, in the app. Nothing
+else changes.
 
-Four separate problems hide behind "the PIN system is awkward".
+**Sixteen credentials: fifteen schools, one each, plus a handful of district
+office operators.** Four digits. Same keypad, same sign-in, same profile
+shape. This is an internal district tool behind a PIN pad, not a public
+service, and the design is sized accordingly.
 
-**1.1 Credentials cannot be read, so they cannot be edited.**
-`ATTENDANCE_ACCESS_CODES_JSON` is a secret-flagged Netlify variable holding a
-single JSON object of roughly nineteen `{pin: profile}` pairs. Netlify never
-returns a secret value — not to the CLI, the API, the UI, or the account
-owner. Changing one person's PIN therefore means reconstructing all nineteen
-profiles from memory and overwriting the lot. A wrong capability flag in that
-rebuild locks somebody out silently, with no error anywhere.
+> An earlier draft of this document treated it as a hardening exercise —
+> scrypt, a pepper, a blind index, forced six-digit rotation, exponential
+> lockout, a fourteen-day evidence gate. That was the wrong size for the
+> problem. It is recorded here only so the reasoning is not re-litigated: the
+> threat model is sixteen shared building codes on a district tool, and the
+> actual complaint is that changing one takes a developer. What follows fixes
+> that and little else.
 
-**1.2 Every change needs a deploy.** Functions read environment variables at
-boot, so even a correct edit is inert until a redeploy. That puts Jon in the
-loop for something Liz should do in thirty seconds.
+## What is actually broken
 
-**1.3 There is no audit and no instant off switch.** Nothing records who
-signed in, when, or from where. If a PIN is shared outside the district the
-only remedy is the rebuild in 1.1. There is no way to disable one credential.
+1. `ATTENDANCE_ACCESS_CODES_JSON` is secret-flagged, so it cannot be read
+   back. Changing one PIN means rebuilding all sixteen profiles from memory,
+   and a wrong capability flag locks somebody out silently.
+2. Functions read environment variables at boot, so every change needs a
+   redeploy.
+3. Nobody can look up a PIN. "What is Creston's code again?" currently has no
+   answer except reissuing it.
 
-**1.4 The real security problem is PIN length, not storage.** A four-digit PIN
-has ten thousand possibilities. The sign-in endpoint is public, and deploy
-previews are publicly reachable and accept the same production PINs. Ten
-thousand guesses is minutes of scripted traffic.
+Point 3 is worth noticing. It is not a security feature today, it is an
+accident of where the PINs are stored — and it is half the day-to-day
+annoyance.
 
-**This fourth point matters more than the other three combined, and no
-amount of hashing fixes it.** A design that encrypts the PINs beautifully and
-leaves them four digits long on an unthrottled public endpoint has improved
-almost nothing. Rate limiting and PIN length are the load-bearing changes;
-hashing is hygiene that limits the damage of a database leak.
+## The table
 
-### What is deliberately not wrong
+One new table in the production Supabase project (`gbjikeytzdlzjulrnjvo`).
 
-**Shared building PINs are a feature.** A kitchen team shares one code on one
-screen. That is how the work happens and the design keeps it. It does mean a
-building's actions cannot be attributed to a person — addressed as an option
-in §9, not assumed.
-
----
-
-## 2. Target design
-
-### 2.1 Where credentials live
-
-A new table in the existing production Supabase project
-(`gbjikeytzdlzjulrnjvo`), **not** in `legacy_state_entries`.
-
-That distinction is load-bearing. `legacy_state_entries` is dumped wholesale
-by the backup export in `state.mjs` — `createBackupPayload(entries, …)` takes
-every key it loaded. Credentials in that table would land in a downloaded
-backup file on somebody's laptop. They get their own table, reachable only by
-a dedicated function, and never by the state endpoint.
+**Not** in `legacy_state_entries`. That is not caution for its own sake:
+`state.mjs` dumps every entry in that table into the backup export, so
+credentials there would land in a downloaded backup file. Separate table,
+reached only by its own function, never by the state endpoint.
 
 ```sql
 create table public.access_profiles (
-  id                uuid primary key default gen_random_uuid(),
-  district_id       bigint not null references public.districts(id),
+  id            uuid primary key default gen_random_uuid(),
+  district_id   bigint not null references public.districts(id),
 
-  -- lookup and verification (see 2.2)
-  pin_index         text not null,          -- HMAC(pepper, pin), unique per district
-  pin_hash          text not null,          -- scrypt(pin + pepper, salt)
-  pin_salt          text not null,
-  pin_length        smallint not null,      -- for the "short PIN" nudge, never the PIN
-  credential_version integer not null default 1,
+  pin           text not null,          -- see "Readable or not" below
+  display_name  text not null,
+  role          text not null check (role in ('admin','school')),
+  location_id   text,                   -- required when role = 'school'
+  employee_id   text,
+  capabilities  jsonb not null default '{}'::jsonb,
 
-  -- who this is
-  display_name      text not null,
-  role              text not null check (role in ('admin','school')),
-  location_id       text,                   -- required when role = 'school'
-  employee_id       text,
+  disabled_at   timestamptz,
+  last_used_at  timestamptz,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  updated_by    text,
 
-  -- what they can do: the same flags normalizeAccessProfile already derives
-  capabilities      jsonb not null default '{}'::jsonb,
-
-  -- lifecycle
-  disabled_at       timestamptz,
-  last_used_at      timestamptz,
-  created_at        timestamptz not null default now(),
-  created_by        text,
-  updated_at        timestamptz not null default now(),
-  updated_by        text,
-
-  unique (district_id, pin_index)
-);
-
-create table public.access_events (
-  id          bigserial primary key,
-  district_id bigint not null,
-  profile_id  uuid references public.access_profiles(id) on delete set null,
-  event       text not null,   -- sign-in-ok | sign-in-failed | created | updated
-                               -- | rotated | disabled | enabled | deleted
-  detail      jsonb not null default '{}'::jsonb,
-  actor       text,
-  ip_hash     text,            -- hashed, never the address
-  created_at  timestamptz not null default now()
+  unique (district_id, pin)
 );
 ```
 
-Both tables are service-role only. No RLS policy grants `anon` or
-`authenticated` anything, matching how `legacy_state_entries` is already
-reached — the Netlify function holds `SUPABASE_SECRET_KEY` and is the only
-caller.
+`capabilities` holds the same flags the profile JSON holds today.
+`normalizeAccessProfile` keeps deriving the rest, unchanged — it is correct
+and well tested, and storing derived values would let them drift.
 
-**`access_events` never stores a PIN, not even a failed one.** A failed
-attempt records that a failure happened, not what was typed. People mistype
-their own credential constantly; a log of near-miss PINs is a list of real
-PINs with digits transposed.
+Service-role only, like `legacy_state_entries`: no RLS grant to `anon` or
+`authenticated`, and the Netlify function holding `SUPABASE_SECRET_KEY` is
+the only caller.
 
-### 2.2 Hashing, and an honest account of what it buys
+A second small table, `access_changes`, records who changed a profile and
+when — not for security theatre, but because "who moved Creston's PIN" is a
+question that will be asked and should have an answer. It never records a
+PIN.
 
-Two columns, because one cannot do both jobs.
+## Readable or not — the one real decision
 
-**`pin_index` — how we find the row.** `HMAC-SHA256(pepper, pin)`, where the
-pepper is a new secret environment variable (`ATTENDANCE_PIN_PEPPER`), never
-stored in the database. Deterministic, so sign-in is one indexed lookup
-rather than nineteen hash computations. Because the pepper lives only in the
-environment, a database leak on its own yields nothing: an attacker holding
-`pin_index` values cannot brute-force them without the pepper.
+**Option A — store the PIN as written, and let Liz see it.**
+The admin screen shows each school's current PIN. "What is Creston's code"
+is answered by looking. Reassigning is typing a new number. Simple, and it
+matches how a door code is treated.
 
-**`pin_hash` — how we verify.** `scrypt(pin + pepper, pin_salt)` at a
-deliberately high cost (N=2^15 or above, tuned so one verification is
-80–150 ms on the function runtime). Node's `crypto.scrypt` is built in; no
-new dependency.
+**Option B — encrypt at rest, still readable in the app.**
+Same experience for Liz, but a raw database dump is not a list of codes.
+Costs about twenty lines: encrypt with a key in `ATTENDANCE_PIN_KEY`,
+decrypt when the admin screen asks. The app can still show her the PIN.
 
-Be clear about the limits:
+**Option C — hash them.** Nobody can ever read a PIN again, including Liz,
+so every "I forgot" becomes a reissue. This is what the first draft proposed
+and it makes the tool worse at the job you asked for.
 
-| Leak | Consequence |
-|---|---|
-| Database only | Safe. No pepper, so neither column is attackable. |
-| Pepper only | Safe. No hashes to attack. |
-| **Both** | **A four-digit PIN falls in seconds.** 10,000 scrypt runs at 100 ms is under twenty minutes, and trivially parallel. |
+**Recommend B.** It keeps the lookup you actually want, and the extra cost
+over A is small enough not to argue about. **A is a perfectly defensible
+choice** for an internal tool and I will build it without complaint if you
+prefer. C is off the table.
 
-So the hashing is worth doing — it turns the most likely incident, a database
-leak, into a non-event — but it is not what protects against guessing. That
-is §2.3 and §2.4.
+## The admin screen
 
-### 2.3 Rate limiting
+Liz-only, same bar as Settings, enforced server-side as well as in the page.
 
-Per-district and per-source, enforced in the sign-in function before any hash
-is computed.
+A table of sixteen rows. For each: school or office name, the PIN, what it
+can reach, when it was last used, and whether it is active.
 
-- A sliding window of failed attempts, counted in the existing Netlify Blobs
-  store (the same mechanism `server-session.mjs` already uses, so no new
-  infrastructure).
-- Exponential backoff rather than a hard lock: delay the response at 5
-  failures, 10, 20, with a cap. **Never permanently lock**, because a locked
-  building is nineteen people who cannot mark attendance, and that is a worse
-  outcome than a slow attacker.
-- Keyed by a hash of the client IP plus the district. IP addresses are not
-  stored in clear.
-- Responses are constant in shape and timing whether or not the PIN exists.
-  "That PIN is not recognised" for everything, including a disabled profile.
-
-Ten thousand guesses against exponential backoff is no longer minutes. It is
-long enough that the audit log will have raised the alarm first.
-
-### 2.4 PIN length
-
-New and rotated credentials are **six digits minimum**, eight recommended for
-district-level logins. Existing four-digit PINs keep working until rotated —
-`pin_length` is stored so the admin screen can show a "short PIN" nudge
-beside them without ever showing the PIN.
-
-This is the single biggest security improvement available and it costs two
-extra keypresses.
-
-### 2.5 Sessions and revocation
-
-Sessions barely change, which is the point — the current mechanism is sound.
-
-The token keeps its shape (base64url payload + HMAC, eight hours), and gains
-two fields: `profileId` and `credentialVersion`.
-
-Revocation already half exists. `server-session.mjs` keeps a strongly
-consistent Netlify Blobs record per session and `revokeServerSession` deletes
-it, so `validatedSessionFromRequest` already rejects killed sessions on the
-next request. The redesign adds:
-
-- **Disable a profile → every live session for it dies.** On validation,
-  compare the token's `credentialVersion` against the profile's current one;
-  a rotation or a disable bumps it. One small cached read, refreshed on a
-  short TTL, so this does not become a database round trip per request.
-- **"Sign out everywhere"** as an explicit button, which bumps the version
-  without changing the PIN.
-
-### 2.6 One mechanism instead of five
-
-Today there are five bespoke environment variables doing one job:
-`ATTENDANCE_CHEF_PIN`, `ATTENDANCE_RECOGNITION_PILOT_PINS_JSON`,
-`ATTENDANCE_PEER_ADMIN_PINS_JSON`, `ATTENDANCE_LIMITED_ADMIN_PINS_JSON`, and
-`ATTENDANCE_LIZ_REPLACEMENT_PIN`, each with its own parser, its own refusal
-rules and its own log events. Every one of them exists only because the main
-blob could not be edited.
-
-They all become ordinary rows. Deleting that code is a substantial
-simplification of `auth.mjs` and removes five chances to get a profile subtly
-wrong.
-
----
-
-## 3. What deliberately does not change
-
-- **The sign-in experience.** A PIN on a keypad. Nothing new to learn.
-- **Shared building credentials.** See §1.
-- **`normalizeAccessProfile`.** The capability derivation is correct and well
-  tested; the table stores its inputs and it keeps deriving the rest. Writing
-  derived capabilities into the database would let them drift.
-- **The session token format**, beyond two added fields.
-- **The state endpoint's permission model.** Untouched.
-
----
-
-## 4. Management screen
-
-Liz-only, the same bar as Settings, enforced on the server as well as the
-page.
-
-**List.** Every profile: name, role, building, capability summary, PIN length,
-last used, status. Sorted with disabled last. A short PIN is flagged.
-
-**Create.** Name, role, building, capabilities. The app generates the PIN —
-people choose 1234 and birthdays. It is shown **once**, large, with copy and
-print, and a warning that it cannot be recovered. Closing the dialog loses it.
-
-**Rotate.** Same one-time reveal. Bumps `credential_version`, so every live
-session on the old PIN ends immediately.
-
-**Disable / enable.** Instant, reversible, no PIN change. The right tool for
-"somebody left on Friday".
-
-**Delete.** Only a profile that has never been used, or one disabled for more
-than thirty days. Otherwise disable — a deleted profile loses its audit trail.
-
-**Never shows an existing PIN,** because it genuinely cannot. The screen says
-so plainly rather than leaving Liz hunting for it.
+- **Change a PIN** — type the new four digits, save. Live sessions on the old
+  one end.
+- **Edit access** — the same capability checkboxes that exist in the profile
+  today: edit attendance, record recognition, manage roster, manage blackout
+  dates, run award draws.
+- **Add** — for a new building or a new office operator.
+- **Disable / enable** — instant, reversible, no PIN change. The right tool
+  for someone leaving on Friday.
 
 ### Guardrails
 
-Each of these is a real way to brick the district, so each is enforced
-server-side, not just in the page:
+Each of these is a real way to lock the district out, so each is enforced on
+the server, not only in the page:
 
-- You cannot disable, delete or downgrade **your own** profile.
-- You cannot remove the **last** Liz-tier profile.
-- You cannot create a profile with capabilities exceeding your own.
-- A `school` profile must carry a valid `location_id`.
-- A PIN colliding with an existing one is refused, naming no detail.
+- You cannot disable or downgrade **your own** login.
+- You cannot remove the **last** Liz-tier login.
+- You cannot grant capabilities you do not have yourself.
+- A `school` login must have a valid `location_id`.
+- A PIN already in use is refused.
 
----
+## Cutover
 
-## 5. Cutover, without locking anyone out
+Three phases. Nothing before the last one is visible to anybody.
 
-The whole plan rests on never having a moment where the table is authoritative
-and incomplete.
+**Phase 1 — dual read with self-migration.** Sign-in checks the table first,
+then falls back to the environment blob exactly as today. When the blob
+answers, that credential is written into the table on the spot.
 
-### Dual read, with self-migration
+A successful legacy sign-in is the one moment anybody holds the plaintext
+PIN, so that is when it migrates. **The district migrates itself as people
+work** — no reconstruction from memory, no bulk rewrite, no window where a
+credential exists in neither place. Sixteen credentials in daily use means
+it is done within a week, and Liz can add any stragglers by hand.
 
-During the transition, `accessForPin(pin)` resolves in this order:
+Two properties keep it safe: migration only fires on an *already successful*
+sign-in, so it cannot create access that did not exist; and once a PIN is in
+the table the blob is never consulted for it again, so a stale environment
+edit cannot resurrect an old profile.
 
-1. **Table.** Compute `pin_index`, look it up, verify with scrypt. Hit → done.
-2. **Environment blob**, exactly as today. Hit → **migrate that credential
-   into the table before returning the session.**
+**Phase 2 — the admin screen.** Liz can see and change everything.
 
-Step 2 is the elegant part. At the instant of a successful legacy sign-in we
-are holding the plaintext PIN — the only moment anyone ever does. So we can
-hash it and write the row then and there. **The system migrates itself as
-people use it**, with no bulk rewrite, no reconstruction from memory, and no
-window where somebody's credential exists in neither place.
+**Phase 3 — cutover.** Remove `ATTENDANCE_ACCESS_CODES_JSON`, the five
+additive variables, and the fallback path. Gate: every one of the sixteen
+present in the table and signing in from it for a few days.
 
-Nineteen credentials in daily use means migration is substantially complete
-within a week. Liz can create any stragglers by hand.
+`ATTENDANCE_TABLE_AUTH_ENABLED=false` reverts to today's behaviour instantly
+at any point before Phase 3, with no code change.
 
-Safety properties:
+## What this also deletes
 
-- Self-migration only ever fires on an **already successful** legacy sign-in.
-  It cannot create a credential that did not already work.
-- Once a `pin_index` exists in the table, the table wins; the blob is never
-  consulted for it again. A later env edit cannot resurrect an old profile.
-- `ATTENDANCE_LEGACY_CODES_ENABLED` is a kill switch. Set false and step 2
-  stops, instantly, without a code change.
+Five environment variables doing one job: `ATTENDANCE_CHEF_PIN`,
+`ATTENDANCE_RECOGNITION_PILOT_PINS_JSON`, `ATTENDANCE_PEER_ADMIN_PINS_JSON`,
+`ATTENDANCE_LIMITED_ADMIN_PINS_JSON`, `ATTENDANCE_LIZ_REPLACEMENT_PIN`. Each
+has its own parser and refusal rules, and each exists *only* because the main
+blob cannot be edited. They all become ordinary rows, which is a real
+simplification of `auth.mjs`.
 
-### Phases
+## Deliberately not doing
 
-Each phase ships on its own and is independently safe to stop at.
+Recorded so these stay closed unless you reopen them: longer PINs, forced
+rotation, password hashing, lockout and backoff, per-person logins for
+building staff, any change to the sign-in screen.
 
-| Phase | What ships | Visible change | Gate to proceed |
-|---|---|---|---|
-| **0** | Migration, tables, hashing module, `ATTENDANCE_PIN_PEPPER` | None | Tests green; pepper set; tables exist and are empty |
-| **1** | Dual read + self-migration, behind `ATTENDANCE_TABLE_AUTH_ENABLED` | None visible | Every existing PIN still signs in; rows appearing in `access_profiles` |
-| **2** | Admin screen, read-only list | Liz can see who has access | List matches reality |
-| **3** | Create / rotate / disable, guardrails, audit log | Liz manages access herself | Liz rotates one test credential end to end |
-| **4** | Rate limiting, lockout, short-PIN nudges | Slower failed sign-ins | Deliberate lockout test passes |
-| **5** | **Cutover.** Remove the env blob and the five additive variables; delete the fallback path | None if 1–4 held | Every profile present and used from the table for 14 consecutive days |
-| **6** | Optional: six-digit rotation drive, per-person district logins | New PINs issued | Liz's call |
+One item is worth separating from that list, because it is not a hardening
+question: **deploy previews are publicly reachable and accept production
+PINs.** That is already an open item in `PROJECT_STATE.md` and predates this
+work. The table makes it a one-line fix — table auth off on previews — so it
+is worth doing in Phase 1 while the code is open, rather than as a separate
+job later. Say if you would rather leave it alone.
 
-Phase 5 is the only irreversible one, and it comes after two weeks of
-evidence rather than a judgement call.
+## Testing
 
-### If it goes wrong
+The existing profile-matrix, permissions and session suites must pass
+unchanged; that is the main regression signal. New tests cover: table hit
+wins, table miss falls through, a blob hit migrates, a migrated credential
+is served from the table afterwards, a PIN in neither place yields nothing
+and writes no row, the kill switch restores prior behaviour, every guardrail
+fails server-side when the page is bypassed, and credentials never appear in
+the state key allowlist or a backup export.
 
-| Failure | Containment |
-|---|---|
-| Table auth misbehaves | `ATTENDANCE_TABLE_AUTH_ENABLED=false` — straight back to today's behaviour |
-| Self-migration writes a bad row | Disable the row; the blob still works until Phase 5 |
-| Nobody can sign in at all | The env blob is untouched through Phases 0–4; revert the deploy |
-| Rate limiting locks a kitchen out | Backoff, not hard lock; worst case is a slow sign-in, and the window is clearable |
-| Liz locks herself out | Guardrails prevent it; Jon can still insert a row directly in SQL |
+## Cost
 
----
+Phase 1 a day, mostly tests. Phase 2 a day and a half, the guardrails being
+most of it. Phase 3 an hour plus a few days of watching. Call it three days
+of build.
 
-## 6. Testing
+## Needed before I start
 
-The existing suite already covers the profile matrix well
-(`pin-profile-matrix.test.mjs`, `permissions.test.mjs`, `session.test.mjs`)
-and those tests keep passing unchanged — that is the main regression signal.
-
-New coverage, roughly in the order it would be written:
-
-- **Hashing**: a known PIN verifies; a wrong one does not; the same PIN under
-  two salts produces different hashes; `pin_index` is stable for a pin+pepper
-  and changes with the pepper.
-- **Lookup**: one database round trip per attempt regardless of profile count.
-- **Dual read**: table hit wins; table miss falls through; blob hit migrates;
-  a migrated credential is served from the table next time and the blob is
-  not consulted.
-- **Self-migration cannot invent access**: a PIN absent from both yields
-  nothing and writes no row.
-- **Kill switches**: each flag, proven to restore the prior behaviour.
-- **Guardrails**: every bullet in §4, each asserted to fail server-side even
-  when the page is bypassed.
-- **Revocation**: disabling a profile invalidates a live session on its next
-  request.
-- **Rate limiting**: N failures produce backoff; a correct PIN during backoff
-  still eventually succeeds; one building's failures do not slow another's.
-- **Containment**: `access_profiles` never appears in the state key
-  allowlist, and a backup export contains no credential material. This is a
-  standing test, not a one-off check.
-
----
-
-## 7. Work not to forget
-
-Small, easy to drop, each with teeth:
-
-- **Deploy previews.** Previews are publicly reachable and today accept real
-  production PINs. The table makes a clean fix available: previews point at a
-  separate district row, or table auth is disabled on previews entirely.
-  Either way, **fix this in Phase 1, not Phase 5.**
-- **Timing.** Compare with `timingSafeEqual`, and make the failure path cost
-  roughly what the success path costs, so response time does not reveal
-  whether a PIN exists.
-- **Logging.** The existing `console.error` events are useful; keep the
-  pattern, and keep PINs out of them as they are today.
-- **`ATTENDANCE_SESSION_SECRET` stays.** Token signing is unrelated and fine.
-- **Pepper rotation.** Changing the pepper invalidates every `pin_index`.
-  Write the procedure down before it is needed: it requires re-indexing every
-  row, which requires the plaintext, which we do not have — so in practice a
-  pepper rotation is a forced rotation of every PIN. Worth knowing in advance.
-
----
-
-## 8. Cost
-
-Roughly, and honestly — these are estimates, not commitments:
-
-| Phase | Size |
-|---|---|
-| 0 | Half a day |
-| 1 | A day, most of it tests |
-| 2 | Half a day |
-| 3 | A day and a half — the guardrails are the work |
-| 4 | A day |
-| 5 | Half a day, plus two weeks of waiting |
-| 6 | Liz's call |
-
-Call it a week of build spread over three weeks of calendar, because Phase 5
-deliberately waits.
-
----
-
-## 9. Decisions needed before Phase 0
-
-These change the shape of the build, so they are worth settling first.
-
-1. **PIN length for new credentials.** Recommend six minimum, eight for
-   district logins. Four-digit stays valid until rotated.
-2. **Per-person district logins?** Building PINs stay shared. But the district
-   office is a handful of named people, and giving each their own makes the
-   audit log meaningful. Recommend yes.
-3. **Attribution inside a building** (optional, deferred). Because a kitchen
-   shares one PIN, nothing attributes a star or an attendance mark to a
-   person. A name picker after sign-in — no second secret, just "who is on
-   the keyboard" — would fix that cheaply. It is a change to how managers
-   work, so it is Liz's call, not a technical one.
-4. **Who besides Liz can manage access?** Recommend Liz alone at first, with
-   the peer-administrator tier able to view but not change.
-5. **Lockout numbers.** Recommend backoff from 5 failures, capped at 60
-   seconds, window reset after 15 minutes. Needs a sanity check against how
-   often a real manager fat-fingers a PIN.
-6. **Preview handling** — separate district row, or table auth off on
-   previews. Recommend off on previews: simplest, and no production
-   credential can ever work there.
-
----
-
-## 10. What this needs from Jon
-
-- Running each migration in the District 9 SQL editor, as before. The
-  connector cannot list that project, so it is addressed by ref and migrations
-  are hand-run — see `PROJECT_STATE.md`.
-- Setting `ATTENDANCE_PIN_PEPPER` once, Production only, as a secret. It must
-  never be committed, and losing it means every PIN must be reissued.
-- Answering §9.
-- Liz performing the Phase 3 gate herself: rotate one test credential, sign in
-  with it, disable it, confirm the session dies. If she cannot do that
-  unaided, the screen is not finished.
+1. **Option A or B** for storing the PIN. Recommend B.
+2. Running two migrations in the District 9 SQL editor, as before.
+3. Setting `ATTENDANCE_PIN_KEY` once, Production only — only if B.
+4. Whether to fix the preview exposure in Phase 1.
