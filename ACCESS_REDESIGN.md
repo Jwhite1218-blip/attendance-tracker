@@ -36,6 +36,34 @@ Point 3 is worth noticing. It is not a security feature today, it is an
 accident of where the PINs are stored — and it is half the day-to-day
 annoyance.
 
+## Three things already built, found while planning
+
+Checked before writing any code, because each would have been wasted work.
+
+**Rate limiting exists.** `session.mjs` already throttles sign-in: five PIN
+failures and one hundred attempts per IP, in a fifteen-minute sliding window,
+backed by Netlify Blobs. The first draft of this document proposed building
+it. It is built. Nothing to do.
+
+**Revocation half exists, in two places.** `server-session.mjs` keeps a
+strongly consistent record per session with a `revokeServerSession` path. And
+`sessionFromRequest` re-resolves a live session against the current code
+table on every request via `credentialFingerprint`, so changing a PIN
+*already* kills its sessions.
+
+**That second mechanism is a cutover hazard.** `sessionFromRequest` is
+synchronous and reads the environment blob. When the blob is removed in Phase
+3, `accessCodeConfiguration()` throws, the surrounding `catch` returns null,
+and **every signed-in user is logged out at once**. It would look exactly
+like a total auth failure.
+
+So revocation moves to the session registry, which is already async and
+already consulted on every request: the registry record gains a `profileId`,
+and changing or disabling a profile deletes its live sessions. The
+fingerprint re-resolution is retired as part of Phase 3 rather than left to
+fail. Keeping `sessionFromRequest` synchronous is deliberate — making it
+async would spread `await` through three call sites for no gain.
+
 ## The table
 
 One new table in the production Supabase project (`gbjikeytzdlzjulrnjvo`).
@@ -50,7 +78,9 @@ create table public.access_profiles (
   id            uuid primary key default gen_random_uuid(),
   district_id   bigint not null references public.districts(id),
 
-  pin           text not null,          -- see "Readable or not" below
+  pin_encrypted text not null,          -- AES-256-GCM, iv and tag included
+  pin_lookup    text not null,          -- HMAC-SHA256, deterministic, indexed
+  pin_length    smallint not null,      -- shown in the list without revealing the PIN
   display_name  text not null,
   role          text not null check (role in ('admin','school')),
   location_id   text,                   -- required when role = 'school'
@@ -63,7 +93,7 @@ create table public.access_profiles (
   updated_at    timestamptz not null default now(),
   updated_by    text,
 
-  unique (district_id, pin)
+  unique (district_id, pin_lookup)
 );
 ```
 
@@ -80,26 +110,27 @@ when — not for security theatre, but because "who moved Creston's PIN" is a
 question that will be asked and should have an answer. It never records a
 PIN.
 
-## Readable or not — the one real decision
+## How the PIN is stored — decided
 
-**Option A — store the PIN as written, and let Liz see it.**
-The admin screen shows each school's current PIN. "What is Creston's code"
-is answered by looking. Reassigning is typing a new number. Simple, and it
-matches how a door code is treated.
+**Encrypted at rest, readable in the app.** Jon chose this on 2026-10-18.
 
-**Option B — encrypt at rest, still readable in the app.**
-Same experience for Liz, but a raw database dump is not a list of codes.
-Costs about twenty lines: encrypt with a key in `ATTENDANCE_PIN_KEY`,
-decrypt when the admin screen asks. The app can still show her the PIN.
+AES-256-GCM with a key in `ATTENDANCE_PIN_KEY`, a new Production-only secret.
+The admin screen decrypts and shows each PIN, so "what is Creston's code?" is
+answered by looking rather than by reissuing. A raw database dump is not a
+list of codes.
 
-**Option C — hash them.** Nobody can ever read a PIN again, including Liz,
-so every "I forgot" becomes a reissue. This is what the first draft proposed
-and it makes the tool worse at the job you asked for.
+Hashing was considered and rejected: it would make a PIN unreadable forever,
+including to Liz, turning every forgotten code into a forced rotation. That
+is worse at the job this work exists to do.
 
-**Recommend B.** It keeps the lookup you actually want, and the extra cost
-over A is small enough not to argue about. **A is a perfectly defensible
-choice** for an internal tool and I will build it without complaint if you
-prefer. C is off the table.
+Lookup is by encrypted value, not by scanning and decrypting. GCM uses a
+random IV, so the same PIN encrypts differently every time and an equality
+match would never hit. The row therefore carries a second column,
+`pin_lookup` — HMAC-SHA256 of the PIN under the same key — which is
+deterministic and indexed. One query per sign-in regardless of row count.
+
+Losing `ATTENDANCE_PIN_KEY` means every PIN must be reissued, so it is
+written down somewhere other than Netlify before Phase 1 ships.
 
 ## The admin screen
 
