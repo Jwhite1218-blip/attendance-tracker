@@ -9,6 +9,7 @@ const FIXED_STORAGE_KEYS = new Set([
   'employee-assignment-history-v1',
   'all-star-recognition-v1',
   'training-records-v1',
+  'program-settings-v1',
   'hr-attendance-progress-v2',
   'hr-flags',
 ])
@@ -50,6 +51,13 @@ export function canWriteManagedKeyForAccess(access, key) {
   }
   if (key === 'training-records-v1') {
     return access.role === 'admin' && access.canManageRoster === true
+  }
+  // Programme settings decide discipline stages and compliance hours for the
+  // whole district, so they sit at Liz's tier rather than any administrator.
+  if (key === 'program-settings-v1') {
+    return access.role === 'admin'
+      && access.canManageRoster === true
+      && access.canManageBlackouts === true
   }
   if (key === 'employee-manager-notes-v1') return access.canWriteEmployeeNotes === true
   if (key === 'employee-record-overrides' || key === 'employee-custom-records') {

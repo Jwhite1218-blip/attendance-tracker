@@ -14,6 +14,7 @@ import {
   EMPLOYEE_NOTES_KEY,
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
+  PROGRAM_SETTINGS_KEY,
   LOCATION_OVERRIDES_KEY,
   RECOGNITION_KEY,
   RECORD_OVERRIDES_KEY,
@@ -179,16 +180,26 @@ function filterRecordMap(records, allowedEmployeeIds) {
 }
 
 function filterEntriesForSession(entries, session) {
+  // Programme settings go to every session, including the narrowest ones.
+  // They are district policy, not personal data, and a session that does not
+  // receive them falls back to the shipped defaults — so a manager would see
+  // different milestones and different occurrence colours from Liz, with
+  // nothing on screen to say why.
+  const programSettings = entries[PROGRAM_SETTINGS_KEY]
+    ? { [PROGRAM_SETTINGS_KEY]: entries[PROGRAM_SETTINGS_KEY] }
+    : {}
+
   if (session.recognitionOnly === true) {
-    return entries[RECOGNITION_KEY]
-      ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] }
-      : {}
+    return {
+      ...programSettings,
+      ...(entries[RECOGNITION_KEY] ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] } : {}),
+    }
   }
   if (hasLizAdminAccess(session)) return entries
   if (session.role === 'admin') return redactLizOnlyEmployeeEntries(entries)
 
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
-  const filtered = {}
+  const filtered = { ...programSettings }
 
   if (entries[BLACKOUTS_KEY]) filtered[BLACKOUTS_KEY] = entries[BLACKOUTS_KEY]
   if (entries[LOCATION_OVERRIDES_KEY]) {

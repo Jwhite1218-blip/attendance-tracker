@@ -9,6 +9,8 @@
 // and it means a single entry does not have to be repeated nineteen times.
 // Hours are then counted per employee out of those records.
 import { writeSharedStorage } from './sharedStore.js'
+import { DEFAULT_POSITION_TRAINING_HOURS } from './programDefaults.js'
+import { positionTrainingHours } from './programSettings.js'
 
 export const TRAINING_STORAGE_KEY = 'training-records-v1'
 
@@ -40,49 +42,15 @@ export const TRAINING_TYPE_MAP = Object.fromEntries(TRAINING_TYPES.map(type => [
 // Twelve hours is the largest requirement, so the list stops there.
 export const TRAINING_HOUR_OPTIONS = Array.from({ length: 48 }, (_, index) => (index + 1) * 0.25)
 
-// Annual requirement by roster position, restarting each July.
-//
-// Food service staff, confirmed by Liz 2026-10-11: 12 hours for the Director,
-// 10 for Food Service Managers and Worker Leads, 6 for Cooks and Food Service
-// Workers.
-//
-// Admin team, given 2026-10-11 and tracked here after all: RDM 12, RN 10,
-// Chef 10, and 6 for the office roles (OM, FM, MM, HRM).
-//
-// The admin titles are recorded under the abbreviations Liz uses. None of them
-// is in the roster yet — matching is on the exact `position` string, so if
-// those people are added with the title spelled out ("Office Manager" rather
-// than "OM") they will read as unset until the spelling here matches.
-//
-// `null` is not used any more, but a position absent from this table still
-// resolves to null rather than defaulting to a tier. That is what stops a new
-// job title from being silently reported as compliant against a number nobody
-// chose.
-export const POSITION_TRAINING_HOURS = {
-  // Food service
-  'Food Service Director': 12,
-  'Food Service Manager': 10,
-  'Food Service Worker Lead': 10,
-  'Cook': 6,
-  'Food Service Worker': 6,
-  // Admin team. Both the abbreviation Liz writes and the spelled-out title,
-  // because matching is on the exact roster string and nobody should have to
-  // remember which spelling the tracker wants.
-  'RDM': 12,
-  'District Office Manager': 6,
-  'RN': 10,
-  'Chef': 10,
-  'OM': 6,
-  'FM': 6,
-  'MM': 6,
-  'HRM': 6,
-}
+// The shipped requirement table. positionTrainingHours() in programSettings
+// is what the report reads, and it falls back to exactly this. Liz changed
+// these twice in the first week, which is why they are a setting now.
+export const POSITION_TRAINING_HOURS = DEFAULT_POSITION_TRAINING_HOURS
 
 export function requiredHoursFor(employee) {
   const position = String(employee?.position || '').trim()
-  return Object.hasOwn(POSITION_TRAINING_HOURS, position)
-    ? POSITION_TRAINING_HOURS[position]
-    : null
+  const hours = positionTrainingHours()
+  return Object.hasOwn(hours, position) ? hours[position] : null
 }
 
 // July–June, matching attendance and recognition. Duplicated locally rather

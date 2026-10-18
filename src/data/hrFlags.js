@@ -6,11 +6,15 @@
 import { normalizeAttendanceCode } from './attendanceCodes.js'
 import { getDateAvailability } from './blackoutDates.js'
 import { writeSharedStorage } from './sharedStore.js'
+import { DEFAULT_OCCURRENCE_THRESHOLDS } from './programDefaults.js'
+import { occurrenceThresholds } from './programSettings.js'
 
 const FLAGS_KEY = 'hr-attendance-progress-v2'
 const LEGACY_FLAGS_KEY = 'hr-flags'
-const TRACKING_THRESHOLD = 3
-const VERBAL_WARNING_THRESHOLD = 4
+// Shipped positions. What is in force comes from occurrenceThresholds(),
+// which Liz can change in Settings and which falls back to exactly these.
+const TRACKING_THRESHOLD = DEFAULT_OCCURRENCE_THRESHOLDS.tracking
+const VERBAL_WARNING_THRESHOLD = DEFAULT_OCCURRENCE_THRESHOLDS.verbalWarning
 const QUALIFYING_CODES = new Set(['UNEX', 'LI', 'EO', 'NCNS', 'CC', 'LE', 'L/EQ'])
 
 export function isQualifyingCode(code) {
@@ -32,8 +36,9 @@ function currentSchoolYearStart() {
 }
 
 function stageForCount(count) {
-  if (count >= VERBAL_WARNING_THRESHOLD) return 'verbal_warning'
-  if (count >= TRACKING_THRESHOLD) return 'formal_tracking'
+  const { tracking, verbalWarning } = occurrenceThresholds()
+  if (count >= verbalWarning) return 'verbal_warning'
+  if (count >= tracking) return 'formal_tracking'
   return 'documented'
 }
 
@@ -196,8 +201,9 @@ export const ATTENDANCE_SEVERITY_CHIP = {
 export function attendanceSeverityOf(status) {
   if (!status) return 'none'
   if (status.seniorityReset) return 'action'
-  if (status.occurrenceCount >= VERBAL_WARNING_THRESHOLD) return 'action'
-  if (status.occurrenceCount >= TRACKING_THRESHOLD) return 'tracking'
+  const { tracking, verbalWarning } = occurrenceThresholds()
+  if (status.occurrenceCount >= verbalWarning) return 'action'
+  if (status.occurrenceCount >= tracking) return 'tracking'
   return 'none'
 }
 
@@ -214,13 +220,13 @@ export function mainPageFlagged(flaggedWithEmployees) {
 
 export function isFlagged(empId) {
   const status = getEmployeeAttendanceStatus(empId)
-  return !!status && (status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset)
+  return !!status && (status.occurrenceCount >= occurrenceThresholds().tracking || status.seniorityReset)
 }
 
 export function getAllFlaggedEmployees() {
   const currentYear = currentSchoolYearStart()
   return Object.values(getAllStatuses())
-    .filter(status => status.schoolYearStart === currentYear && (status.occurrenceCount >= TRACKING_THRESHOLD || status.seniorityReset))
+    .filter(status => status.schoolYearStart === currentYear && (status.occurrenceCount >= occurrenceThresholds().tracking || status.seniorityReset))
     .sort((a, b) => {
       if (a.seniorityReset !== b.seniorityReset) return a.seniorityReset ? -1 : 1
       return new Date(b.updatedAt) - new Date(a.updatedAt)

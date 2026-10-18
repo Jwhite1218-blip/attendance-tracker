@@ -1,3 +1,5 @@
+import { spanishApproval } from './programSettings.js'
+
 // Warren's own vocabulary, in both languages.
 //
 // Kept apart from i18n.js because this is the part that needs a person, not a
@@ -192,6 +194,15 @@ export const REVIEW_GROUPS = [
   { title: 'Recognition', note: 'Program names are left in English on purpose — see the questions.', keys: Object.keys(RECOGNITION.en) },
 ]
 
+// Sign-off now happens in Settings rather than in this file, so Liz can
+// clear the "still under review" notice herself the day her team finishes
+// reading it. The constant above stays as the fallback and as the record of
+// when the draft was written.
 export function isApproved() {
-  return Boolean(APPROVAL.approvedBy && APPROVAL.approvedOn)
+  const approval = spanishApproval() || APPROVAL
+  return Boolean(approval.approvedBy && approval.approvedOn)
+}
+
+export function approvalRecord() {
+  return spanishApproval() || (APPROVAL.approvedBy ? APPROVAL : null)
 }

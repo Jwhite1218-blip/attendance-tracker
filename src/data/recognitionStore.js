@@ -1,14 +1,12 @@
 import { writeSharedStorage } from './sharedStore.js'
+import { DEFAULT_CRITERION_LABELS, DEFAULT_STAR_LEVELS } from './programDefaults.js'
+import { criterionLabels, starLevels } from './programSettings.js'
 
 export const RECOGNITION_STORAGE_KEY = 'all-star-recognition-v1'
 
-export const STAR_LEVELS = [
-  { id: 'bronze', name: 'Bronze Star', minimum: 5, symbol: '🥉' },
-  { id: 'silver', name: 'Silver Star', minimum: 10, symbol: '🥈' },
-  { id: 'gold', name: 'Gold Star', minimum: 20, symbol: '🥇' },
-  { id: 'platinum', name: 'Platinum Star', minimum: 30, symbol: '🏆' },
-  { id: 'superstar', name: 'Superstar', minimum: 50, symbol: '⭐' },
-]
+// The shipped milestones. What the district actually uses comes from
+// starLevels() in programSettings, which falls back to exactly this.
+export const STAR_LEVELS = DEFAULT_STAR_LEVELS
 
 export const RECOGNITION_TYPES = [
   {
@@ -270,11 +268,11 @@ export function employeeStarsByLocation(records, employeeId, startYear = null) {
 }
 
 export function getStarLevel(count) {
-  return [...STAR_LEVELS].reverse().find(level => Number(count) >= level.minimum) || null
+  return [...starLevels()].reverse().find(level => Number(count) >= level.minimum) || null
 }
 
 export function getNextStarLevel(count) {
-  return STAR_LEVELS.find(level => Number(count) < level.minimum) || null
+  return starLevels().find(level => Number(count) < level.minimum) || null
 }
 
 // excludedEmployeeIds carries the manager-grade roster once the split is
@@ -439,30 +437,15 @@ export function recognitionAccent(typeId) {
 //
 // Keyed by the value already stored on records, so nothing recorded has to
 // change and the history of past shout-outs picks up the names too.
-export const CRITERION_LABELS = {
-  'Showing patience or kindness when helping students': {
-    name: 'Compassionate Service',
-    description: 'Shows patience or kindness when helping students',
-  },
-  'Participating in school functions beyond regular duties': {
-    name: 'Community Contributor',
-    description: 'Participates in school activities beyond job duties',
-  },
-  'Working with teachers and communicating effectively': {
-    name: 'Effective Communicator',
-    description: 'Works with teachers & staff effectively',
-  },
-  'Creating a positive cafeteria environment for students': {
-    name: 'Resilient Leader',
-    description: 'Creating a positive cafeteria environment for all',
-  },
-}
+// The shipped card wording. criterionLabels() in programSettings is what the
+// screens read, and it falls back to exactly this.
+export const CRITERION_LABELS = DEFAULT_CRITERION_LABELS
 
 // Falls back to the stored value as its own name, so a reason with no card
 // wording — the Shooting Star list, or anything added later — still reads
 // correctly rather than rendering blank.
 export function criterionLabel(value) {
-  return CRITERION_LABELS[value] || { name: value, description: '' }
+  return criterionLabels()[value] || { name: value, description: '' }
 }
 
 // --- the manager / hourly split --------------------------------------------

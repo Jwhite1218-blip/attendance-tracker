@@ -3,6 +3,7 @@ import { useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import ManagerHome from './pages/ManagerHome.jsx'
 import Training from './pages/Training.jsx'
+import ProgramSettings from './pages/ProgramSettings.jsx'
 import DailyReport from './pages/DailyReport.jsx'
 import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
@@ -101,6 +102,7 @@ function AppShell() {
     ...(role === 'admin' ? [{ path: '/training', label: t('nav.training') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
+    ...(lizAdminAccess ? [{ path: '/settings', label: t('nav.settings') }] : []),
     ...(lizAdminAccess ? [{ path: '/backup-recovery', label: t('nav.backupRecovery') }] : []),
   ]
   const navItems = recognitionOnly
@@ -302,6 +304,7 @@ function AppShell() {
               housekeeping is occasional and does not belong on the front page. */}
           <Route path="/staff" element={role === 'admin' ? <StaffAdmin /> : <Navigate to={homePath} replace />} />
           <Route path="/training" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Training />} />
+          <Route path="/settings" element={lizAdminAccess ? <ProgramSettings /> : <Navigate to={homePath} replace />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />

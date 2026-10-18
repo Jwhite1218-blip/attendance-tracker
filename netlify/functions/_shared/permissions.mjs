@@ -5,6 +5,7 @@ export const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
 export const EMPLOYEE_NOTES_KEY = 'employee-manager-notes-v1'
 export const ASSIGNMENT_HISTORY_KEY = 'employee-assignment-history-v1'
 export const TRAINING_KEY = 'training-records-v1'
+export const PROGRAM_SETTINGS_KEY = 'program-settings-v1'
 export const RECOGNITION_KEY = 'all-star-recognition-v1'
 export const HR_STATUS_KEY = 'hr-attendance-progress-v2'
 export const LEGACY_HR_STATUS_KEY = 'hr-flags'
@@ -34,6 +35,7 @@ export const MANAGED_FIXED_STATE_KEYS = Object.freeze([
   ASSIGNMENT_HISTORY_KEY,
   RECOGNITION_KEY,
   TRAINING_KEY,
+  PROGRAM_SETTINGS_KEY,
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
 ])
@@ -75,6 +77,11 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   // admin must not write them, hence the roster-management bar rather than
   // canEditAttendance.
   if (key === TRAINING_KEY) return session.canManageRoster === true
+  // District-wide programme policy. Liz's tier only — these change what the
+  // app says about somebody's job.
+  if (key === PROGRAM_SETTINGS_KEY) {
+    return session.canManageRoster === true && session.canManageBlackouts === true
+  }
   if (ROSTER_KEYS.has(key)) return session.canManageRoster === true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false
