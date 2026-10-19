@@ -63,7 +63,7 @@ export const RECOGNITION_TYPES = [
     shortLabel: 'Coach Buck',
     description: 'District recognition for a kitchen manager. Counts toward ACE Coach milestones.',
     earnsStar: true,
-    actionLabel: 'Award an ACE Star Buck',
+    actionLabel: 'Award an ACE Coach Buck',
     districtOnly: true,
     managerGradeOnly: true,
   },

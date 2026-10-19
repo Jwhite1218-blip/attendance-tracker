@@ -47,7 +47,7 @@ export const DEFAULT_CRITERION_LABELS = {
 }
 
 // The Leadership Track's milestones, from Liz's programme document and
-// confirmed by Jon 2026-10-19. Counted in ACE Star Bucks, never in Daily
+// confirmed by Jon 2026-10-19. Counted in ACE Coach Bucks, never in Daily
 // Stars — a manager holding both has two separate totals on purpose.
 export const DEFAULT_COACH_MILESTONES = [
   { id: 'rising-coach', name: 'Rising Coach', minimum: 25, symbol: '◆' },

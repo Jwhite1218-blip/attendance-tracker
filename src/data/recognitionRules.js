@@ -36,7 +36,7 @@ export function monthlyDrawingStatus(monthKey, dateValue = new Date()) {
 // session is refused it here and again on the server.
 export function recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards = role === 'admin') {
   if (role !== 'admin' && role !== 'school') return false
-  // An ACE Star Buck is awarded by the district, never by a building. Liz
+  // An ACE Coach Buck is awarded by the district, never by a building. Liz
   // and the admin team hand them to Worker Leads, Managers and the Director;
   // a school login must not be able to award one even to its own staff.
   if (type === 'ace-buck') return role === 'admin'

@@ -220,7 +220,7 @@ export default function RecognitionProgram() {
     buildingAllStars: schoolYearRecords.filter(record => record.type === 'all-star-of-month').length,
   }
 
-  // Employees are ranked on Daily Stars; managers on ACE Star Bucks. The two
+  // Employees are ranked on Daily Stars; managers on Daily Stars too. The two
   // are separate currencies against separate milestones, so they are counted
   // separately rather than split out of one list — a manager who collected
   // Daily Stars before the Leadership Track existed keeps them as Daily
@@ -250,7 +250,7 @@ export default function RecognitionProgram() {
     .filter(entry => entry.count > 0)
     .sort(byCount)
 
-  // The Leadership Track, counted in ACE Star Bucks against the coach
+  // The Leadership Track, counted in ACE Coach Bucks against the coach
   // milestones. District-only for now, so it is built but not handed to the
   // page unless the session is an administrator.
   const coachLevels = coachMilestones()
@@ -644,7 +644,7 @@ export default function RecognitionProgram() {
                 selectableTypes={bonusTypes}
                 compact
                 title="Bonus recognition"
-                subtitle="Nominations, shout-outs and ACE Star Bucks."
+                subtitle="Nominations and shout-outs. Coach Bucks have their own section below."
                 employees={scopedEmployees}
                 peerManagers={peerManagers}
                 managerIds={managerIds}
@@ -757,7 +757,7 @@ function RecognitionEntryForm({
   // outside these sets, so offering a name it would discard would look like
   // a save that worked and did nothing.
   //
-  //   ACE Star Buck  — manager-grade only, any building. District award.
+  //   ACE Coach Buck — kitchen managers only, any building. District award.
   //   Shout-Out      — this building, plus every other building's managers.
   //                    It earns nothing and decides nothing, which is what
   //                    makes it safe to send across a boundary.

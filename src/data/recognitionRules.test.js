@@ -55,7 +55,7 @@ test('quarterly nomination windows follow three-month calendar periods', () => {
 // Jon, 2026-10-19: "Admin would give out the manager/food service worker lead
 // Stars or 'Ace Star Bucks' to be tracked like the employee Star of the Day."
 // Top-down from the district, not peer to peer between buildings.
-test('only the district awards an ACE Star Buck', () => {
+test('only the district awards an ACE Coach Buck', () => {
   assert.equal(recognitionTypeAllowedForRole('admin', 'ace-buck'), true)
   assert.equal(recognitionTypeAllowedForRole('school', 'ace-buck'), false,
     'a building manager cannot award one, not even to their own staff')
@@ -64,7 +64,7 @@ test('only the district awards an ACE Star Buck', () => {
   assert.equal(recognitionTypeAllowedForRole('nobody', 'ace-buck'), false)
 })
 
-test('an ACE Star Buck only goes to manager-grade staff', () => {
+test('an ACE Coach Buck only goes to manager-grade staff', () => {
   const positions = ['Food Service Worker Lead', 'Food Service Manager', 'Food Service Director']
   for (const position of positions) {
     assert.equal(aceBuckRecipientAllowed({ position }, positions), true, position)
@@ -106,7 +106,7 @@ test('a Daily Star stays inside the building', () => {
   }
 })
 
-test('an ACE Star Buck reaches managers and nobody else', () => {
+test('an ACE Coach Buck reaches managers and nobody else', () => {
   const own = [{ id: 'a', position: 'Cook' }, { id: 'b', position: 'Food Service Worker Lead' }]
   const peers = [{ id: 'c', position: 'Food Service Manager' }]
   const isManager = employee => ['b', 'c'].includes(employee.id)
