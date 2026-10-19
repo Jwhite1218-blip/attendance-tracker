@@ -160,6 +160,12 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
           employee_id: access?.employeeId || null,
           capabilities: capabilitiesFromProfile(access),
           source: 'legacy',
+          // Stamped on insert, because a credential only migrates at the
+          // moment somebody successfully signs in with it. Leaving it null
+          // until their SECOND sign-in made fifteen live credentials read as
+          // "never used" on the day they all migrated — and "never used" is
+          // exactly the signal somebody would act on to delete one.
+          last_used_at: new Date().toISOString(),
           created_by: actor,
           updated_by: actor,
         }

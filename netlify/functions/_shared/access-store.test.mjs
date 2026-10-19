@@ -178,6 +178,10 @@ test('a legacy credential migrates itself, encrypted, with its capabilities', as
     assert.equal(created.pin_lookup, pinLookup('1742'))
     assert.deepEqual(created.capabilities, { canEditAttendance: true })
     assert.ok(fake.calls.some(call => call.url.includes('/access_changes')), 'the migration is logged')
+    // A credential only migrates because somebody just signed in with it, so
+    // it has emphatically been used. Reading as "never used" would invite
+    // deleting a live credential.
+    assert.match(created.last_used_at, /^\d{4}-\d{2}-\d{2}T/, 'stamped as used on the way in')
   })
 })
 
