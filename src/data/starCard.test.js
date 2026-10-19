@@ -48,7 +48,7 @@ test('only the chosen reasons are marked', () => {
     { name: 'A B', date: '2026-09-01', criteria: ['Safety'], message: 'x', recognizedBy: 'y' },
   ], { pad: false })
   assert.equal(markedReasonCount(html), 1)
-  // Every reason the program recognises is still offered on the card.
+  // Every reason the program recognizes is still offered on the card.
   for (const reason of ALL_STAR_REASON_OPTIONS) assert.match(html, new RegExp(`>${reason}<`))
 })
 

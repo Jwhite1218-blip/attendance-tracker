@@ -74,7 +74,7 @@ test('buildings are ordered by total, busiest first', () => {
 })
 
 test('a building with no stars still appears when it is named', () => {
-  // A kitchen that recognised nobody is the useful signal; leaving it out of
+  // A kitchen that recognized nobody is the useful signal; leaving it out of
   // the table hides exactly the thing worth seeing.
   const summary = buildingRecognitionSummary([], 2026, ['StonyBrkMS', 'CrestonMS'])
   assert.equal(summary.length, 2)
@@ -249,7 +249,7 @@ test('only that building, only earned stars, only this school year', () => {
   assert.deepEqual(rows, [])
 })
 
-test('a building nobody has recognised returns nothing rather than throwing', () => {
+test('a building nobody has recognized returns nothing rather than throwing', () => {
   assert.deepEqual(buildingMonthlyRecipients([], 2026, 'StonyBrkMS'), [])
   assert.deepEqual(buildingMonthlyRecipients(null, 2026, null), [])
 })

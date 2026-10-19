@@ -10,7 +10,7 @@
 // lowercase condensed caps, and DATE / RECOGNIZED BY ruled along the foot.
 //
 // Reasons come from ALL_STAR_REASON_OPTIONS so the card always offers exactly
-// the reasons the program recognises.
+// the reasons the program recognizes.
 //
 // Fonts and the logo arrive as `assets` rather than being imported, because
 // this module is also run under Node by the sheet generator and by its tests,

@@ -52,7 +52,7 @@ export function canWriteManagedKeyForAccess(access, key) {
   if (key === 'training-records-v1') {
     return access.role === 'admin' && access.canManageRoster === true
   }
-  // Programme settings decide discipline stages and compliance hours for the
+  // Program settings decide discipline stages and compliance hours for the
   // whole district, so they sit at Liz's tier rather than any administrator.
   if (key === 'program-settings-v1') {
     return access.role === 'admin'

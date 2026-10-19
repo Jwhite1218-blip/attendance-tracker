@@ -1,4 +1,4 @@
-// Programme settings Liz can change without a deploy.
+// Program settings Liz can change without a deploy.
 //
 // Everything here used to be a constant in a source file, which meant that
 // "the Gold Star should be 25, not 20" was a code change, a build and a
@@ -9,7 +9,7 @@
 //
 //   1. A stored setting is an OVERRIDE, never a replacement. Anything absent
 //      or malformed falls back to the default, so a half-written settings
-//      blob degrades to the shipped behaviour rather than to nothing.
+//      blob degrades to the shipped behavior rather than to nothing.
 //   2. Every write is validated as strictly as a form would validate it. The
 //      Settings page is the only writer today, but a bad value here changes
 //      what the app says about somebody's job.

@@ -41,9 +41,9 @@ export default function ProgramSettings() {
   if (!hasLizAdminAccess(access)) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <h1 className="text-lg font-bold text-gray-900">Programme settings</h1>
+        <h1 className="text-lg font-bold text-gray-900">Program settings</h1>
         <p className="mt-2 text-sm text-gray-500">
-          These settings change the programme for every school, so they are kept to the district
+          These settings change the program for every school, so they are kept to the district
           administrator. Ask Liz if something needs changing.
         </p>
       </div>
@@ -70,7 +70,7 @@ export default function ProgramSettings() {
     <div className="space-y-5">
       <header className="rounded-xl border border-gray-200 bg-white p-5">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">District administrator</p>
-        <h1 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Programme settings</h1>
+        <h1 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">Program settings</h1>
         <p className="mt-1 text-sm text-gray-500">
           Changes take effect everywhere as soon as they save. No release needed.
         </p>

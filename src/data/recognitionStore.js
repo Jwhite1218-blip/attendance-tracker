@@ -348,7 +348,7 @@ export function buildingRecognitionSummary(records, startYear, locationIds = [])
 }
 
 // The months of a school year in order, July through June, so a table has a
-// stable set of columns even in a month nobody was recognised.
+// stable set of columns even in a month nobody was recognized.
 export function schoolYearMonthKeys(startYear) {
   return Array.from({ length: 12 }, (_, index) => {
     const month = ((6 + index) % 12) + 1
@@ -378,7 +378,7 @@ export function toStarCardEntries(records, resolveName) {
 // form, the history list and any later surface cannot drift apart.
 //
 // `earns` marks the two that actually add to someone's star count, so the
-// distinction is visible at a glance and not just a colour difference.
+// distinction is visible at a glance and not just a color difference.
 export const RECOGNITION_ACCENTS = {
   'star-of-day': {
     glyph: '★',
@@ -450,7 +450,7 @@ export function criterionLabel(value) {
 
 // --- the manager / hourly split --------------------------------------------
 //
-// Liz's ask: the people who run the kitchens are recognised in their own pool
+// Liz's ask: the people who run the kitchens are recognized in their own pool
 // rather than competing with the staff they supervise. Eighteen people —
 // fifteen Worker Leads, two Managers and the Director.
 //
@@ -555,15 +555,15 @@ export function buildingMonthlyRecipients(records, startYear, locationId) {
     }))
 }
 
-// Two independent things are being signalled on the recognition screens, and
+// Two independent things are being signaled on the recognition screens, and
 // they must not fight each other:
 //
 //   recognitionAccent() — WHAT the recognition is (daily star, nomination,
 //     shout-out). Owns the glyph and the chip.
 //   gradeAccent()       — WHO earned it (staff or manager). Owns the star
-//     colour on the boards, and a chip beside the name in the history.
+//     color on the boards, and a chip beside the name in the history.
 //
-// Managers get the ACE orange of the coach programme rather than the All-Star
+// Managers get the ACE orange of the coach program rather than the All-Star
 // gold, so which board you are looking at is obvious at a glance without
 // reading the tab.
 export const GRADE_ACCENTS = {
@@ -578,7 +578,7 @@ export const GRADE_ACCENTS = {
   },
   // Blue, and deliberately not a neighbour of the All-Star gold. An orange
   // first attempt sat too close to the gold to register at a glance, which
-  // defeated the point: the two programmes have to be tellable apart across a
+  // defeated the point: the two programs have to be tellable apart across a
   // room, not on close inspection.
   manager: {
     label: 'ACE Coach',

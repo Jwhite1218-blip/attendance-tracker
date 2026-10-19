@@ -122,7 +122,7 @@ test('signing off the Spanish wording records who and when', () => {
 
 // --- the part that actually protects people ---------------------------------
 
-test('a malformed blob degrades to the shipped behaviour, not to nothing', () => {
+test('a malformed blob degrades to the shipped behavior, not to nothing', () => {
   for (const broken of ['not json', '[]', '"a string"', 'null']) {
     localStorage.setItem(PROGRAM_SETTINGS_KEY, broken)
     assert.deepEqual(starLevels(), DEFAULT_STAR_LEVELS, broken)
@@ -131,7 +131,7 @@ test('a malformed blob degrades to the shipped behaviour, not to nothing', () =>
   }
 })
 
-test('a section that survives validation empty falls back rather than erasing the programme', () => {
+test('a section that survives validation empty falls back rather than erasing the program', () => {
   store({ starLevels: [{ name: 'No id or minimum' }] })
   assert.deepEqual(starLevels(), DEFAULT_STAR_LEVELS)
 

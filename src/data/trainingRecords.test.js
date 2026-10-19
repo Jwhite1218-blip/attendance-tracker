@@ -42,7 +42,7 @@ function training(overrides = {}) {
   return createTrainingRecord({ ...VALID, ...overrides })
 }
 
-test('a complete training record is accepted and normalised', () => {
+test('a complete training record is accepted and normalized', () => {
   const record = training({ trainer: '  Liz  ', areas: ['nutrition', 'nutrition', 'operations'] })
   assert.equal(record.title, 'Allergen awareness')
   assert.equal(record.trainer, 'Liz')

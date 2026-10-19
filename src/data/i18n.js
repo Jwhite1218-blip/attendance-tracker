@@ -185,7 +185,7 @@ export function translateCount(locale, key, count, values) {
   return translate(locale, `${key}.${suffix}`, { count, ...values })
 }
 
-// 'es-MX', 'es_419' and 'ES' all mean Spanish here. Anything unrecognised
+// 'es-MX', 'es_419' and 'ES' all mean Spanish here. Anything unrecognized
 // falls back to English rather than throwing.
 export function normalizeLocale(value) {
   const base = String(value || '').trim().toLowerCase().replace('_', '-').split('-')[0]

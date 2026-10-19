@@ -132,7 +132,7 @@ test('the drafted program vocabulary is complete in both languages', () => {
   )
 })
 
-test('program keys are recognisable as program keys', () => {
+test('program keys are recognizable as program keys', () => {
   for (const key of Object.keys(PROGRAM_STRINGS.en)) {
     assert.ok(isProgramKey(key), `${key} is not covered by PROGRAM_KEY_PREFIXES`)
   }

@@ -44,7 +44,7 @@ export default function ManagerHome() {
 
   // "Marked today" counts exceptions recorded, not people present: a blank day
   // is the normal case for someone who turned up, so this is a count of what
-  // the manager has entered rather than a completeness score. Labelling it as
+  // the manager has entered rather than a completeness score. Labeling it as
   // progress would imply nineteen entries were expected every morning.
   const markedToday = useMemo(
     () => roster.filter(employee => getAttendanceCode(employee.kronos_id || employee.id, today)).length,

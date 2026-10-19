@@ -1,4 +1,4 @@
-// What the programme means when nobody has changed anything.
+// What the program means when nobody has changed anything.
 //
 // These used to live in recognitionStore, hrFlags and trainingRecords. They
 // moved here on 2026-10-18 so that programSettings can read them without

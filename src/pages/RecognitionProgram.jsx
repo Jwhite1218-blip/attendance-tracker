@@ -217,7 +217,7 @@ export default function RecognitionProgram() {
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
   const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
-  // Buildings in the current view, named even when they have recognised
+  // Buildings in the current view, named even when they have recognized
   // nobody — an empty row is the signal worth seeing.
   const buildingCounts = buildingRecognitionSummary(
     schoolYearRecords,
@@ -903,7 +903,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
     managers: {
       label: 'Managers',
       entries: managers,
-      empty: 'No manager has been recognised yet this school year.',
+      empty: 'No manager has been recognized yet this school year.',
     },
   }
   const active = boards[pool]
@@ -924,7 +924,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
         Star of the Day only · July {schoolYearStart} – June {schoolYearStart + 1}
       </p>
 
-      {/* Worker Leads, Managers and the Director are recognised in their own
+      {/* Worker Leads, Managers and the Director are recognized in their own
           pool, so nobody is ranked against someone they supervise. */}
       <div className="mt-3 flex rounded-lg border border-amber-200 bg-[#fffaf0] p-0.5" role="tablist">
         {Object.entries(boards).map(([key, board]) => (
@@ -1108,7 +1108,7 @@ function MonthlyDrawing({
           {managerEntriesHeld > 0 && (
             <p className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${gradeAccent(true).note}`}>
               {managerEntriesHeld} star{managerEntriesHeld === 1 ? '' : 's'} earned by Worker Leads, Managers or the Director
-              {' '}are not in this drawing — they are recognised in the manager pool instead.
+              {' '}are not in this drawing — they are recognized in the manager pool instead.
             </p>
           )}
         </div>
@@ -1470,7 +1470,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
 
       {summary.some(entry => entry.total === 0) && (
         <p className="mt-3 text-xs text-gray-500">
-          A building showing no stars has not recognised anyone this school year.
+          A building showing no stars has not recognized anyone this school year.
         </p>
       )}
     </section>
