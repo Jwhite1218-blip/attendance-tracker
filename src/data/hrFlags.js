@@ -51,11 +51,12 @@ function currentSchoolYearStart() {
   return month >= 7 ? year : year - 1
 }
 
+// Two stages, not three. Occurrences below the fourth get no label of their
+// own — the count is the whole story, and naming a stage for them implied a
+// process the app is not part of. The third still turns the name amber; that
+// is a glance cue, not a claim.
 function stageForCount(count) {
-  const { tracking, formalAction } = occurrenceThresholds()
-  if (count >= formalAction) return 'formal_action'
-  if (count >= tracking) return 'monitoring'
-  return 'documented'
+  return count >= occurrenceThresholds().formalAction ? 'formal_action' : 'documented'
 }
 
 // Seniority reset was removed on 2026-10-19. It computed, stored and
@@ -236,9 +237,6 @@ export function getAttendanceStageLabel(status) {
   // their own.
   if (status.stage === 'formal_action' || status.stage === 'verbal_warning') {
     return 'Formal attendance tracking needed'
-  }
-  if (status.stage === 'monitoring' || status.stage === 'formal_tracking') {
-    return 'Tracked by manager'
   }
   return `${status.occurrenceCount} documented occurrence${status.occurrenceCount === 1 ? '' : 's'}`
 }

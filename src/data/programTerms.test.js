@@ -55,10 +55,9 @@ test('an empty code is the clear-entry wording', () => {
 test('HR stages map onto wording, and the count stays pluralisable', () => {
   assert.equal(attendanceStageTerm(null).key, 'hr.none')
   assert.equal(attendanceStageTerm({ stage: 'formal_action' }).key, 'hr.formalActionNeeded')
-  assert.equal(attendanceStageTerm({ stage: 'monitoring' }).key, 'hr.managerTracked')
   // Stage names written before 2026-10-19, still readable.
   assert.equal(attendanceStageTerm({ stage: 'verbal_warning' }).key, 'hr.formalActionNeeded')
-  assert.equal(attendanceStageTerm({ stage: 'formal_tracking' }).key, 'hr.managerTracked')
+  assert.equal(attendanceStageTerm({ stage: 'formal_tracking', occurrenceCount: 3 }).key, 'hr.occurrences')
   // Seniority reset is gone. A status still carrying the flag is just a
   // count now, not a conclusion about somebody's standing.
   assert.equal(attendanceStageTerm({ seniorityReset: true, occurrenceCount: 2 }).key, 'hr.occurrences')

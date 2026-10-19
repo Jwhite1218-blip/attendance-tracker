@@ -21,26 +21,21 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
       <p className="text-xs text-gray-400 mb-1">
         Active employees only. Occurrences are counted per school year (July–June).
       </p>
-      <details className="mb-3 group">
-        <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700 select-none">
-          What do these stages mean?
-        </summary>
-        <div className="mt-2 space-y-1.5 text-xs text-gray-500 border-l-2 border-gray-200 pl-3">
-          <p>
-            <span className="font-semibold text-gray-700">Documented occurrences</span> — each no-call/no-show (NCNS), unexcused call-in absence (UNEX), late-in (LI), or early-out (EO) on record for this school year. Approved and protected leave never counts.
-          </p>
-          <p>
-            <span className="font-semibold text-amber-700">Tracked by manager</span> — occurrences 1 to 3. The building manager is keeping an eye on it.
-          </p>
-          <p>
-            <span className="font-semibold text-red-900">Formal attendance tracking needed</span> — from the 4th occurrence. Something is owed <strong>outside this app</strong>, on the district&apos;s own forms.
-          </p>
-          <p className="pt-1">
-            Warren&apos;s ladder, for reference: <strong>4th</strong> verbal warning · <strong>5th</strong> written
-            warning · <strong>6th</strong> final written warning · <strong>7th</strong> possible termination.
-          </p>
-        </div>
-      </details>
+      <div className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+        <p className="text-[11px] font-bold uppercase tracking-wide text-gray-500">
+          HR reference · handled outside this app
+        </p>
+        <ul className="mt-1.5 grid gap-x-5 gap-y-0.5 text-xs text-gray-600 sm:grid-cols-2">
+          <li><strong className="text-gray-800">4th</strong> verbal warning</li>
+          <li><strong className="text-gray-800">5th</strong> written warning</li>
+          <li><strong className="text-gray-800">6th</strong> final written warning</li>
+          <li><strong className="text-gray-800">7th</strong> possible termination</li>
+        </ul>
+        <p className="mt-1.5 text-[11px] text-gray-500">
+          An occurrence is a no-call/no-show, unexcused call-in, late-in or early-out. Approved and
+          protected leave never counts.
+        </p>
+      </div>
       <div className="divide-y divide-gray-100">
         {flaggedEmployees.map(f => (
           <button

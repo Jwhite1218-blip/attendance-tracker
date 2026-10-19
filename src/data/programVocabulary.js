@@ -92,7 +92,6 @@ const HR_STAGES = {
   en: {
     'hr.none': 'No active attendance action',
     'hr.formalActionNeeded': 'Formal attendance tracking needed',
-    'hr.managerTracked': 'Tracked by manager',
     'hr.formalTracking': 'Formal attendance tracking',
     'hr.occurrences.one': '{count} documented occurrence',
     'hr.occurrences.other': '{count} documented occurrences',
@@ -100,7 +99,6 @@ const HR_STAGES = {
   es: {
     'hr.none': 'Sin acción de asistencia activa',
     'hr.formalActionNeeded': 'Se requiere seguimiento formal de asistencia',
-    'hr.managerTracked': 'Seguimiento del gerente',
     'hr.formalTracking': 'Seguimiento formal de asistencia',
     'hr.occurrences.one': '{count} incidencia documentada',
     'hr.occurrences.other': '{count} incidencias documentadas',

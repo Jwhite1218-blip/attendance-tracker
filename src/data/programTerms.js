@@ -49,9 +49,6 @@ export function attendanceStageTerm(status) {
   if (status.stage === 'formal_action' || status.stage === 'verbal_warning') {
     return { key: 'hr.formalActionNeeded' }
   }
-  if (status.stage === 'monitoring' || status.stage === 'formal_tracking') {
-    return { key: 'hr.managerTracked' }
-  }
   return { key: 'hr.occurrences', count: Number(status.occurrenceCount) || 0 }
 }
 

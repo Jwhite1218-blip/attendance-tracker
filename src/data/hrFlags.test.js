@@ -47,7 +47,7 @@ test('Liz qualifying codes exclude approved and protected leave', () => {
   assert.equal(isQualifyingCode('JUR'), false)
 })
 
-test('the third occurrence is manager-tracked and the fourth needs formal tracking', async () => {
+test('the fourth occurrence is the first that needs anything', async () => {
   const employeeId = 'threshold-test'
   const first = firstWeekday(SCHOOL_YEAR_START, 7, 1)
   const second = firstWeekday(SCHOOL_YEAR_START, 8, 1)
@@ -62,7 +62,10 @@ test('the third occurrence is manager-tracked and the fourth needs formal tracki
 
   let status = getEmployeeAttendanceStatus(employeeId)
   assert.equal(status.occurrenceCount, 3)
-  assert.equal(status.stage, 'monitoring')
+  // No stage of its own below the fourth: the count is the whole story, and
+  // naming one implied a process the app is not part of.
+  assert.equal(status.stage, 'documented')
+  assert.match(getAttendanceStageLabel(status), /3 documented occurrences/)
   assert.equal(isFlagged(employeeId), true)
 
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
@@ -161,7 +164,7 @@ test('the building watch list keeps third occurrences that the main page hides',
 test('no stage label names a disciplinary step', () => {
   const labels = [1, 2, 3, 4, 5, 6, 7, 12].map(occurrenceCount => getAttendanceStageLabel({
     occurrenceCount,
-    stage: occurrenceCount >= 4 ? 'formal_action' : occurrenceCount >= 3 ? 'monitoring' : 'documented',
+    stage: occurrenceCount >= 4 ? 'formal_action' : 'documented',
   }))
   for (const label of labels) {
     for (const forbidden of ['verbal', 'written', 'termination', 'seniority', 'warning', 'discipline']) {
@@ -176,8 +179,10 @@ test('no stage label names a disciplinary step', () => {
 test('stage names written before 2026-10-19 still read correctly', () => {
   assert.equal(getAttendanceStageLabel({ stage: 'verbal_warning', occurrenceCount: 4 }),
     'Formal attendance tracking needed')
-  assert.equal(getAttendanceStageLabel({ stage: 'formal_tracking', occurrenceCount: 3 }),
-    'Tracked by manager')
+  // The old third-occurrence stage now falls through to its count, which is
+  // what every status below the fourth occurrence says.
+  assert.match(getAttendanceStageLabel({ stage: 'formal_tracking', occurrenceCount: 3 }),
+    /3 documented occurrences/)
 })
 
 test('a count below the first threshold just says how many', () => {
