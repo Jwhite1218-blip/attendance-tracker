@@ -111,14 +111,192 @@ test('an administrator below Liz\'s tier is refused', async () => {
   })
 })
 
-test('anything other than a read is refused', async () => {
+test('PUT and DELETE are not verbs this endpoint has', async () => {
   await withEnv(BASE_ENV, async () => {
     const sessions = createMemoryBlobStore()
     const token = await signedIn(LIZ, sessions)
-    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+    for (const method of ['PUT', 'DELETE']) {
       const response = await handler(request(token, { method }), {}, { sessions })
-      assert.equal(response.status, 405, `${method}`)
+      assert.equal(response.status, 405, method)
     }
+  })
+})
+
+// --- write operations -------------------------------------------------------
+
+function fakeAccessStore(rows = []) {
+  const profiles = [...rows]
+  const store = {
+    profiles,
+    async listProfiles() { return profiles },
+    async findById(id) { return profiles.find(row => row.id === id) || null },
+    async createProfile(input) {
+      const row = {
+        id: `created-${profiles.length + 1}`,
+        pin_encrypted: encryptPin(input.pin),
+        pin_length: input.pin.length,
+        display_name: input.displayName,
+        role: input.role,
+        location_id: input.locationId,
+        capabilities: input.capabilities,
+        disabled_at: null,
+      }
+      profiles.push(row)
+      return row
+    },
+    async updateProfile(id, patch) {
+      const row = profiles.find(item => item.id === id)
+      if (!row) return null
+      if (patch.pin !== undefined) {
+        row.pin_encrypted = encryptPin(patch.pin)
+        row.pin_length = patch.pin.length
+      }
+      if (patch.displayName !== undefined) row.display_name = patch.displayName
+      if (patch.role !== undefined) row.role = patch.role
+      if (patch.locationId !== undefined) row.location_id = patch.locationId
+      if (patch.capabilities !== undefined) row.capabilities = patch.capabilities
+      if (patch.disabledAt !== undefined) row.disabled_at = patch.disabledAt
+      return row
+    },
+  }
+  return store
+}
+
+function adminRow(overrides = {}) {
+  return {
+    id: 'liz-id',
+    pin_encrypted: encryptPin('1111'),
+    pin_length: 4,
+    display_name: 'Elizabeth Schmitt',
+    role: 'admin',
+    location_id: null,
+    capabilities: { canManageRoster: true, canManageBlackouts: true },
+    disabled_at: null,
+    ...overrides,
+  }
+}
+
+function send(token, method, body) {
+  return new Request('https://allstartracker.netlify.app/api/access-admin', {
+    method,
+    headers: { cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+}
+
+test('a new school login is created and reads back with its code', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const access = fakeAccessStore([adminRow()])
+    const response = await handler(
+      send(token, 'POST', {
+        pin: '4321',
+        displayName: 'Sunny Heights Manager',
+        role: 'school',
+        locationId: 'SunnyHt ES',
+        capabilities: { canEditAttendance: true },
+      }),
+      {}, { sessions, access }
+    )
+    assert.equal(response.status, 201)
+    const body = await response.json()
+    assert.equal(body.profile.pin, '4321', 'readable straight back, no write-it-down-now')
+    assert.equal(body.profile.locationId, 'SunnyHt ES')
+  })
+})
+
+test('creating refuses a bad code or a school with no building', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const access = fakeAccessStore([adminRow()])
+    for (const [body, pattern] of [
+      [{ pin: '12', displayName: 'X', role: 'school', locationId: 'CrestonMS' }, /4 to 8 digits/],
+      [{ pin: '4321', displayName: 'X', role: 'school' }, /which school/],
+      [{ pin: '4321', displayName: '  ', role: 'admin' }, /a name/],
+    ]) {
+      const response = await handler(send(token, 'POST', body), {}, { sessions, access })
+      assert.equal(response.status, 409, JSON.stringify(body))
+      assert.match((await response.json()).error, pattern)
+    }
+    assert.equal(access.profiles.length, 1, 'nothing was written')
+  })
+})
+
+test('a code can be changed, and comes back readable', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const school = adminRow({
+      id: 'school-id', display_name: 'Creston Manager', role: 'school',
+      location_id: 'CrestonMS', capabilities: { canEditAttendance: true },
+    })
+    const access = fakeAccessStore([adminRow(), school])
+    const response = await handler(send(token, 'PATCH', { id: 'school-id', pin: '5566' }), {}, { sessions, access })
+    assert.equal(response.status, 200)
+    assert.equal((await response.json()).profile.pin, '5566')
+  })
+})
+
+// The guardrails, reached through HTTP rather than called directly, because
+// the page is not the thing that has to hold.
+test('you cannot disable your own login through the endpoint', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const access = fakeAccessStore([adminRow(), adminRow({ id: 'other', display_name: 'Marlene & Reese' })])
+    const response = await handler(send(token, 'PATCH', { id: 'liz-id', disabled: true }), {}, { sessions, access })
+    assert.equal(response.status, 409)
+    assert.match((await response.json()).error, /your own login/)
+    assert.equal(access.profiles[0].disabled_at, null)
+  })
+})
+
+test('the last full administrator cannot be stood down through the endpoint', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn({ ...LIZ, displayName: 'Someone Else' }, sessions)
+    const access = fakeAccessStore([adminRow()])
+    const response = await handler(send(token, 'PATCH', { id: 'liz-id', disabled: true }), {}, { sessions, access })
+    assert.equal(response.status, 409)
+    assert.match((await response.json()).error, /last full administrator/)
+  })
+})
+
+test('a manager cannot create a login even by calling the endpoint directly', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(MANAGER, sessions)
+    const access = fakeAccessStore([adminRow()])
+    const response = await handler(
+      send(token, 'POST', { pin: '4321', displayName: 'Backdoor', role: 'admin' }),
+      {}, { sessions, access }
+    )
+    assert.equal(response.status, 403)
+    assert.equal(access.profiles.length, 1)
+  })
+})
+
+test('an update with nothing in it is refused rather than silently succeeding', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const access = fakeAccessStore([adminRow()])
+    const response = await handler(send(token, 'PATCH', { id: 'liz-id' }), {}, { sessions, access })
+    assert.equal(response.status, 409)
+    assert.match((await response.json()).error, /Nothing to change/)
+  })
+})
+
+test('an update to a login that does not exist is refused', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const access = fakeAccessStore([adminRow()])
+    const response = await handler(send(token, 'PATCH', { id: 'ghost', pin: '4321' }), {}, { sessions, access })
+    assert.equal(response.status, 409)
+    assert.match((await response.json()).error, /no longer exists/)
   })
 })
 

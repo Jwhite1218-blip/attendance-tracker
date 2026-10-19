@@ -1,0 +1,114 @@
+// The rules that stop somebody locking the district out of its own tracker.
+//
+// Pure functions, separate from the endpoint, because each of these is a
+// real way to break sign-in for nineteen people and they deserve tests that
+// do not involve HTTP. The page enforces the same rules for a decent
+// experience; these are the ones that actually hold.
+import { LOCATIONS } from '../../../src/data/locations.js'
+import { hasLizAdminAccess } from '../../../src/data/futureTools.js'
+
+export class GuardError extends Error {}
+
+function refuse(message) {
+  throw new GuardError(message)
+}
+
+const CAPABILITY_FLAGS = [
+  'canEditAttendance',
+  'canEditRecognition',
+  'canManageRecognitionAwards',
+  'canManageRoster',
+  'canManageBlackouts',
+  'recognitionOnly',
+]
+
+const LOCATION_IDS = new Set(LOCATIONS.map(location => location.id))
+
+export function normalizeCapabilities(input) {
+  const capabilities = {}
+  for (const flag of CAPABILITY_FLAGS) {
+    if (typeof input?.[flag] === 'boolean') capabilities[flag] = input[flag]
+  }
+  return capabilities
+}
+
+export function assertValidPin(pin) {
+  const value = String(pin ?? '').trim()
+  if (!/^\d{4,8}$/.test(value)) refuse('A code must be 4 to 8 digits.')
+  return value
+}
+
+export function assertValidProfileInput({ displayName, role, locationId }) {
+  const name = String(displayName || '').trim()
+  if (!name) refuse('Give this login a name.')
+  if (name.length > 80) refuse('That name is too long.')
+  if (role !== 'admin' && role !== 'school') refuse('Choose whether this is a school or district login.')
+  // A school login with no building is refused by normalizeAccessProfile at
+  // sign-in, so it would be a credential that exists and cannot be used.
+  if (role === 'school') {
+    if (!locationId || !LOCATION_IDS.has(locationId)) refuse('Choose which school this login is for.')
+  }
+  return { displayName: name, role, locationId: role === 'school' ? locationId : null }
+}
+
+// Nobody can hand out more than they hold. Today everyone who reaches this
+// endpoint is Liz-tier so it never bites, but it is the rule that keeps a
+// future lower tier from promoting itself.
+export function assertNoPrivilegeEscalation(actorSession, capabilities) {
+  for (const [flag, value] of Object.entries(capabilities)) {
+    if (value !== true) continue
+    if (flag === 'recognitionOnly') continue
+    if (actorSession?.[flag] !== true) refuse(`You cannot grant ${flag} because you do not have it.`)
+  }
+}
+
+// Matching on id when the session has one, and on name when it does not.
+// A session created before migration carries a credential fingerprint
+// rather than a profileId, and "do not let somebody disable themselves"
+// should not quietly stop applying for those.
+export function isOwnProfile(actorSession, profile) {
+  if (!profile) return false
+  if (actorSession?.profileId && actorSession.profileId === profile.id) return true
+  const sessionName = String(actorSession?.displayName || '').trim().toLowerCase()
+  const profileName = String(profile.display_name || '').trim().toLowerCase()
+  return Boolean(sessionName) && sessionName === profileName
+}
+
+export function assertNotSelfLockout(actorSession, profile, change) {
+  if (!isOwnProfile(actorSession, profile)) return
+  if (change.disabling) refuse('You cannot disable your own login.')
+  if (change.capabilities) {
+    const losing = ['canManageRoster', 'canManageBlackouts']
+      .filter(flag => profile.capabilities?.[flag] === true && change.capabilities[flag] !== true)
+    if (losing.length) refuse('You cannot remove your own administrator access.')
+  }
+}
+
+function isLizTier(profile) {
+  if (profile.disabled_at) return false
+  return hasLizAdminAccess({
+    role: profile.role,
+    canManageRoster: profile.capabilities?.canManageRoster,
+    canManageBlackouts: profile.capabilities?.canManageBlackouts,
+  })
+}
+
+// The one that matters most. Removing the last full administrator leaves a
+// district that cannot manage its own access, and the only way back is a
+// developer writing SQL.
+export function assertNotLastAdministrator(allProfiles, profile, change) {
+  if (!isLizTier(profile)) return
+  const stillAdminAfter = change.disabling
+    ? false
+    : hasLizAdminAccess({
+      role: change.role ?? profile.role,
+      canManageRoster: (change.capabilities ?? profile.capabilities)?.canManageRoster,
+      canManageBlackouts: (change.capabilities ?? profile.capabilities)?.canManageBlackouts,
+    })
+  if (stillAdminAfter) return
+
+  const others = (allProfiles || []).filter(other => other.id !== profile.id && isLizTier(other))
+  if (!others.length) {
+    refuse('This is the last full administrator. Give somebody else that access first.')
+  }
+}

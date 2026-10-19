@@ -15,6 +15,9 @@ import { encryptPin, hasPinKey, pinLengthOf, pinLookup } from './pin-crypto.mjs'
 
 const DEFAULT_DISTRICT_SLUG = 'warren-township'
 
+// A clash with an existing code, as opposed to anything actually broken.
+export class ConflictError extends Error {}
+
 const PROFILE_COLUMNS = [
   'id', 'pin_encrypted', 'pin_lookup', 'pin_length', 'display_name', 'role',
   'location_id', 'employee_id', 'capabilities', 'source', 'disabled_at',
@@ -194,6 +197,93 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
         logEvent('access-profile-migration-failed', { reason: String(error?.message || error) })
         return null
       }
+    },
+
+    async findById(profileId) {
+      const id = await districtId()
+      const query = new URLSearchParams({
+        district_id: `eq.${id}`,
+        id: `eq.${profileId}`,
+        select: PROFILE_COLUMNS,
+        limit: '1',
+      })
+      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
+      if (!response.ok) throw new Error(`Supabase access profile read failed with status ${response.status}.`)
+      const rows = await response.json()
+      return (Array.isArray(rows) ? rows[0] : null) || null
+    },
+
+    async createProfile({ pin, displayName, role, locationId, employeeId, capabilities }, { actor = '' } = {}) {
+      const id = await districtId()
+      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles`, {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+        body: JSON.stringify({
+          district_id: id,
+          pin_encrypted: encryptPin(pin),
+          pin_lookup: pinLookup(pin),
+          pin_length: pinLengthOf(pin),
+          display_name: displayName,
+          role,
+          location_id: role === 'school' ? locationId : null,
+          employee_id: employeeId || null,
+          capabilities: capabilities || {},
+          source: 'manual',
+          last_used_at: null,
+          created_by: actor,
+          updated_by: actor,
+        }),
+      })
+      // 23505 is the unique violation on (district_id, pin_lookup). Surfaced
+      // as a plain conflict so the caller can say "that code is taken"
+      // without saying whose it is.
+      if (response.status === 409) throw new ConflictError('That code is already in use.')
+      if (!response.ok) throw new Error(`Supabase access profile create failed with status ${response.status}.`)
+      const rows = await response.json()
+      const created = Array.isArray(rows) ? rows[0] : null
+      if (created) await this.recordChange({ profileId: created.id, event: 'created', actor })
+      return created
+    },
+
+    // patch carries only what changed. A new PIN arrives as `pin` and is
+    // turned into all three columns here, so no caller ever has to remember
+    // that a PIN is stored three ways.
+    async updateProfile(profileId, patch, { actor = '', event = 'updated' } = {}) {
+      const id = await districtId()
+      const body = { updated_at: new Date().toISOString(), updated_by: actor }
+
+      if (patch.pin !== undefined) {
+        body.pin_encrypted = encryptPin(patch.pin)
+        body.pin_lookup = pinLookup(patch.pin)
+        body.pin_length = pinLengthOf(patch.pin)
+      }
+      if (patch.displayName !== undefined) body.display_name = patch.displayName
+      if (patch.role !== undefined) body.role = patch.role
+      if (patch.locationId !== undefined) body.location_id = patch.locationId
+      if (patch.capabilities !== undefined) body.capabilities = patch.capabilities
+      if (patch.disabledAt !== undefined) body.disabled_at = patch.disabledAt
+
+      const query = new URLSearchParams({ district_id: `eq.${id}`, id: `eq.${profileId}` })
+      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, {
+        method: 'PATCH',
+        headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
+        body: JSON.stringify(body),
+      })
+      if (response.status === 409) throw new ConflictError('That code is already in use.')
+      if (!response.ok) throw new Error(`Supabase access profile update failed with status ${response.status}.`)
+      const rows = await response.json()
+      const updated = Array.isArray(rows) ? rows[0] : null
+      if (updated) {
+        await this.recordChange({
+          profileId,
+          event,
+          // Which fields moved, never their values. A change log that
+          // records PINs is a list of PINs.
+          detail: { fields: Object.keys(patch) },
+          actor,
+        })
+      }
+      return updated
     },
 
     async recordChange({ profileId = null, event, detail = {}, actor = '' }) {

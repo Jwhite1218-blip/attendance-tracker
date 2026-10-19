@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
-import { LOCATION_MAP } from '../data/locations.js'
+import { LOCATION_MAP, LOCATIONS } from '../data/locations.js'
 
 const CAPABILITY_LABELS = [
   ['canManageRoster', 'Roster'],
@@ -45,6 +45,10 @@ export default function AccessAdmin() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [revealed, setRevealed] = useState(() => new Set())
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [adding, setAdding] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -63,6 +67,33 @@ export default function AccessAdmin() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // One path for every write, so the refusal from the server is what the
+  // page shows. The guardrails live there; this just reports them.
+  const save = useCallback(async (method, payload, successText) => {
+    setBusy(true)
+    setNotice(null)
+    try {
+      const response = await fetch('/api/access-admin', {
+        method,
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || `Request failed (${response.status}).`)
+      setNotice({ tone: 'ok', text: successText })
+      setEditing(null)
+      setAdding(false)
+      await load()
+      return true
+    } catch (saveError) {
+      setNotice({ tone: 'bad', text: saveError.message })
+      return false
+    } finally {
+      setBusy(false)
+    }
+  }, [load])
 
   const sorted = useMemo(() => [...(profiles || [])].sort((left, right) => {
     // Disabled last, then administrators, then schools by name — the order
@@ -101,20 +132,46 @@ export default function AccessAdmin() {
               Every sign-in code for the district, what it reaches, and when it was last used.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={load}
-            disabled={loading}
-            className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-          >
-            {loading ? 'Loading…' : 'Refresh'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={load}
+              disabled={loading || busy}
+              className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+            >
+              {loading ? 'Loading…' : 'Refresh'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAdding(true); setEditing(null); setNotice(null) }}
+              disabled={busy}
+              className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-40"
+            >
+              Add a login
+            </button>
+          </div>
         </div>
-        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-          Read-only for now. Changing a PIN, editing what it reaches, adding and disabling are the next
-          step — this list exists first so you can check the nineteen codes that moved across by themselves.
+        <p className="mt-3 text-xs text-gray-500">
+          Changes take effect immediately. A code you change stops working at once, so tell whoever uses it
+          before you save.
         </p>
       </header>
+
+      {notice && (
+        <p className={`rounded-xl px-4 py-3 text-sm font-semibold ${
+          notice.tone === 'ok' ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-800'
+        }`}>
+          {notice.text}
+        </p>
+      )}
+
+      {adding && (
+        <ProfileForm
+          busy={busy}
+          onCancel={() => setAdding(false)}
+          onSubmit={values => save('POST', values, `${values.displayName} can now sign in.`)}
+        />
+      )}
 
       {error && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4">
@@ -181,8 +238,32 @@ export default function AccessAdmin() {
                         {revealed.has(profile.id) ? 'Hide' : 'Show'}
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditing(editing === profile.id ? null : profile.id); setNotice(null) }}
+                      disabled={busy}
+                      className="rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                    >
+                      {editing === profile.id ? 'Close' : 'Edit'}
+                    </button>
                   </div>
                 </div>
+
+                {editing === profile.id && (
+                  <ProfileForm
+                    key={profile.id}
+                    profile={profile}
+                    busy={busy}
+                    onCancel={() => setEditing(null)}
+                    onSubmit={values => save('PATCH', { id: profile.id, ...values }, `${values.displayName} saved.`)}
+                    onChangePin={pin => save('PATCH', { id: profile.id, pin }, 'Code changed. The old one stopped working.')}
+                    onToggleDisabled={() => save(
+                      'PATCH',
+                      { id: profile.id, disabled: !profile.disabledAt },
+                      profile.disabledAt ? 'Login turned back on.' : 'Login disabled.'
+                    )}
+                  />
+                )}
 
                 {!profile.pinReadable && (
                   <p className="mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-800">
@@ -202,5 +283,176 @@ export default function AccessAdmin() {
         </p>
       )}
     </div>
+  )
+}
+
+// One form for adding and for editing. Editing exposes two things a new
+// login does not need: changing the code, and turning the login off. Both
+// are separate buttons rather than fields, because they take effect on
+// their own and should not be bundled into "save".
+function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, onToggleDisabled }) {
+  const editing = Boolean(profile)
+  const [form, setForm] = useState(() => ({
+    displayName: profile?.displayName || '',
+    role: profile?.role || 'school',
+    locationId: profile?.locationId || '',
+    pin: '',
+    capabilities: {
+      canEditAttendance: profile?.capabilities?.canEditAttendance ?? true,
+      canEditRecognition: profile?.capabilities?.canEditRecognition ?? true,
+      canManageRoster: profile?.capabilities?.canManageRoster ?? false,
+      canManageBlackouts: profile?.capabilities?.canManageBlackouts ?? false,
+      canManageRecognitionAwards: profile?.capabilities?.canManageRecognitionAwards ?? false,
+    },
+  }))
+  const [newPin, setNewPin] = useState('')
+
+  const update = (field, value) => setForm(current => ({ ...current, [field]: value }))
+  const toggle = flag => setForm(current => ({
+    ...current,
+    capabilities: { ...current.capabilities, [flag]: !current.capabilities[flag] },
+  }))
+
+  const submit = event => {
+    event.preventDefault()
+    const values = {
+      displayName: form.displayName.trim(),
+      role: form.role,
+      locationId: form.role === 'school' ? form.locationId : null,
+      capabilities: form.capabilities,
+    }
+    if (!editing) values.pin = form.pin.trim()
+    onSubmit(values)
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+      <p className="text-xs font-bold uppercase tracking-wide text-brand-700">
+        {editing ? 'Edit login' : 'New login'}
+      </p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs font-semibold text-gray-700">
+          Name
+          <input
+            value={form.displayName}
+            onChange={event => update('displayName', event.target.value)}
+            placeholder="Creston Manager"
+            className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal"
+          />
+        </label>
+
+        <label className="block text-xs font-semibold text-gray-700">
+          Type
+          <select
+            value={form.role}
+            onChange={event => update('role', event.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal"
+          >
+            <option value="school">One school</option>
+            <option value="admin">District — every school</option>
+          </select>
+        </label>
+
+        {form.role === 'school' && (
+          <label className="block text-xs font-semibold text-gray-700">
+            School
+            <select
+              value={form.locationId}
+              onChange={event => update('locationId', event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal"
+            >
+              <option value="">Select…</option>
+              {[...LOCATIONS].sort((a, b) => a.sort - b.sort).map(location => (
+                <option key={location.id} value={location.id}>{location.name}</option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        {!editing && (
+          <label className="block text-xs font-semibold text-gray-700">
+            Code
+            <input
+              value={form.pin}
+              onChange={event => update('pin', event.target.value.replace(/\D/g, '').slice(0, 8))}
+              inputMode="numeric"
+              placeholder="4 digits"
+              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm tracking-widest"
+            />
+          </label>
+        )}
+      </div>
+
+      <fieldset className="mt-3">
+        <legend className="text-xs font-semibold text-gray-700">Can do</legend>
+        <div className="mt-1.5 flex flex-wrap gap-2">
+          {[
+            ['canEditAttendance', 'Mark attendance'],
+            ['canEditRecognition', 'Record recognition'],
+            ['canManageRoster', 'Manage roster'],
+            ['canManageBlackouts', 'Blackout dates'],
+            ['canManageRecognitionAwards', 'Run award draws'],
+          ].map(([flag, label]) => (
+            <label key={flag} className={`cursor-pointer rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+              form.capabilities[flag]
+                ? 'border-brand-300 bg-brand-100 text-brand-800'
+                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+            }`}>
+              <input type="checkbox" className="sr-only" checked={form.capabilities[flag]} onChange={() => toggle(flag)} />
+              {label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-brand-600 px-3 py-2 text-xs font-bold text-white hover:bg-brand-700 disabled:opacity-40"
+        >
+          {editing ? 'Save changes' : 'Create login'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+      </div>
+
+      {editing && (
+        <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-brand-200 pt-4">
+          <label className="text-xs font-semibold text-gray-700">
+            New code
+            <input
+              value={newPin}
+              onChange={event => setNewPin(event.target.value.replace(/\D/g, '').slice(0, 8))}
+              inputMode="numeric"
+              placeholder="4 digits"
+              className="mt-1 block w-28 rounded-lg border border-gray-200 px-3 py-2 font-mono text-sm tracking-widest"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={busy || newPin.length < 4}
+            onClick={() => onChangePin(newPin)}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            Change code
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onToggleDisabled}
+            className="ml-auto rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            {profile.disabledAt ? 'Turn back on' : 'Disable this login'}
+          </button>
+        </div>
+      )}
+    </form>
   )
 }

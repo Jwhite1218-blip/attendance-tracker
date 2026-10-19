@@ -12,7 +12,16 @@ import { randomUUID } from 'node:crypto'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
-import { getAccessStore, tableAuthEnabled } from './_shared/access-store.mjs'
+import { ConflictError, getAccessStore, tableAuthEnabled } from './_shared/access-store.mjs'
+import {
+  GuardError,
+  assertNoPrivilegeEscalation,
+  assertNotLastAdministrator,
+  assertNotSelfLockout,
+  assertValidPin,
+  assertValidProfileInput,
+  normalizeCapabilities,
+} from './_shared/access-guards.mjs'
 import { decryptPin } from './_shared/pin-crypto.mjs'
 
 // A row with an unreadable PIN is still a real credential and must still be
@@ -47,39 +56,134 @@ export function publicProfile(row) {
   }
 }
 
-async function handleList(request, stores) {
+// Every verb goes through this, so there is no path to the store that
+// skips the tier check. Returns either a refusal or what to work with.
+async function authorize(request, stores) {
   const session = stores.sessions
     ? await validatedSessionFromRequest(request, Date.now(), stores.sessions)
     : await validatedSessionFromRequest(request)
-  if (!session) return jsonResponse({ error: 'Sign in to continue.' }, 401)
+  if (!session) return { refusal: jsonResponse({ error: 'Sign in to continue.' }, 401) }
 
-  // The same bar the page enforces, enforced again here. The page is a
-  // convenience; this is the boundary.
+  // The page hides itself from anyone below this tier, but the page is a
+  // convenience. This is the boundary.
   if (!hasLizAdminAccess(session)) {
     console.error(JSON.stringify({
       event: 'access-admin-refused',
       role: session.role,
       displayName: session.displayName,
     }))
-    return jsonResponse({ error: 'Access management is limited to the district administrator.' }, 403)
+    return { refusal: jsonResponse({ error: 'Access management is limited to the district administrator.' }, 403) }
   }
 
   if (!tableAuthEnabled()) {
-    return jsonResponse({
-      error: 'Table-backed access is not switched on for this environment.',
-      profiles: [],
-    }, 409)
+    return {
+      refusal: jsonResponse({
+        error: 'Table-backed access is not switched on for this environment.',
+        profiles: [],
+      }, 409),
+    }
   }
 
+  return { session, store: stores.access || getAccessStore() }
+}
+
+// A guard refusal is the caller's mistake and says exactly what was wrong.
+// Anything else is ours, and says nothing that would help somebody probing.
+function errorResponse(error, event) {
+  if (error instanceof GuardError || error instanceof ConflictError) {
+    return jsonResponse({ error: error.message }, 409)
+  }
+  console.error(JSON.stringify({ event, reason: String(error?.message || error) }))
+  return jsonResponse({ error: 'That change could not be saved.' }, 502)
+}
+
+async function handleList(request, stores) {
+  const { refusal, store } = await authorize(request, stores)
+  if (refusal) return refusal
   try {
-    const rows = await (stores.access || getAccessStore()).listProfiles()
+    const rows = await store.listProfiles()
     return jsonResponse({ profiles: rows.map(publicProfile) })
   } catch (error) {
-    console.error(JSON.stringify({
-      event: 'access-admin-list-failed',
-      reason: String(error?.message || error),
-    }))
-    return jsonResponse({ error: 'Could not load access profiles.' }, 502)
+    return errorResponse(error, 'access-admin-list-failed')
+  }
+}
+
+async function handleCreate(request, stores) {
+  const { refusal, session, store } = await authorize(request, stores)
+  if (refusal) return refusal
+
+  try {
+    const body = await request.json().catch(() => ({}))
+    const pin = assertValidPin(body.pin)
+    const { displayName, role, locationId } = assertValidProfileInput(body)
+    const capabilities = normalizeCapabilities(body.capabilities)
+    assertNoPrivilegeEscalation(session, capabilities)
+
+    const created = await store.createProfile(
+      { pin, displayName, role, locationId, employeeId: body.employeeId, capabilities },
+      { actor: session.displayName }
+    )
+    return jsonResponse({ profile: publicProfile(created) }, 201)
+  } catch (error) {
+    return errorResponse(error, 'access-admin-create-failed')
+  }
+}
+
+async function handleUpdate(request, stores) {
+  const { refusal, session, store } = await authorize(request, stores)
+  if (refusal) return refusal
+
+  try {
+    const body = await request.json().catch(() => ({}))
+    const profileId = String(body.id || '').trim()
+    if (!profileId) throw new GuardError('Which login is being changed?')
+
+    const [profile, allProfiles] = await Promise.all([
+      store.findById(profileId),
+      store.listProfiles(),
+    ])
+    if (!profile) throw new GuardError('That login no longer exists.')
+
+    const patch = {}
+    let event = 'updated'
+
+    if (body.pin !== undefined) {
+      patch.pin = assertValidPin(body.pin)
+      event = 'pin-changed'
+    }
+    if (body.displayName !== undefined || body.role !== undefined || body.locationId !== undefined) {
+      const next = assertValidProfileInput({
+        displayName: body.displayName ?? profile.display_name,
+        role: body.role ?? profile.role,
+        locationId: body.locationId ?? profile.location_id,
+      })
+      patch.displayName = next.displayName
+      patch.role = next.role
+      patch.locationId = next.locationId
+    }
+    if (body.capabilities !== undefined) {
+      patch.capabilities = normalizeCapabilities(body.capabilities)
+      assertNoPrivilegeEscalation(session, patch.capabilities)
+    }
+    if (body.disabled !== undefined) {
+      patch.disabledAt = body.disabled ? new Date().toISOString() : null
+      event = body.disabled ? 'disabled' : 'enabled'
+    }
+    if (!Object.keys(patch).length) throw new GuardError('Nothing to change.')
+
+    const change = {
+      disabling: body.disabled === true,
+      capabilities: patch.capabilities,
+      role: patch.role,
+    }
+    assertNotSelfLockout(session, profile, change)
+    assertNotLastAdministrator(allProfiles, profile, change)
+
+    const updated = await store.updateProfile(profileId, patch, { actor: session.displayName, event })
+    if (!updated) throw new GuardError('That login no longer exists.')
+    return jsonResponse({ profile: publicProfile(updated) })
+  } catch (error) {
+    return errorResponse(error, 'access-admin-update-failed')
   }
 }
 
@@ -90,7 +194,14 @@ export default async function handler(request, context = {}, stores = {}) {
 
   const response = request.method === 'GET'
     ? await handleList(request, stores)
-    : jsonResponse({ error: 'Method not allowed.' }, 405)
+    : request.method === 'POST'
+      ? await handleCreate(request, stores)
+      : request.method === 'PATCH'
+        ? await handleUpdate(request, stores)
+        // No hard delete. A login that is no longer wanted is disabled,
+        // which is reversible and keeps its history; deleting one throws
+        // away the record of what it was able to reach.
+        : jsonResponse({ error: 'Method not allowed.' }, 405)
 
   // Deliberately logs that the list was read and by whom, but never what it
   // contained. This endpoint returns every PIN in the district.
