@@ -245,9 +245,24 @@ function filterEntriesForSession(entries, session) {
 
 function rosterForSession(entries, session) {
   if (session.role === 'admin') return employees.map(employee => publicEmployee(employee, session))
+
+  // A building session sees its own staff, plus the manager pool from every
+  // other building — and nothing else. Liz, 2026-10-19: Worker Leads and
+  // Managers should be able to send each other a Warren Star Shout-Out, which
+  // her own programme document already describes.
+  //
+  // This is the first time a school session receives anybody outside its own
+  // roster, so the widening is kept as narrow as it can be: eighteen people,
+  // through the same publicEmployee allowlist as everyone else, and only
+  // because a Shout-Out is the one recognition that earns no star, feeds no
+  // drawing and touches no discipline record.
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
+  const managerIds = managerGradeIds(entries)
   return employees
-    .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+    .filter(employee => {
+      const key = employeeKey(employee)
+      return allowedEmployeeIds.has(key) || managerIds.has(key)
+    })
     .map(employee => publicEmployee(employee, session))
 }
 
@@ -300,6 +315,13 @@ function recognitionMutationForSession(mutation, session, allowedEmployeeIds, ma
           if (recognition?.type === 'ace-buck') {
             if (session.role !== 'admin') return false
             if (managerIds && !managerIds.has(String(recognition?.employeeId))) return false
+            return true
+          }
+          // Peer recognition between buildings, and only this one type.
+          // A Shout-Out earns nothing and decides nothing, which is what
+          // makes it safe to let out of a building; a Daily Star would have
+          // fed another school's monthly drawing.
+          if (recognition?.type === 'star-shout-out' && managerIds?.has(String(recognition?.employeeId))) {
             return true
           }
           return !scopedToSchool || allowedEmployeeIds.has(String(recognition?.employeeId))

@@ -283,3 +283,31 @@ test('school managers can only write attendance for employees in their school', 
   assert.equal(canWriteStateKey(schoolManager, 'attendance-blackout-dates', allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, 'employee-location-overrides', allowedEmployeeIds), false)
 })
+
+// Liz, 2026-10-19: Worker Leads should be able to send each other a Warren
+// Star Shout-Out across buildings. Her own programme document already says
+// "anyone can give one, to employees, managers or teams"; this is the
+// narrowest version of that — manager to manager only.
+//
+// A Shout-Out is the one recognition safe to let out of a building: it earns
+// no star, feeds no drawing, and touches no discipline record. These tests
+// exist to make sure the widening stays exactly that wide.
+test('the manager pool is the only thing that crosses a building boundary', async () => {
+  const { MANAGER_GRADE_POSITIONS } = await import('../../../src/data/recognitionStore.js')
+  const employees = (await import('../../../src/data/employees.json', { with: { type: 'json' } })).default
+
+  const managers = employees.filter(employee =>
+    MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+
+  // Eighteen people, and the widening is defined by position rather than by
+  // a hand-maintained list, so adding a Lead to the roster includes them
+  // automatically and demoting one removes them.
+  assert.equal(managers.length, 18)
+  assert.ok(managers.every(employee => employee.position && employee.location))
+
+  // Nobody else qualifies, which is what keeps 128 other staff invisible
+  // outside their own building.
+  const others = employees.filter(employee =>
+    !MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+  assert.equal(others.length, employees.length - 18)
+})

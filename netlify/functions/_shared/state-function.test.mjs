@@ -6,6 +6,7 @@ import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
 import { handleStateRequest, handleMutate } from '../state.mjs'
 import { validateInactiveDetails } from '../../../src/data/employmentStatus.js'
+import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
 test('inactive details require both real dates and a nonblank reason', () => {
   const complete = { termination_date: '2026-09-18', last_day_worked: '2026-09-17', inactive_reason: 'Resigned' }
@@ -179,17 +180,31 @@ test('school state filters roster and location overrides to that school', async 
 
     assert.equal(response.status, 200)
     assert.ok(body.roster.length > 0)
-    assert.ok(body.roster.every(employee => employee.location === schoolEmployee.location))
+    // A building also receives the manager pool from 2026-10-19, so that
+    // Worker Leads can send each other a Warren Star Shout-Out. Anyone from
+    // another building in this payload must be manager-grade.
+    assert.ok(body.roster.every(employee => (
+      employee.location === schoolEmployee.location
+      || MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim())
+    )))
     assert.equal(Object.hasOwn(body.entries['employee-location-overrides'], schoolId(outsider)), false)
     assert.deepEqual(body.entries['attendance-blackout-dates'], [
       { date: '2026-09-07', label: 'Labor Day' },
     ])
-    assert.equal(body.roster[0].birthdate, schoolEmployee.birthdate || '')
-    assert.equal(body.roster[0].hire_date, schoolEmployee.hire_date || '')
-    assert.equal(body.roster[0].service_date, schoolEmployee.service_date || '')
-    assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
-    assert.equal(Object.hasOwn(body.roster[0], 'pay_amount'), false)
-    assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
+    // Looked up rather than taken from index 0: the roster now carries the
+    // manager pool as well, so position in the array means nothing.
+    const rosterRow = body.roster.find(row => schoolId(row) === schoolId(schoolEmployee))
+    assert.ok(rosterRow, 'the school employee is in their own roster')
+    assert.equal(rosterRow.birthdate, schoolEmployee.birthdate || '')
+    assert.equal(rosterRow.hire_date, schoolEmployee.hire_date || '')
+    assert.equal(rosterRow.service_date, schoolEmployee.service_date || '')
+    // The allowlist still holds for every row, including the managers that
+    // are new to this payload.
+    for (const row of body.roster) {
+      assert.equal(Object.hasOwn(row, 'weekly_hours'), false)
+      assert.equal(Object.hasOwn(row, 'pay_amount'), false)
+      assert.equal(Object.hasOwn(row, 't_shirt_size'), false)
+    }
     assert.equal(body.entries['employee-record-overrides'][schoolId(schoolEmployee)].notes, 'School-visible note')
     // School managers can read their own building's recognition board, but not
     // another building's. Writing recognition stays refused for them entirely

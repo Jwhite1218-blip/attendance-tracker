@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { LOCATIONS } from '../../../src/data/locations.js'
+import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
@@ -332,11 +333,28 @@ test('all 15 building sessions receive only their roster and no recognition reco
       }, sessions)
       const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
       const body = await response.json()
-      const expectedRosterCount = employees.filter(employee => employee.location === school.id).length
+      // Since 2026-10-19 a building also receives the manager pool, so that
+      // Worker Leads can send each other a Warren Star Shout-Out. Asserting
+      // the exact membership rather than a count, because the point of this
+      // test is that NOBODY ELSE gets through.
+      const own = employees.filter(employee => employee.location === school.id)
+      const managers = employees.filter(employee => MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+      const expectedIds = new Set([...own, ...managers].map(employee => String(employee.kronos_id || employee.id)))
 
       assert.equal(response.status, 200)
-      assert.equal(body.roster.length, expectedRosterCount, `${school.name} roster count`)
-      assert.ok(body.roster.every(employee => employee.location === school.id))
+      assert.equal(body.roster.length, expectedIds.size, `${school.name} roster count`)
+      assert.ok(
+        body.roster.every(employee => expectedIds.has(String(employee.kronos_id || employee.id))),
+        `${school.name} received somebody who is neither its own staff nor a manager`
+      )
+      // The widening is exactly one pool wide: everyone from outside this
+      // building must be manager-grade.
+      assert.ok(
+        body.roster
+          .filter(employee => employee.location !== school.id)
+          .every(employee => MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim())),
+        `${school.name} received a non-manager from another building`
+      )
 
       // School managers read their own building's board only. Every other
       // building's stars must stay out of the payload, and writing recognition
@@ -396,7 +414,12 @@ test('school sessions read only their own building recognition board', async () 
     const body = await response.json()
 
     assert.equal(response.status, 200)
-    assert.ok(body.roster.every(employee => employee.location === targetSchool.id))
+    // Own building, or a manager from another one — see the roster test
+    // above for why that second group is now admitted.
+    assert.ok(body.roster.every(employee => (
+      employee.location === targetSchool.id
+      || MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim())
+    )))
 
     // A school PIN reads its own building's board and nothing more. Recording
     // stars is now theirs (Liz, 2026-09-02), but that does not widen what they
@@ -419,4 +442,83 @@ test('school sessions read only their own building recognition board', async () 
     if (previousCodes === undefined) delete process.env.ATTENDANCE_ACCESS_CODES_JSON
     else process.env.ATTENDANCE_ACCESS_CODES_JSON = previousCodes
   }
+})
+
+// Liz, 2026-10-19: Worker Leads should be able to send each other a Warren
+// Star Shout-Out across buildings. Her programme document already says
+// "anyone can give one, to employees, managers or teams"; this is the
+// narrowest version — manager to manager.
+//
+// The boundary this crosses is the one that has held everywhere else, so the
+// test is about what still does NOT get through.
+test('a manager may shout out a manager elsewhere, but may not star them', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'matrix-test-session-secret-that-is-long-enough'
+
+  const home = SCHOOLS[0]
+  const elsewhere = employees.find(employee =>
+    employee.location !== home.id
+    && MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+  const outsider = employees.find(employee =>
+    employee.location !== home.id
+    && !MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+  assert.ok(elsewhere && outsider, 'the roster has both a manager and a non-manager elsewhere')
+
+  const targetId = String(elsewhere.kronos_id || elsewhere.id)
+  const outsiderId = String(outsider.kronos_id || outsider.id)
+
+  async function attempt(recognition) {
+    const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+    const sessions = createMemoryBlobStore()
+    const base = await authenticatedRequest({
+      role: 'school',
+      locationId: home.id,
+      displayName: `${home.shortName} Manager`,
+      canEditAttendance: true,
+      canEditRecognition: true,
+    }, sessions)
+    const request = new Request('https://example.test/api/state', {
+      method: 'POST',
+      headers: { cookie: base.headers.get('cookie'), 'content-type': 'application/json' },
+      body: JSON.stringify({
+        action: 'mutate',
+        key: 'all-star-recognition-v1',
+        mutation: { type: 'object-patch', set: { [recognition.id]: recognition } },
+      }),
+    })
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    const body = await response.json()
+    return body.value || {}
+  }
+
+  const shoutOut = {
+    ...recognitionFor(elsewhere, 'shout'),
+    id: 'shout-1',
+    type: 'star-shout-out',
+    criteria: ['Showing patience or kindness when helping students'],
+  }
+  const saved = await attempt(shoutOut)
+  assert.ok(saved['shout-1'], 'a Shout-Out for another building\'s manager is accepted')
+  assert.equal(saved['shout-1'].employeeId, targetId)
+
+  // Same recipient, a type that earns a star and feeds a drawing. This one
+  // must still be dropped, or a building could inflate another building's
+  // numbers.
+  const star = { ...recognitionFor(elsewhere, 'star'), id: 'star-1', type: 'star-of-day' }
+  assert.equal(Object.keys(await attempt(star)).length, 0, 'a Daily Star for them is still dropped')
+
+  // And the widening is one pool wide: a cook at another building is not
+  // reachable by any recognition at all.
+  const outsiderShout = {
+    ...recognitionFor(outsider, 'shout2'),
+    id: 'shout-2',
+    type: 'star-shout-out',
+    criteria: ['Showing patience or kindness when helping students'],
+  }
+  const outsiderResult = await attempt(outsiderShout)
+  assert.equal(Object.keys(outsiderResult).length, 0,
+    `a Shout-Out for ${outsiderId} at another building is dropped`)
+
+  if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+  else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
 })
