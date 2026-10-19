@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
-import { MANAGER_GRADE_POSITIONS } from '../../src/data/recognitionStore.js'
+import { DISTRICT_OFFICE_LOCATION, MANAGER_GRADE_POSITIONS } from '../../src/data/recognitionStore.js'
 import { validateEmploymentChanges } from '../../src/data/employmentStatus.js'
 import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
@@ -280,9 +280,35 @@ function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
   return { type: 'object-patch', set, remove }
 }
 
+// Who may RECEIVE an ACE Coach Buck: kitchen managers, which is
+// manager-grade minus the district office. Liz, 2026-10-19 — the programme
+// is for the people running kitchens, not for the office that awards it.
+// Read from the roster on the server, never trusted from the request.
+function aceEligibleIds(entries) {
+  return new Set(
+    [...managerGradeIds(entries)].filter(id => {
+      const employee = rosterEmployeeById(entries, id)
+      return String(employee?.location || '').trim() !== DISTRICT_OFFICE_LOCATION
+    })
+  )
+}
+
+function rosterEmployeeById(entries, id) {
+  const recordOverrides = entries?.[RECORD_OVERRIDES_KEY] || {}
+  const customEmployees = Array.isArray(entries?.[CUSTOM_EMPLOYEES_KEY]) ? entries[CUSTOM_EMPLOYEES_KEY] : []
+  const locationOverrides = entries?.[LOCATION_OVERRIDES_KEY] || {}
+  const employee = [...employees, ...customEmployees].find(row => employeeKey(row) === String(id))
+  if (!employee) return null
+  const key = employeeKey(employee)
+  return {
+    ...employee,
+    location: locationOverrides[key] || recordOverrides[key]?.location || employee.location,
+  }
+}
+
 // Manager-grade personnel ids, read from the roster rather than trusted from
-// the client, so an ACE Buck cannot be awarded to a cook by editing a
-// request.
+// the client. Used for the Shout-Out widening, which DOES include the
+// district office — a Shout-Out may be sent to anybody manager-grade.
 function managerGradeIds(entries) {
   const recordOverrides = entries?.[RECORD_OVERRIDES_KEY] || {}
   const customEmployees = Array.isArray(entries?.[CUSTOM_EMPLOYEES_KEY]) ? entries[CUSTOM_EMPLOYEES_KEY] : []
@@ -297,7 +323,7 @@ function managerGradeIds(entries) {
   )
 }
 
-function recognitionMutationForSession(mutation, session, allowedEmployeeIds, managerIds = null) {
+function recognitionMutationForSession(mutation, session, allowedEmployeeIds, managerIds = null, aceIds = null) {
   if (mutation?.type !== 'object-patch') return mutation
   // A building manager may only recognise their own team. Rows naming anyone
   // else are dropped rather than rejected: the session's own roster is the
@@ -314,7 +340,7 @@ function recognitionMutationForSession(mutation, session, allowedEmployeeIds, ma
           // and nobody may award one to somebody outside the manager pool.
           if (recognition?.type === 'ace-buck') {
             if (session.role !== 'admin') return false
-            if (managerIds && !managerIds.has(String(recognition?.employeeId))) return false
+            if (aceIds && !aceIds.has(String(recognition?.employeeId))) return false
             return true
           }
           // Peer recognition between buildings, and only this one type.
@@ -544,7 +570,14 @@ export async function handleMutate(store, session, body) {
     return jsonResponse({ error: 'Only a district administrator can record Warren Food Services Employee of the Month.' }, 403)
   }
   if (key === RECOGNITION_KEY) {
-    mutation = recognitionMutationForSession(mutation, session, allowedEmployeeIds, managerGradeIds(await loadSchoolRosterEntries(store)))
+    const rosterForRules = await loadSchoolRosterEntries(store)
+    mutation = recognitionMutationForSession(
+      mutation,
+      session,
+      allowedEmployeeIds,
+      managerGradeIds(rosterForRules),
+      aceEligibleIds(rosterForRules)
+    )
   }
   try {
     validateMutation(key, mutation)

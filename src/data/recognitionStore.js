@@ -59,9 +59,9 @@ export const RECOGNITION_TYPES = [
     // roster in recognitionMutationForSession. Peer awarding would have meant
     // widening that, and it does not.
     id: 'ace-buck',
-    label: 'ACE Star Buck',
-    shortLabel: 'ACE Buck',
-    description: 'District recognition for a Worker Lead, Manager or Director. Counts toward ACE Coach milestones.',
+    label: 'ACE Coach Buck',
+    shortLabel: 'Coach Buck',
+    description: 'District recognition for a kitchen manager. Counts toward ACE Coach milestones.',
     earnsStar: true,
     actionLabel: 'Award an ACE Star Buck',
     districtOnly: true,
@@ -540,6 +540,30 @@ export const MANAGER_GRADE_POSITIONS = [
   'Food Service Manager',
   'Food Service Director',
 ]
+
+// The district office, where the Director and the two Food Service Managers
+// sit. Manager-grade, but they do not run a kitchen.
+export const DISTRICT_OFFICE_LOCATION = 'Admin'
+
+// Who an ACE Coach Buck may be awarded to. Liz, 2026-10-19: "only awarded to
+// kitchen managers" — so the district office is excluded even though those
+// three are manager-grade and still appear on the manager leaderboard.
+//
+// Keyed on where somebody works rather than on their job title, because a
+// Food Service Manager posted to a building would be running a kitchen and
+// should be eligible, while the same title at the district office is not.
+export function isKitchenManager(employee) {
+  if (!isManagerGrade(employee)) return false
+  return String(employee?.location || '').trim() !== DISTRICT_OFFICE_LOCATION
+}
+
+export function kitchenManagerIds(employees) {
+  return new Set(
+    (employees || [])
+      .filter(isKitchenManager)
+      .map(employee => String(employee.kronos_id || employee.id))
+  )
+}
 
 export function isManagerGrade(employee) {
   return MANAGER_GRADE_POSITIONS.includes(String(employee?.position || '').trim())

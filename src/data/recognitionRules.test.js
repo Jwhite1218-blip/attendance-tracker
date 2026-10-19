@@ -121,3 +121,39 @@ test('the recipient rule copes with nothing passed to it', () => {
   assert.deepEqual(recognitionRecipients('star-shout-out'), [])
   assert.deepEqual(recognitionRecipients('star-of-day', { scoped: [] }), [])
 })
+
+// Liz, 2026-10-19: "remove any admin member from the list... This program is
+// only awarded to kitchen managers." The district office is manager-grade
+// and stays on the manager leaderboard, but does not collect the currency
+// it hands out.
+test('a Coach Buck reaches kitchen managers and not the district office', () => {
+  const positions = ['Food Service Worker Lead', 'Food Service Manager', 'Food Service Director']
+  assert.equal(aceBuckRecipientAllowed({ position: 'Food Service Worker Lead', location: 'CrestonMS' }, positions), true)
+  assert.equal(aceBuckRecipientAllowed({ position: 'Food Service Director', location: 'Admin' }, positions), false)
+  assert.equal(aceBuckRecipientAllowed({ position: 'Food Service Manager', location: 'Admin' }, positions), false)
+  assert.equal(aceBuckRecipientAllowed({ position: 'Cook', location: 'CrestonMS' }, positions), false)
+  // A Food Service Manager posted to a building IS running a kitchen, which
+  // is why this is keyed on location rather than on job title.
+  assert.equal(aceBuckRecipientAllowed({ position: 'Food Service Manager', location: 'CrestonMS' }, positions), true)
+})
+
+test('the Coach Buck picker drops the district office from both lists', () => {
+  const scoped = [{ id: 'cook' }, { id: 'lead' }]
+  const peers = [{ id: 'peer-lead' }, { id: 'director' }]
+  const isManager = e => ['lead', 'peer-lead', 'director'].includes(e.id)
+  const isAceEligible = e => ['lead', 'peer-lead'].includes(e.id)
+  assert.deepEqual(
+    recognitionRecipients('ace-buck', { scoped, peerManagers: peers, isManager, isAceEligible }).map(e => e.id),
+    ['lead', 'peer-lead'],
+    'the director is manager-grade but not eligible'
+  )
+})
+
+test('without an eligibility test the picker still refuses a cook', () => {
+  const scoped = [{ id: 'cook' }, { id: 'lead' }]
+  const isManager = e => e.id === 'lead'
+  assert.deepEqual(
+    recognitionRecipients('ace-buck', { scoped, isManager }).map(e => e.id),
+    ['lead']
+  )
+})

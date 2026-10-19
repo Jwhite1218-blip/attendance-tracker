@@ -27,6 +27,8 @@ import { downloadWorkbook } from '../lib/exportWorkbook.js'
 import {
   RECOGNITION_TYPE_MAP,
   employeeStarsByLocation,
+  getAceBuckCount,
+  isKitchenManager,
   getAllRecognitions,
   getEmployeeStarCount,
   getNextStarLevel,
@@ -122,6 +124,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
+  // A kitchen manager runs two counts at once: Stars for what they do, Coach
+  // Bucks for how they lead. Shown here so somebody can see their own total
+  // without the district board, which is administrator-only.
+  const coachBuckCount = isKitchenManager(employee)
+    ? getAceBuckCount(recognitionRecords, empKey, recognitionSchoolYear)
+    : null
   // Where the stars were earned, across every year on record rather than just
   // this one: the question Liz asked is about someone who has moved schools,
   // and a transfer in September would otherwise erase the answer each July.
@@ -453,6 +461,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 <p className="text-2xl font-black">{starCount} earned star{starCount === 1 ? '' : 's'}</p>
                 <p className="text-xs font-semibold text-white/60">{recognitionSchoolYear}-{recognitionSchoolYear + 1}</p>
               </div>
+              {coachBuckCount !== null && (
+                <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-200">
+                  <span aria-hidden="true">◆</span>
+                  {coachBuckCount} ACE Coach Buck{coachBuckCount === 1 ? '' : 's'}
+                </p>
+              )}
               <p className="mt-1 text-xs text-amber-100/75">
                 {starLevel ? `${starLevel.symbol} ${starLevel.name}` : 'Building toward Bronze Star'}
                 {nextStarLevel ? ` - ${nextStarLevel.minimum - starCount} more to ${nextStarLevel.name}` : ' - Highest published level'}

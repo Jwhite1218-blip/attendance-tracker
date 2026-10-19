@@ -21,6 +21,7 @@ import {
   buildingRecognitionSummary,
   buildingMonthlyRecipients,
   schoolYearMonthKeys,
+  kitchenManagerIds,
   managerEmployeeIds,
   addRecognition,
   createRecognitionRecord,
@@ -166,6 +167,10 @@ export default function RecognitionProgram() {
   // stored on records, so every star they have already earned counts in
   // their own pool without a single live record being rewritten.
   const managerIds = useMemo(() => managerEmployeeIds(employees), [employees])
+  // Who may receive an ACE Coach Buck: the fifteen running kitchens. The
+  // district office is manager-grade and stays on the manager leaderboard,
+  // but does not collect the currency it hands out.
+  const aceEligibleIds = useMemo(() => kitchenManagerIds(employees), [employees])
   const availableLocations = useMemo(() => {
     const ids = new Set(employees.map(employee => employee.location).filter(Boolean))
     return LOCATIONS.filter(location => ids.has(location.id))
@@ -250,7 +255,7 @@ export default function RecognitionProgram() {
   // page unless the session is an administrator.
   const coachLevels = coachMilestones()
   const aceLeaderboard = employees
-    .filter(employee => managerIds.has(employeeKey(employee)))
+    .filter(employee => aceEligibleIds.has(employeeKey(employee)))
     .map(employee => {
       const count = getAceBuckCount(records, employeeKey(employee), schoolYearStart)
       return {
@@ -691,6 +696,7 @@ export default function RecognitionProgram() {
             employees={scopedEmployees}
             peerManagers={peerManagers}
             managerIds={managerIds}
+            aceEligibleIds={aceEligibleIds}
             canEdit={canEditRecognition}
             isSubmitting={submittingSurface === 'ace'}
             confirmation={confirmations.ace}
@@ -724,6 +730,7 @@ function RecognitionEntryForm({
   employees,
   peerManagers = [],
   managerIds,
+  aceEligibleIds,
   ownLocationId,
   canEdit,
   isSubmitting,
@@ -743,6 +750,7 @@ function RecognitionEntryForm({
   // outside these sets, so offering a name it would discard would be a
   // silent failure rather than a refusal.
   const isManager = employee => managerIds?.has(employeeKey(employee)) === true
+  const isAceEligible = employee => aceEligibleIds?.has(employeeKey(employee)) === true
   const byName = (left, right) => employeeListName(left).localeCompare(employeeListName(right))
 
   // Who each type may actually be given to. The server drops anything
@@ -758,6 +766,7 @@ function RecognitionEntryForm({
     scoped: employees,
     peerManagers,
     isManager,
+    isAceEligible,
   }).sort(byName)
   const recipientLabel = form.type === 'ace-buck'
     ? 'Which leader'
@@ -1361,11 +1370,11 @@ function AceBucksSection({
           >◆</span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Manager program</p>
-            <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Star Bucks</h2>
+            <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Coach Bucks</h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-100/80">
-              The leadership side of the All-Star program. Where employees collect Stars for what they do,
-              managers collect ACE Bucks for how they lead — awarded by the district to Worker Leads,
-              Managers and the Director.
+              The leadership side of the All-Star program. Kitchen managers already earn Stars for what
+              they do; Coach Bucks are for how they lead, awarded by the district office to the fifteen
+              people running kitchens.
             </p>
           </div>
         </div>
@@ -1373,14 +1382,14 @@ function AceBucksSection({
 
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award an ACE Star Buck</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Coach Buck</h3>
           <div className="mt-3">
             <RecognitionEntryForm
               surface="ace"
               form={form}
               compact
-              title="ACE Star Buck"
-              subtitle="District recognition for a Worker Lead, Manager or Director."
+              title="ACE Coach Buck"
+              subtitle="District recognition for a kitchen manager."
               employees={employees}
               peerManagers={peerManagers}
               managerIds={managerIds}
@@ -1405,7 +1414,7 @@ function AceBucksSection({
 
           {leaderboard.length === 0 ? (
             <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center text-sm text-emerald-900">
-              No ACE Star Bucks awarded yet. The first one starts this board.
+              No Coach Bucks awarded yet. The first one starts this board.
             </p>
           ) : (
             <>

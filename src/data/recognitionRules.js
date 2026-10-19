@@ -43,12 +43,14 @@ export function recognitionTypeAllowedForRole(role, type, canManageRecognitionAw
   return type !== 'warren-employee-month' || canManageRecognitionAwards === true
 }
 
-// ACE Bucks only go to manager-grade staff. Awarding one to a cook would put
-// a record in the Leadership Track for somebody who is not in it, and it
-// would count toward coach milestones they cannot hold.
-export function aceBuckRecipientAllowed(employee, managerGradePositions) {
+// ACE Coach Bucks go to kitchen managers only. Awarding one to a cook would
+// put a record in the Leadership Track for somebody who is not in it;
+// awarding one to the district office would hand the programme's own
+// administrators its currency.
+export function aceBuckRecipientAllowed(employee, managerGradePositions, districtOfficeLocation = 'Admin') {
   const position = String(employee?.position || '').trim()
-  return (managerGradePositions || []).includes(position)
+  if (!(managerGradePositions || []).includes(position)) return false
+  return String(employee?.location || '').trim() !== districtOfficeLocation
 }
 
 export function quarterWindowFor(dateValue = new Date()) {
@@ -75,8 +77,20 @@ export function quarterWindowFor(dateValue = new Date()) {
 //   ace-buck        manager-grade only, any building (district award)
 //   star-shout-out  this building, plus every other building's managers
 //   everything else this building only
-export function recognitionRecipients(type, { scoped = [], peerManagers = [], isManager = () => false } = {}) {
-  if (type === 'ace-buck') return [...scoped.filter(isManager), ...peerManagers]
+export function recognitionRecipients(type, {
+  scoped = [],
+  peerManagers = [],
+  isManager = () => false,
+  isAceEligible = null,
+} = {}) {
+  if (type === 'ace-buck') {
+    // Kitchen managers only — the district office is manager-grade but does
+    // not collect the currency it awards. Falls back to manager-grade when
+    // no eligibility test is supplied, so a caller that does not know about
+    // the distinction still cannot offer a cook.
+    const eligible = isAceEligible || isManager
+    return [...scoped.filter(eligible), ...peerManagers.filter(eligible)]
+  }
   if (type === 'star-shout-out') return [...scoped, ...peerManagers]
   return [...scoped]
 }
