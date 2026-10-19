@@ -8,6 +8,7 @@ import { configureClientAccess, flushPendingWrites } from './sharedStore.js'
 import {
   PROGRAM_SETTINGS_KEY,
   SettingsError,
+  coachMilestones,
   criterionLabels,
   customisedSections,
   occurrenceThresholds,
@@ -196,5 +197,44 @@ test('resetting a section removes the override entirely', () => {
 
 test('resetting something that was never set is harmless', () => {
   assert.doesNotThrow(() => resetProgramSetting('starLevels', { changedBy: 'Liz' }))
+  assert.deepEqual(starLevels(), DEFAULT_STAR_LEVELS)
+})
+
+// Liz's programme document, confirmed 2026-10-19. Counted in ACE Bucks, and
+// never mixed with the employee star milestones.
+test('the coach milestones are the ones from the programme document', () => {
+  assert.deepEqual(
+    coachMilestones().map(level => [level.name, level.minimum]),
+    [
+      ['Rising Coach', 25],
+      ['All-Star Coach', 50],
+      ['Elite Coach', 100],
+      ['Hall of Fame Coach', 150],
+      ['ACE Coach of the Year', 200],
+    ]
+  )
+})
+
+test('coach milestones are editable and validated like star milestones', () => {
+  saveProgramSettings({
+    coachMilestones: [{ id: 'first', name: 'First Rung', minimum: 10, symbol: '◆' }],
+  }, { changedBy: 'Liz' })
+  flushPendingWrites()
+  assert.deepEqual(coachMilestones().map(level => level.name), ['First Rung'])
+  assert.ok(customisedSections().includes('coachMilestones'))
+
+  assert.throws(() => saveProgramSettings({ coachMilestones: [] }), /at least one milestone/)
+  assert.throws(() => saveProgramSettings({ coachMilestones: [{ name: '', minimum: 5 }] }), /needs a name/)
+  assert.throws(
+    () => saveProgramSettings({ coachMilestones: [{ name: 'A', minimum: 5 }, { name: 'B', minimum: 5 }] }),
+    /both start at 5/
+  )
+})
+
+test('the two tracks do not share milestones', () => {
+  saveProgramSettings({ coachMilestones: [{ id: 'x', name: 'Coach Only', minimum: 7 }] }, { changedBy: 'Liz' })
+  flushPendingWrites()
+  assert.equal(starLevels().some(level => level.name === 'Coach Only'), false,
+    'changing one track leaves the other alone')
   assert.deepEqual(starLevels(), DEFAULT_STAR_LEVELS)
 })

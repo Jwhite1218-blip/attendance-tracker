@@ -18,6 +18,7 @@
 //      to be answerable.
 import { writeSharedStorage } from './sharedStore.js'
 import {
+  DEFAULT_COACH_MILESTONES,
   DEFAULT_CRITERION_LABELS,
   DEFAULT_OCCURRENCE_THRESHOLDS,
   DEFAULT_POSITION_TRAINING_HOURS,
@@ -62,6 +63,26 @@ export function starLevels() {
   // A stored list that survives validation with nothing in it means the blob
   // is broken, not that the district has no milestones.
   return levels.length ? levels : DEFAULT_STAR_LEVELS
+}
+
+// Same shape and same validation as starLevels, deliberately: these are the
+// same kind of decision about a different track, and Liz should be able to
+// rename a coach milestone exactly as she renames a star one.
+export function coachMilestones() {
+  const stored = readSettings().coachMilestones
+  if (!Array.isArray(stored) || !stored.length) return DEFAULT_COACH_MILESTONES
+
+  const levels = stored
+    .map(level => ({
+      id: String(level?.id || '').trim(),
+      name: String(level?.name || '').trim(),
+      minimum: Number(level?.minimum),
+      symbol: String(level?.symbol || '').trim() || '◆',
+    }))
+    .filter(level => level.id && level.name && Number.isFinite(level.minimum) && level.minimum > 0)
+    .sort((left, right) => left.minimum - right.minimum)
+
+  return levels.length ? levels : DEFAULT_COACH_MILESTONES
 }
 
 export function occurrenceThresholds() {
@@ -127,16 +148,17 @@ function fail(message) {
 export function validateSettingsPatch(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) fail('Nothing to save.')
 
-  if ('starLevels' in patch) {
-    const levels = patch.starLevels
+  for (const section of ['starLevels', 'coachMilestones']) {
+    if (!(section in patch)) continue
+    const levels = patch[section]
     if (!Array.isArray(levels) || !levels.length) fail('Keep at least one milestone.')
-    const minimums = new Set()
+    const seen = new Set()
     for (const level of levels) {
       if (!String(level?.name || '').trim()) fail('Every milestone needs a name.')
       const minimum = Number(level?.minimum)
-      if (!Number.isInteger(minimum) || minimum < 1) fail(`"${level.name}" needs a whole number of stars, at least 1.`)
-      if (minimums.has(minimum)) fail(`Two milestones both start at ${minimum} stars.`)
-      minimums.add(minimum)
+      if (!Number.isInteger(minimum) || minimum < 1) fail(`"${level.name}" needs a whole number, at least 1.`)
+      if (seen.has(minimum)) fail(`Two milestones both start at ${minimum}.`)
+      seen.add(minimum)
     }
   }
 
@@ -210,6 +232,6 @@ export function settingsAudit() {
 // on the Settings page.
 export function customisedSections() {
   const stored = readSettings()
-  return ['starLevels', 'occurrence', 'trainingHours', 'criterionLabels', 'spanishApproval']
+  return ['starLevels', 'coachMilestones', 'occurrence', 'trainingHours', 'criterionLabels', 'spanishApproval']
     .filter(section => section in stored && stored[section] !== null)
 }
