@@ -8,3 +8,4 @@ dist/
 .netlify
 supabase/.temp/
 deno.lock
+dist/ssr/

@@ -22,13 +22,13 @@ import {
   buildingMonthlyRecipients,
   schoolYearMonthKeys,
   managerEmployeeIds,
-  splitLeaderboardByGrade,
   addRecognition,
   createRecognitionRecord,
   drawMonthlyAllStar,
   existingMonthlyWinner,
   getAllRecognitions,
-  getEmployeeStarCount,
+  getAceBuckCount,
+  getDailyStarCount,
   getMonthlyDrawingEntries,
   getNextStarLevel,
   getStarLevel,
@@ -44,6 +44,7 @@ import {
   quarterWindowFor,
   recognitionTypeAllowedForRole,
 } from '../data/recognitionRules.js'
+import { coachMilestones } from '../data/programSettings.js'
 import { flushPendingWrites } from '../data/sharedStore.js'
 
 function localDateKey(date = new Date()) {
@@ -120,7 +121,7 @@ function emptyRecognitionForm(type) {
 
 // The extras a manager may record beyond the daily star. Employee of the Month
 // stays district-only, so it is filtered by role at render time.
-const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month']
+const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month', 'ace-buck']
 
 export default function RecognitionProgram() {
   const access = useAuth()
@@ -204,16 +205,37 @@ export default function RecognitionProgram() {
     buildingAllStars: schoolYearRecords.filter(record => record.type === 'all-star-of-month').length,
   }
 
-  const leaderboard = scopedEmployees
+  // Employees are ranked on Daily Stars; managers on ACE Star Bucks. The two
+  // are separate currencies against separate milestones, so they are counted
+  // separately rather than split out of one list — a manager who collected
+  // Daily Stars before the Leadership Track existed keeps them as Daily
+  // Stars and they do not become Bucks.
+  const byCount = (left, right) =>
+    right.count - left.count || employeeName(left.employee).localeCompare(employeeName(right.employee))
+
+  const staffLeaderboard = scopedEmployees
+    .filter(employee => !managerIds.has(employeeKey(employee)))
     .map(employee => {
-      const count = getEmployeeStarCount(records, employeeKey(employee), schoolYearStart)
+      const count = getDailyStarCount(records, employeeKey(employee), schoolYearStart)
       return { employee, count, level: getStarLevel(count), nextLevel: getNextStarLevel(count) }
     })
     .filter(entry => entry.count > 0)
-    .sort((left, right) => right.count - left.count || employeeName(left.employee).localeCompare(employeeName(right.employee)))
+    .sort(byCount)
 
-  const { managers: managerLeaderboard, staff: staffLeaderboard } =
-    splitLeaderboardByGrade(leaderboard, managerIds)
+  const coachLevels = coachMilestones()
+  const managerLeaderboard = scopedEmployees
+    .filter(employee => managerIds.has(employeeKey(employee)))
+    .map(employee => {
+      const count = getAceBuckCount(records, employeeKey(employee), schoolYearStart)
+      return {
+        employee,
+        count,
+        level: [...coachLevels].reverse().find(level => count >= level.minimum) || null,
+        nextLevel: coachLevels.find(level => count < level.minimum) || null,
+      }
+    })
+    .filter(entry => entry.count > 0)
+    .sort(byCount)
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
   const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
@@ -547,6 +569,8 @@ export default function RecognitionProgram() {
               title="Star of the Day"
               subtitle="Catch someone shining. This is the daily award that earns stars."
               employees={scopedEmployees}
+              managerIds={managerIds}
+              ownLocationId={locationId}
               canEdit={canEditRecognition}
               isSubmitting={submittingSurface === 'star'}
               confirmation={confirmations.star}
@@ -587,8 +611,10 @@ export default function RecognitionProgram() {
                 selectableTypes={bonusTypes}
                 compact
                 title="Bonus recognition"
-                subtitle="Nominations and shout-outs. These are tracked separately and do not earn stars."
+                subtitle="Nominations, shout-outs and ACE Star Bucks."
                 employees={scopedEmployees}
+                managerIds={managerIds}
+                ownLocationId={locationId}
                 canEdit={canEditRecognition}
                 isSubmitting={submittingSurface === 'bonus'}
                 confirmation={confirmations.bonus}
@@ -649,6 +675,8 @@ function RecognitionEntryForm({
   title,
   subtitle,
   employees,
+  managerIds,
+  ownLocationId,
   canEdit,
   isSubmitting,
   confirmation,
@@ -662,6 +690,19 @@ function RecognitionEntryForm({
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
   const messageRequired = requiresStarMessage(form.type)
+
+  // Who this type can actually be given to. The server drops anything
+  // outside these sets, so offering a name it would discard would be a
+  // silent failure rather than a refusal.
+  const isManager = employee => managerIds?.has(employeeKey(employee)) === true
+  const recipients = form.type === 'ace-buck'
+    ? employees.filter(isManager)
+    : form.type === 'star-shout-out'
+      ? employees
+      : employees.filter(employee => !isManager(employee) || employee.location === ownLocationId || !ownLocationId)
+  const recipientLabel = form.type === 'ace-buck'
+    ? 'Which leader'
+    : form.type === 'star-shout-out' ? 'Who is being thanked' : 'Team member'
 
   return (
     <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -717,7 +758,7 @@ function RecognitionEntryForm({
 
           <div className={compact ? 'space-y-4' : 'grid gap-4 md:grid-cols-2'}>
             <label className="block">
-              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Team member</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{recipientLabel}</span>
               <select
                 required
                 value={form.employeeId}
@@ -725,9 +766,10 @@ function RecognitionEntryForm({
                 className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
               >
                 <option value="">Choose an employee</option>
-                {employees.map(employee => (
+                {recipients.map(employee => (
                   <option key={employeeKey(employee)} value={employeeKey(employee)}>
                     {employeeListName(employee)}
+                    {employee.location && managerIds?.has(employeeKey(employee)) ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}` : ''}
                   </option>
                 ))}
               </select>
@@ -750,7 +792,9 @@ function RecognitionEntryForm({
               <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
                 {form.type === 'shooting-star'
                   ? 'Why they are being nominated'
-                  : form.type === 'warren-employee-month' ? 'Why they were selected' : 'Why they shine'}
+                  : form.type === 'ace-buck'
+                    ? 'What they did as a leader'
+                    : form.type === 'warren-employee-month' ? 'Why they were selected' : 'Why they shine'}
               </span>
               <span className="text-[11px] font-semibold text-[#9a651b]">Pick at least one</span>
             </div>

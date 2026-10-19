@@ -10,7 +10,11 @@ import {
 import { fetchDeployedBuildId, shouldReloadForUpdate } from '../data/appVersion.js'
 import { LanguageToggle, useLanguage } from './LanguageProvider.jsx'
 
-const AuthContext = createContext({
+// Exported so scripts/render-pages.jsx can render a page as a given role
+// without signing in. Nothing behind the PIN gate is reachable on localhost,
+// so executing the components under Node is the only way to prove they
+// render at all — see that file for the two outages that justified it.
+export const AuthContext = createContext({
   role: 'admin',
   locationId: null,
   displayName: null,
