@@ -120,6 +120,8 @@ const RECOGNITION = {
     'recognition.shoutOut.description': 'A special recognition received from a student, teacher, or staff member.',
     'recognition.employeeOfMonth.label': 'Warren Food Services Employee of the Month',
     'recognition.employeeOfMonth.description': 'Township-wide recognition for a qualifying top performer.',
+    'recognition.aceBuck.label': 'ACE Star Buck',
+    'recognition.aceBuck.description': 'District recognition for a Worker Lead, Manager or Director. Counts toward ACE Coach milestones.',
     'recognition.allStarOfMonth.label': 'All-Star of the Month',
     'recognition.allStarOfMonth.description': 'Building winner drawn from that month\'s daily recognition entries.',
 
@@ -155,6 +157,8 @@ const RECOGNITION = {
     'recognition.shoutOut.description': 'Un reconocimiento especial recibido de un estudiante, maestro o miembro del personal.',
     'recognition.employeeOfMonth.label': 'Warren Food Services Employee of the Month',
     'recognition.employeeOfMonth.description': 'Reconocimiento de todo el distrito para un empleado destacado que califique.',
+    'recognition.aceBuck.label': 'ACE Star Buck',
+    'recognition.aceBuck.description': 'Reconocimiento del distrito para un líder, gerente o director. Cuenta para los logros de ACE Coach.',
     'recognition.allStarOfMonth.label': 'All-Star of the Month',
     'recognition.allStarOfMonth.description': 'Ganador del plantel, sorteado entre las entradas de reconocimiento diario de ese mes.',
 

@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  aceBuckRecipientAllowed,
   monthlyDrawingStatus,
   quarterWindowFor,
   recognitionTypeAllowedForRole,
@@ -48,4 +49,33 @@ test('quarterly nomination windows follow three-month calendar periods', () => {
     end: '2026-09-30',
     label: 'Jul–Sep 2026',
   })
+})
+
+// Jon, 2026-10-19: "Admin would give out the manager/food service worker lead
+// Stars or 'Ace Star Bucks' to be tracked like the employee Star of the Day."
+// Top-down from the district, not peer to peer between buildings.
+test('only the district awards an ACE Star Buck', () => {
+  assert.equal(recognitionTypeAllowedForRole('admin', 'ace-buck'), true)
+  assert.equal(recognitionTypeAllowedForRole('school', 'ace-buck'), false,
+    'a building manager cannot award one, not even to their own staff')
+  assert.equal(recognitionTypeAllowedForRole('admin', 'ace-buck', false), true,
+    'it is not gated behind the district award capability the way Employee of the Month is')
+  assert.equal(recognitionTypeAllowedForRole('nobody', 'ace-buck'), false)
+})
+
+test('an ACE Star Buck only goes to manager-grade staff', () => {
+  const positions = ['Food Service Worker Lead', 'Food Service Manager', 'Food Service Director']
+  for (const position of positions) {
+    assert.equal(aceBuckRecipientAllowed({ position }, positions), true, position)
+  }
+  assert.equal(aceBuckRecipientAllowed({ position: 'Cook' }, positions), false)
+  assert.equal(aceBuckRecipientAllowed({ position: 'Food Service Worker' }, positions), false)
+  assert.equal(aceBuckRecipientAllowed({}, positions), false)
+  assert.equal(aceBuckRecipientAllowed(null, positions), false)
+})
+
+test('the other recognition types are unchanged by the new one', () => {
+  assert.equal(recognitionTypeAllowedForRole('school', 'star-of-day'), true)
+  assert.equal(recognitionTypeAllowedForRole('school', 'warren-employee-month', false), false)
+  assert.equal(recognitionTypeAllowedForRole('admin', 'warren-employee-month', true), true)
 })

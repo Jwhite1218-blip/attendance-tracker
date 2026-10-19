@@ -36,7 +36,19 @@ export function monthlyDrawingStatus(monthKey, dateValue = new Date()) {
 // session is refused it here and again on the server.
 export function recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards = role === 'admin') {
   if (role !== 'admin' && role !== 'school') return false
+  // An ACE Star Buck is awarded by the district, never by a building. Liz
+  // and the admin team hand them to Worker Leads, Managers and the Director;
+  // a school login must not be able to award one even to its own staff.
+  if (type === 'ace-buck') return role === 'admin'
   return type !== 'warren-employee-month' || canManageRecognitionAwards === true
+}
+
+// ACE Bucks only go to manager-grade staff. Awarding one to a cook would put
+// a record in the Leadership Track for somebody who is not in it, and it
+// would count toward coach milestones they cannot hold.
+export function aceBuckRecipientAllowed(employee, managerGradePositions) {
+  const position = String(employee?.position || '').trim()
+  return (managerGradePositions || []).includes(position)
 }
 
 export function quarterWindowFor(dateValue = new Date()) {

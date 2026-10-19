@@ -47,6 +47,26 @@ export const RECOGNITION_TYPES = [
     description: 'Building winner drawn from that month\'s daily recognition entries.',
     earnsStar: false,
   },
+  {
+    // The Leadership Track's equivalent of a Daily Star. Jon, 2026-10-19:
+    // "Admin would give out the manager/food service worker lead Stars or
+    // 'Ace Star Bucks' to be tracked like the employee Star of the Day."
+    //
+    // That settled the one question that had blocked this for weeks — it is
+    // awarded top-down by the district, not peer to peer between buildings.
+    // Which means no new permission: an admin session already writes
+    // recognition for anybody, while a school session is narrowed to its own
+    // roster in recognitionMutationForSession. Peer awarding would have meant
+    // widening that, and it does not.
+    id: 'ace-buck',
+    label: 'ACE Star Buck',
+    shortLabel: 'ACE Buck',
+    description: 'District recognition for a Worker Lead, Manager or Director. Counts toward ACE Coach milestones.',
+    earnsStar: true,
+    actionLabel: 'Award an ACE Star Buck',
+    districtOnly: true,
+    managerGradeOnly: true,
+  },
 ]
 
 export const RECOGNITION_TYPE_MAP = Object.fromEntries(
@@ -82,8 +102,22 @@ export const RECOGNITION_CRITERIA_DESCRIPTIONS = {
   Other: 'Choose this when none of the listed reasons fit, then explain it in the message below.',
 }
 
+// The eight ACE Bucks categories, verbatim from Liz's programme document
+// (ACE Bucks recognition.pdf, supplied 2026-09-28).
+export const ACE_BUCK_CATEGORIES = [
+  'People & Culture',
+  'Safety Leader',
+  'Operational Excellence',
+  'Communication',
+  'Customer Experience',
+  'Marketing & Promotion',
+  'Innovation',
+  'ACE Moment',
+]
+
 export const RECOGNITION_CRITERIA = {
   'star-of-day': ALL_STAR_REASON_OPTIONS,
+  'ace-buck': ACE_BUCK_CATEGORIES,
   'shooting-star': [
     'Improving attendance or perfect attendance',
     'Going above and beyond to help coworkers',
@@ -267,6 +301,33 @@ export function employeeStarsByLocation(records, employeeId, startYear = null) {
     .sort((left, right) => right.count - left.count || left.locationId.localeCompare(right.locationId))
 }
 
+// An ACE Buck earns, like a Daily Star earns — but for a different pool and
+// against different milestones, so the two must never be added together. A
+// manager who picked up Daily Stars before this existed keeps them in their
+// own count; they are not ACE Bucks and do not become them.
+export function isAceBuck(record) {
+  return record?.type === 'ace-buck'
+}
+
+export function getAceBuckCount(records, employeeId, startYear) {
+  return (records || []).filter(record =>
+    String(record.employeeId) === String(employeeId)
+    && isRecognitionInSchoolYear(record, startYear)
+    && isAceBuck(record)
+  ).length
+}
+
+// Deliberately excludes ACE Bucks, so an employee star count stays an
+// employee star count even for a manager who holds both.
+export function getDailyStarCount(records, employeeId, startYear) {
+  return (records || []).filter(record =>
+    String(record.employeeId) === String(employeeId)
+    && isRecognitionInSchoolYear(record, startYear)
+    && recognitionEarnsStar(record)
+    && !isAceBuck(record)
+  ).length
+}
+
 export function getStarLevel(count) {
   return [...starLevels()].reverse().find(level => Number(count) >= level.minimum) || null
 }
@@ -380,6 +441,16 @@ export function toStarCardEntries(records, resolveName) {
 // `earns` marks the two that actually add to someone's star count, so the
 // distinction is visible at a glance and not just a color difference.
 export const RECOGNITION_ACCENTS = {
+  // Blue, matching the ACE Coach board, so an ACE Buck reads as belonging to
+  // the Leadership Track at a glance rather than looking like a gold star
+  // that happened to land on a manager.
+  'ace-buck': {
+    glyph: '◆',
+    earns: true,
+    text: 'text-[#12407f]',
+    chip: 'border-[#9ecbff] bg-[#eaf3ff] text-[#12407f]',
+    mark: 'text-[#1a56c4]',
+  },
   'star-of-day': {
     glyph: '★',
     earns: true,

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
+import { MANAGER_GRADE_POSITIONS } from '../../src/data/recognitionStore.js'
 import { validateEmploymentChanges } from '../../src/data/employmentStatus.js'
 import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
@@ -264,7 +265,24 @@ function schoolStatusMutation(mutation, currentValue, allowedEmployeeIds) {
   return { type: 'object-patch', set, remove }
 }
 
-function recognitionMutationForSession(mutation, session, allowedEmployeeIds) {
+// Manager-grade personnel ids, read from the roster rather than trusted from
+// the client, so an ACE Buck cannot be awarded to a cook by editing a
+// request.
+function managerGradeIds(entries) {
+  const recordOverrides = entries?.[RECORD_OVERRIDES_KEY] || {}
+  const customEmployees = Array.isArray(entries?.[CUSTOM_EMPLOYEES_KEY]) ? entries[CUSTOM_EMPLOYEES_KEY] : []
+  return new Set(
+    [...employees, ...customEmployees]
+      .filter(employee => {
+        const key = employeeKey(employee)
+        const position = String(recordOverrides[key]?.position || employee.position || '').trim()
+        return MANAGER_GRADE_POSITIONS.includes(position)
+      })
+      .map(employeeKey)
+  )
+}
+
+function recognitionMutationForSession(mutation, session, allowedEmployeeIds, managerIds = null) {
   if (mutation?.type !== 'object-patch') return mutation
   // A building manager may only recognise their own team. Rows naming anyone
   // else are dropped rather than rejected: the session's own roster is the
@@ -274,9 +292,18 @@ function recognitionMutationForSession(mutation, session, allowedEmployeeIds) {
     ...mutation,
     set: Object.fromEntries(
       Object.entries(mutation.set || {})
-        .filter(([, recognition]) => (
-          !scopedToSchool || allowedEmployeeIds.has(String(recognition?.employeeId))
-        ))
+        .filter(([, recognition]) => {
+          // An ACE Star Buck is a district award for manager-grade staff.
+          // Both halves are enforced here because the page is not the thing
+          // that has to hold: a school session must not award one at all,
+          // and nobody may award one to somebody outside the manager pool.
+          if (recognition?.type === 'ace-buck') {
+            if (session.role !== 'admin') return false
+            if (managerIds && !managerIds.has(String(recognition?.employeeId))) return false
+            return true
+          }
+          return !scopedToSchool || allowedEmployeeIds.has(String(recognition?.employeeId))
+        })
         .map(([recognitionId, recognition]) => [
           recognitionId,
           {
@@ -325,6 +352,7 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
       'star-shout-out',
       'warren-employee-month',
       'all-star-of-month',
+      'ace-buck',
     ])
     const validDate = dateKey => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return false
@@ -493,7 +521,9 @@ export async function handleMutate(store, session, body) {
   ) {
     return jsonResponse({ error: 'Only a district administrator can record Warren Food Services Employee of the Month.' }, 403)
   }
-  if (key === RECOGNITION_KEY) mutation = recognitionMutationForSession(mutation, session, allowedEmployeeIds)
+  if (key === RECOGNITION_KEY) {
+    mutation = recognitionMutationForSession(mutation, session, allowedEmployeeIds, managerGradeIds(await loadSchoolRosterEntries(store)))
+  }
   try {
     validateMutation(key, mutation)
   } catch {

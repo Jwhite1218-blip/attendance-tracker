@@ -57,6 +57,7 @@ const RECOGNITION_KEY_BY_TYPE = {
   'star-shout-out': 'shoutOut',
   'warren-employee-month': 'employeeOfMonth',
   'all-star-of-month': 'allStarOfMonth',
+  'ace-buck': 'aceBuck',
 }
 
 export function recognitionLabelKey(typeId) {
