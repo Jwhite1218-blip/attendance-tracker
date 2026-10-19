@@ -122,7 +122,7 @@ function emptyRecognitionForm(type) {
 
 // The extras a manager may record beyond the daily star. Employee of the Month
 // stays district-only, so it is filtered by role at render time.
-const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month', 'ace-buck']
+const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month']
 
 export default function RecognitionProgram() {
   const access = useAuth()
@@ -145,9 +145,10 @@ export default function RecognitionProgram() {
   // the side panel, so the two never compete for a manager's attention.
   const [starForm, setStarForm] = useState(() => emptyRecognitionForm('star-of-day'))
   const [bonusForm, setBonusForm] = useState(() => emptyRecognitionForm('shooting-star'))
+  const [aceForm, setAceForm] = useState(() => emptyRecognitionForm('ace-buck'))
   const [feedback, setFeedback] = useState(null)
   const [submittingSurface, setSubmittingSurface] = useState(null)
-  const [confirmations, setConfirmations] = useState({ star: null, bonus: null })
+  const [confirmations, setConfirmations] = useState({ star: null, bonus: null, ace: null })
 
   const employees = useMemo(
     () => getEmployeesWithEffectiveLocations(),
@@ -231,8 +232,24 @@ export default function RecognitionProgram() {
     .filter(entry => entry.count > 0)
     .sort(byCount)
 
-  const coachLevels = coachMilestones()
+  // Managers keep their Daily Stars on the blue board beside the staff one,
+  // counted and named exactly as the staff board counts and names them.
+  // Those stars were earned as Daily Stars and stay Daily Stars — the ACE
+  // Bucks board below is a different currency, not a replacement.
   const managerLeaderboard = scopedEmployees
+    .filter(employee => managerIds.has(employeeKey(employee)))
+    .map(employee => {
+      const count = getDailyStarCount(records, employeeKey(employee), schoolYearStart)
+      return { employee, count, level: getStarLevel(count), nextLevel: getNextStarLevel(count) }
+    })
+    .filter(entry => entry.count > 0)
+    .sort(byCount)
+
+  // The Leadership Track, counted in ACE Star Bucks against the coach
+  // milestones. District-only for now, so it is built but not handed to the
+  // page unless the session is an administrator.
+  const coachLevels = coachMilestones()
+  const aceLeaderboard = employees
     .filter(employee => managerIds.has(employeeKey(employee)))
     .map(employee => {
       const count = getAceBuckCount(records, employeeKey(employee), schoolYearStart)
@@ -276,7 +293,7 @@ export default function RecognitionProgram() {
     && record.date <= nominationQuarter.end
   ))
 
-  const surfaceSetters = { star: setStarForm, bonus: setBonusForm }
+  const surfaceSetters = { star: setStarForm, bonus: setBonusForm, ace: setAceForm }
   const clearConfirmation = surface => setConfirmations(current => ({ ...current, [surface]: null }))
   const setFormValue = (surface, name, value) => {
     clearConfirmation(surface)
@@ -364,7 +381,8 @@ export default function RecognitionProgram() {
     if (!pendingPreview) return
     const { surface } = pendingPreview
     setPendingPreview(null)
-    await submitRecognition(surface, surface === 'star' ? starForm : bonusForm)
+    const forms = { star: starForm, bonus: bonusForm, ace: aceForm }
+    await submitRecognition(surface, forms[surface])
   }
 
   const handlePrintSheet = visibleRecords => {
@@ -660,10 +678,28 @@ export default function RecognitionProgram() {
               employeeMap={employeeMap}
               quarterLabel={nominationQuarter.label}
             />
-            <AceBucksCard />
           </div>
         </div>
 
+
+        {role === 'admin' && (
+          <AceBucksSection
+            leaderboard={aceLeaderboard}
+            schoolYearStart={schoolYearStart}
+            coachLevels={coachLevels}
+            form={aceForm}
+            employees={scopedEmployees}
+            peerManagers={peerManagers}
+            managerIds={managerIds}
+            canEdit={canEditRecognition}
+            isSubmitting={submittingSurface === 'ace'}
+            confirmation={confirmations.ace}
+            onFieldChange={setFormValue}
+            onToggleCriterion={toggleCriterion}
+            onSubmit={event => beginSubmit('ace', aceForm, event)}
+            onRetry={() => submitRecognition('ace', aceForm)}
+          />
+        )}
 
         <SubmissionsByBuilding counts={starSubmissionsByLocation} schoolYearStart={schoolYearStart} />
         <div className="mt-6">
@@ -1285,14 +1321,138 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
   )
 }
 
-function AceBucksCard() {
+// The Leadership Track, in one place: what it is, how to award one, and who
+// is where. Pulled out of the side panel on 2026-10-19 — it had been a card
+// explaining a programme that could not be used, beside a bonus form that
+// could award one without saying so.
+//
+// Green, because the two boards above it are gold and blue and a third
+// currency reading as either would be worse than no colour at all.
+//
+// District-only while the programme settles. The server refuses an ACE Buck
+// from a school session regardless, so this is about not showing a manager a
+// board they cannot act on.
+function AceBucksSection({
+  leaderboard,
+  schoolYearStart,
+  coachLevels,
+  form,
+  employees,
+  peerManagers,
+  managerIds,
+  canEdit,
+  isSubmitting,
+  confirmation,
+  onFieldChange,
+  onToggleCriterion,
+  onSubmit,
+  onRetry,
+}) {
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? leaderboard : leaderboard.slice(0, 10)
+
   return (
-    <section className="rounded-2xl border border-[#d7b44b] bg-gradient-to-br from-[#f7df88] via-[#d9b64f] to-[#a97420] p-[1px] shadow-sm">
-      <div className="rounded-[15px] bg-[#201a11] p-5 text-white">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#f1cf69]">★ Manager program</p>
-        <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Bucks</h2>
-        <p className="mt-2 text-xs leading-relaxed text-white/70">Managers earn ACE Bucks for leadership, operational excellence, innovation, team development, food safety, customer service, and support of district goals.</p>
-        <p className="mt-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-amber-100/75">Tracking values are intentionally pending: the source defines the program but does not assign buck amounts or redemption values.</p>
+    <section className="mt-6 overflow-hidden rounded-2xl border border-emerald-300 bg-white shadow-sm">
+      <div className="border-b border-emerald-200 bg-gradient-to-r from-[#0f3d2e] to-[#15583f] px-5 py-5 text-white sm:px-6">
+        <div className="flex items-start gap-3">
+          <span
+            className="flex h-12 w-12 flex-none items-center justify-center rounded-xl border border-emerald-300/50 bg-emerald-300/15 text-2xl text-emerald-200"
+            aria-hidden="true"
+          >◆</span>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Manager program</p>
+            <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Star Bucks</h2>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-100/80">
+              The leadership side of the All-Star program. Where employees collect Stars for what they do,
+              managers collect ACE Bucks for how they lead — awarded by the district to Worker Leads,
+              Managers and the Director.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
+        <div>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award an ACE Star Buck</h3>
+          <div className="mt-3">
+            <RecognitionEntryForm
+              surface="ace"
+              form={form}
+              compact
+              title="ACE Star Buck"
+              subtitle="District recognition for a Worker Lead, Manager or Director."
+              employees={employees}
+              peerManagers={peerManagers}
+              managerIds={managerIds}
+              canEdit={canEdit}
+              isSubmitting={isSubmitting}
+              confirmation={confirmation}
+              onFieldChange={onFieldChange}
+              onToggleCriterion={onToggleCriterion}
+              onSubmit={onSubmit}
+              onRetry={onRetry}
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">
+              ACE Coach standings
+            </h3>
+            <span className="text-[11px] font-semibold text-gray-500">{schoolYearStart}–{schoolYearStart + 1}</span>
+          </div>
+
+          {leaderboard.length === 0 ? (
+            <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center text-sm text-emerald-900">
+              No ACE Star Bucks awarded yet. The first one starts this board.
+            </p>
+          ) : (
+            <>
+              <ol className="mt-3 divide-y divide-emerald-100 rounded-xl border border-emerald-200">
+                {visible.map((entry, index) => (
+                  <li key={employeeKey(entry.employee)} className="flex items-center gap-3 px-3 py-2.5">
+                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#0f3d2e] text-xs font-black text-emerald-200">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-gray-900">
+                        {employeeName(entry.employee)}
+                      </span>
+                      <span className="block text-[11px] text-gray-500">
+                        {LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}
+                        {entry.level ? ` · ${entry.level.symbol} ${entry.level.name}` : ''}
+                        {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ''}
+                      </span>
+                    </span>
+                    <span className="flex-none text-base font-black text-[#15583f]">{entry.count}</span>
+                  </li>
+                ))}
+              </ol>
+              {leaderboard.length > 10 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAll(value => !value)}
+                  className="mt-2 text-xs font-semibold text-[#15583f] hover:underline"
+                >
+                  {showAll ? 'Show top ten' : `Show all ${leaderboard.length}`}
+                </button>
+              )}
+            </>
+          )}
+
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#15583f]">Coach milestones</p>
+            <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {coachLevels.map(level => (
+                <li key={level.id} className="text-[11px] text-emerald-900">
+                  <span aria-hidden="true">{level.symbol}</span> {level.name}
+                  <span className="text-emerald-700"> · {level.minimum}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
       </div>
     </section>
   )

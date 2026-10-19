@@ -47,7 +47,7 @@ const results = render()
 let failed = 0
 for (const result of results) {
   if (result.ok) {
-    console.log(`  ok    ${result.name} (${result.who})`)
+    console.log(`  ok    ${result.name} (${result.who})  ${result.length} chars`)
   } else {
     failed += 1
     console.log(`  FAIL  ${result.name} (${result.who}): ${result.error}`)
