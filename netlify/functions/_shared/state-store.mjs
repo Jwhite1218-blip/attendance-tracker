@@ -39,9 +39,22 @@ async function checkedJson(response, operation) {
   return value
 }
 
+// A rejection that will never succeed is a different animal from an outage,
+// and the caller has to be able to tell them apart. Postgres raises
+// 'Unsupported state key.' with SQLSTATE 22023 for a key missing from the
+// allowlist inside mutate_legacy_state_entry; retrying that forever is what
+// turned a missing migration into a sign-in outage on 2026-10-19.
+export class PermanentStateError extends Error {}
+
 async function checkedValue(response, operation) {
   if (!response.ok) {
-    throw new Error(`Supabase ${operation} failed with status ${response.status}.`)
+    const detail = await response.json().catch(() => ({}))
+    const because = detail?.message || detail?.error || ''
+    const message = `Supabase ${operation} failed with status ${response.status}.${because ? ` ${because}` : ''}`
+    // 400 from the RPC means the function itself refused the arguments.
+    // There is nothing a retry can change.
+    if (response.status === 400) throw new PermanentStateError(message)
+    throw new Error(message)
   }
   return response.json()
 }

@@ -7,7 +7,7 @@ import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/d
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
-import { getStateStore } from './_shared/state-store.mjs'
+import { PermanentStateError, getStateStore } from './_shared/state-store.mjs'
 import {
   BLACKOUTS_KEY,
   CUSTOM_EMPLOYEES_KEY,
@@ -573,7 +573,16 @@ export default async (request, context) => {
     response = await handleStateRequest(request)
   } catch (error) {
     console.error(JSON.stringify({ event: 'state-error', requestId, message: error.message }))
-    response = jsonResponse({ error: 'The shared attendance service is temporarily unavailable.', requestId }, 503)
+    // 503 means "come back later" and the client retries forever on it. A
+    // write the database will never accept has to say so, or one rejected
+    // key blocks every later write in the queue and takes sign-in with it.
+    response = error instanceof PermanentStateError
+      ? jsonResponse({
+        error: 'That change was refused and cannot be retried. It has been set aside.',
+        permanent: true,
+        requestId,
+      }, 422)
+      : jsonResponse({ error: 'The shared attendance service is temporarily unavailable.', requestId }, 503)
   }
   response.headers.set('X-Request-ID', requestId)
   console.log(JSON.stringify({

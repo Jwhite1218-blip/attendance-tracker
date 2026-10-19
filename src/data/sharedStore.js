@@ -213,11 +213,42 @@ async function performPendingFlush() {
       continue
     }
 
-    const response = await requestJson('/api/state', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'mutate', key, mutation }),
-      keepalive: true,
-    })
+    let response
+    try {
+      response = await requestJson('/api/state', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'mutate', key, mutation }),
+        keepalive: true,
+      })
+    } catch (error) {
+      // A 4xx will never succeed however many times it is retried — a key
+      // the server does not admit, or one this session may not write. Left
+      // in the queue it is retried on every sign-in, throws every time, and
+      // because that throw escapes this loop it also blocks every write
+      // queued behind it. That is how a missing migration became "the
+      // shared attendance service is temporarily unavailable" for a whole
+      // sign-in on 2026-10-19.
+      //
+      // So it is dropped, loudly. Losing one rejected change is bad; losing
+      // the ability to sign in, and silently freezing every later write, is
+      // worse.
+      if (error?.status >= 400 && error.status < 500) {
+        console.error(JSON.stringify({
+          event: 'pending-write-discarded',
+          key,
+          status: error.status,
+          message: error.message,
+        }))
+        const latestPending = readPendingWrites()
+        if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
+          delete latestPending[key]
+          writePendingWrites(latestPending)
+        }
+        continue
+      }
+      // A 5xx really might clear up. Leave it queued and try again later.
+      throw error
+    }
 
     const latestPending = readPendingWrites()
     if (JSON.stringify(latestPending[key]) === JSON.stringify(rawPending)) {
