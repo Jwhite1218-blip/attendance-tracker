@@ -59,13 +59,17 @@ export const DEFAULT_COACH_MILESTONES = [
 
 // --- attendance accountability ---------------------------------------------
 
-// The third qualifying occurrence starts formal tracking; the fourth requires
-// a verbal warning. Both are editable because Liz owns the policy, but they
-// decide what the app says about somebody's job, so the Settings page warns
-// before saving and records who changed them.
+// Occurrences 1-3 are tracked by the manager; from the fourth, formal
+// attendance tracking is owed OUTSIDE this app. Editable because Liz owns
+// the policy, but they decide what the app says about somebody's job, so the
+// Settings page warns before saving and records who changed them.
+//
+// Warren's ladder is 4 verbal, 5 written, 6 final written, 7 possible
+// termination. The app deliberately does not model those steps — see the
+// header of hrFlags.js for why.
 export const DEFAULT_OCCURRENCE_THRESHOLDS = {
   tracking: 3,
-  verbalWarning: 4,
+  formalAction: 4,
 }
 
 // --- professional standards ------------------------------------------------

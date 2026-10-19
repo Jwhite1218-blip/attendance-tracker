@@ -88,10 +88,13 @@ export function coachMilestones() {
 export function occurrenceThresholds() {
   const stored = readSettings().occurrence || {}
   const tracking = Number(stored.tracking)
-  const verbalWarning = Number(stored.verbalWarning)
-  const valid = Number.isInteger(tracking) && Number.isInteger(verbalWarning)
-    && tracking >= 1 && verbalWarning > tracking
-  return valid ? { tracking, verbalWarning } : DEFAULT_OCCURRENCE_THRESHOLDS
+  // verbalWarning is the name this field had before 2026-10-19, when the app
+  // stopped claiming a verbal warning had happened. A district that saved a
+  // value under the old name keeps it.
+  const formalAction = Number(stored.formalAction ?? stored.verbalWarning)
+  const valid = Number.isInteger(tracking) && Number.isInteger(formalAction)
+    && tracking >= 1 && formalAction > tracking
+  return valid ? { tracking, formalAction } : DEFAULT_OCCURRENCE_THRESHOLDS
 }
 
 export function positionTrainingHours() {
@@ -164,10 +167,10 @@ export function validateSettingsPatch(patch) {
 
   if ('occurrence' in patch) {
     const tracking = Number(patch.occurrence?.tracking)
-    const verbalWarning = Number(patch.occurrence?.verbalWarning)
-    if (!Number.isInteger(tracking) || tracking < 1) fail('Formal tracking must start at occurrence 1 or later.')
-    if (!Number.isInteger(verbalWarning)) fail('The verbal warning stage needs a whole number.')
-    if (verbalWarning <= tracking) fail('The verbal warning has to come after formal tracking.')
+    const formalAction = Number(patch.occurrence?.formalAction ?? patch.occurrence?.verbalWarning)
+    if (!Number.isInteger(tracking) || tracking < 1) fail('Manager tracking must start at occurrence 1 or later.')
+    if (!Number.isInteger(formalAction)) fail('The formal-tracking stage needs a whole number.')
+    if (formalAction <= tracking) fail('Formal tracking has to come after manager tracking.')
   }
 
   if ('trainingHours' in patch) {

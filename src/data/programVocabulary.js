@@ -91,18 +91,16 @@ const ATTENDANCE = {
 const HR_STAGES = {
   en: {
     'hr.none': 'No active attendance action',
-    'hr.seniorityResetVerbal': 'Union seniority reset · Verbal warning required',
-    'hr.seniorityReset': 'Union seniority reset',
-    'hr.verbalWarning': 'Verbal warning required',
+    'hr.formalActionNeeded': 'Formal attendance tracking needed',
+    'hr.managerTracked': 'Tracked by manager',
     'hr.formalTracking': 'Formal attendance tracking',
     'hr.occurrences.one': '{count} documented occurrence',
     'hr.occurrences.other': '{count} documented occurrences',
   },
   es: {
     'hr.none': 'Sin acción de asistencia activa',
-    'hr.seniorityResetVerbal': 'Reinicio de antigüedad sindical · Se requiere advertencia verbal',
-    'hr.seniorityReset': 'Reinicio de antigüedad sindical',
-    'hr.verbalWarning': 'Se requiere advertencia verbal',
+    'hr.formalActionNeeded': 'Se requiere seguimiento formal de asistencia',
+    'hr.managerTracked': 'Seguimiento del gerente',
     'hr.formalTracking': 'Seguimiento formal de asistencia',
     'hr.occurrences.one': '{count} incidencia documentada',
     'hr.occurrences.other': '{count} incidencias documentadas',

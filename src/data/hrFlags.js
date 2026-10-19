@@ -1,7 +1,23 @@
 // Attendance accountability follows a July–June school year.
-// The third qualifying occurrence starts formal tracking, the fourth triggers
-// a verbal-warning stage, and two consecutive NCNS workdays reset union
-// seniority status.
+//
+// THIS IS A TRACKING TOOL, NOT A DISCIPLINARY RECORD. Liz, 2026-10-19: the
+// HR manager had begun treating what this shows as the formal documentation
+// itself, which it is not and must never be. So the app counts occurrences
+// and says when something is owed outside it. It does not name a
+// disciplinary step as having happened, and it is not evidence that one did.
+//
+// Warren's ladder, for reference only — the app does not record which of
+// these took place:
+//
+//   1-3  tracked by the manager
+//   4    verbal warning
+//   5    written warning
+//   6    final written warning
+//   7    possible termination
+//
+// From the fourth occurrence the app says "formal attendance tracking
+// needed" and nothing more specific. Naming the step would invite the file
+// to be read as proof the step was taken.
 
 import { normalizeAttendanceCode } from './attendanceCodes.js'
 import { getDateAvailability } from './blackoutDates.js'
@@ -14,7 +30,7 @@ const LEGACY_FLAGS_KEY = 'hr-flags'
 // Shipped positions. What is in force comes from occurrenceThresholds(),
 // which Liz can change in Settings and which falls back to exactly these.
 const TRACKING_THRESHOLD = DEFAULT_OCCURRENCE_THRESHOLDS.tracking
-const VERBAL_WARNING_THRESHOLD = DEFAULT_OCCURRENCE_THRESHOLDS.verbalWarning
+const FORMAL_ACTION_THRESHOLD = DEFAULT_OCCURRENCE_THRESHOLDS.formalAction
 const QUALIFYING_CODES = new Set(['UNEX', 'LI', 'EO', 'NCNS', 'CC', 'LE', 'L/EQ'])
 
 export function isQualifyingCode(code) {
@@ -36,46 +52,18 @@ function currentSchoolYearStart() {
 }
 
 function stageForCount(count) {
-  const { tracking, verbalWarning } = occurrenceThresholds()
-  if (count >= verbalWarning) return 'verbal_warning'
-  if (count >= tracking) return 'formal_tracking'
+  const { tracking, formalAction } = occurrenceThresholds()
+  if (count >= formalAction) return 'formal_action'
+  if (count >= tracking) return 'monitoring'
   return 'documented'
 }
 
-function nextScheduledWorkday(dateKey) {
-  const date = new Date(`${dateKey}T12:00:00`)
-  do {
-    date.setDate(date.getDate() + 1)
-  } while (getDateAvailability(date.toISOString().slice(0, 10)).unavailable)
-  return date.toISOString().slice(0, 10)
-}
-
-// Per Liz (2026-09-01): only back-to-back no-call/no-shows reset seniority. An
-// unexcused call-in is still an occurrence and still counts toward the tracking
-// and verbal-warning stages, but the employee did call, so it never reaches here.
-function findSeniorityResetDate(triggers) {
-  const noCallNoShows = (triggers || []).filter(trigger => trigger.code === 'NCNS')
-  for (let index = 1; index < noCallNoShows.length; index++) {
-    if (nextScheduledWorkday(noCallNoShows[index - 1].date) === noCallNoShows[index].date) {
-      return noCallNoShows[index].date
-    }
-  }
-  return null
-}
-
-// seniorityReset is recomputed from the stored triggers on every read rather
-// than trusted as saved. Statuses written under the old consecutive-UNEX rule
-// still carry its verdict, and this heals them in place on first read: the
-// storage key is mirrored in the server allowlist and two SQL migrations, so
-// bumping it would make this a schema change instead of a code fix.
-function withDerivedSeniorityReset(statuses) {
-  return Object.fromEntries(
-    Object.entries(statuses || {}).map(([key, status]) => {
-      const seniorityResetAt = findSeniorityResetDate(status?.triggers)
-      return [key, { ...status, seniorityReset: Boolean(seniorityResetAt), seniorityResetAt }]
-    })
-  )
-}
+// Seniority reset was removed on 2026-10-19. It computed, stored and
+// displayed a union consequence from two back-to-back no-call/no-shows —
+// which is a conclusion about somebody's employment, not a count of
+// absences, and this app has no business drawing it. Statuses written before
+// today still carry seniorityReset and seniorityResetAt; nothing reads them,
+// and they age out as each status is recomputed.
 
 function migrateLegacyFlags() {
   try {
@@ -87,7 +75,6 @@ function migrateLegacyFlags() {
           code: normalizeAttendanceCode(trigger.code),
         })).filter(trigger => !getDateAvailability(trigger.date).unavailable)
         const year = Number(flag.year) || new Date(flag.flaggedAt || Date.now()).getFullYear()
-        const seniorityResetAt = findSeniorityResetDate(triggers)
         return [statusKey(flag.empId, year), {
           empId: flag.empId,
           schoolYearStart: year,
@@ -95,8 +82,6 @@ function migrateLegacyFlags() {
           stage: stageForCount(triggers.length),
           updatedAt: flag.flaggedAt || new Date().toISOString(),
           triggers,
-          seniorityReset: Boolean(seniorityResetAt),
-          seniorityResetAt,
         }]
       })
     )
@@ -108,7 +93,7 @@ function migrateLegacyFlags() {
 function getAllStatuses() {
   try {
     const saved = localStorage.getItem(FLAGS_KEY)
-    if (saved) return withDerivedSeniorityReset(JSON.parse(saved))
+    if (saved) return JSON.parse(saved)
     const migrated = migrateLegacyFlags()
     if (Object.keys(migrated).length) {
       try {
@@ -141,7 +126,6 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     return
   }
 
-  const seniorityResetAt = findSeniorityResetDate(triggers)
   statuses[key] = {
     empId,
     schoolYearStart,
@@ -149,8 +133,6 @@ export function checkAndFlag(empId, schoolYearStart, schoolYearData) {
     stage: stageForCount(triggers.length),
     updatedAt: new Date().toISOString(),
     triggers,
-    seniorityReset: Boolean(seniorityResetAt),
-    seniorityResetAt,
   }
   saveAllStatuses(statuses)
 }
@@ -200,9 +182,8 @@ export const ATTENDANCE_SEVERITY_CHIP = {
 
 export function attendanceSeverityOf(status) {
   if (!status) return 'none'
-  if (status.seniorityReset) return 'action'
-  const { tracking, verbalWarning } = occurrenceThresholds()
-  if (status.occurrenceCount >= verbalWarning) return 'action'
+  const { tracking, formalAction } = occurrenceThresholds()
+  if (status.occurrenceCount >= formalAction) return 'action'
   if (status.occurrenceCount >= tracking) return 'tracking'
   return 'none'
 }
@@ -220,17 +201,17 @@ export function mainPageFlagged(flaggedWithEmployees) {
 
 export function isFlagged(empId) {
   const status = getEmployeeAttendanceStatus(empId)
-  return !!status && (status.occurrenceCount >= occurrenceThresholds().tracking || status.seniorityReset)
+  return !!status && status.occurrenceCount >= occurrenceThresholds().tracking
 }
 
 export function getAllFlaggedEmployees() {
   const currentYear = currentSchoolYearStart()
   return Object.values(getAllStatuses())
-    .filter(status => status.schoolYearStart === currentYear && (status.occurrenceCount >= occurrenceThresholds().tracking || status.seniorityReset))
-    .sort((a, b) => {
-      if (a.seniorityReset !== b.seniorityReset) return a.seniorityReset ? -1 : 1
-      return new Date(b.updatedAt) - new Date(a.updatedAt)
-    })
+    .filter(status => status.schoolYearStart === currentYear && status.occurrenceCount >= occurrenceThresholds().tracking)
+    // Most occurrences first: the person furthest along the ladder is the one
+    // a manager needs to deal with, and recency buried that.
+    .sort((a, b) => (b.occurrenceCount - a.occurrenceCount)
+      || (new Date(b.updatedAt) - new Date(a.updatedAt)))
 }
 
 // The follow-up list is a watch list: it only means something if every name on
@@ -249,9 +230,15 @@ export function splitFlaggedByEmploymentStatus(flaggedWithEmployees) {
 
 export function getAttendanceStageLabel(status) {
   if (!status) return 'No active attendance action'
-  if (status.seniorityReset && status.stage === 'verbal_warning') return 'Union seniority reset · Verbal warning required'
-  if (status.seniorityReset) return 'Union seniority reset'
-  if (status.stage === 'verbal_warning') return 'Verbal warning required'
-  if (status.stage === 'formal_tracking') return 'Formal attendance tracking'
+  // 'verbal_warning' and 'formal_tracking' are the stage names written by
+  // versions before 2026-10-19. Mapped rather than migrated: the stage is
+  // recomputed from the triggers on every write, so stored values age out on
+  // their own.
+  if (status.stage === 'formal_action' || status.stage === 'verbal_warning') {
+    return 'Formal attendance tracking needed'
+  }
+  if (status.stage === 'monitoring' || status.stage === 'formal_tracking') {
+    return 'Tracked by manager'
+  }
   return `${status.occurrenceCount} documented occurrence${status.occurrenceCount === 1 ? '' : 's'}`
 }

@@ -5,6 +5,7 @@ import { saveBlackoutDateRange } from './blackoutDates.js'
 import {
   attendanceSeverityOf,
   checkAndFlag,
+  getAttendanceStageLabel,
   getEmployeeAttendanceStatus,
   isFlagged,
   isQualifyingCode,
@@ -46,7 +47,7 @@ test('Liz qualifying codes exclude approved and protected leave', () => {
   assert.equal(isQualifyingCode('JUR'), false)
 })
 
-test('third occurrence starts formal tracking and fourth requires a verbal warning', async () => {
+test('the third occurrence is manager-tracked and the fourth needs formal tracking', async () => {
   const employeeId = 'threshold-test'
   const first = firstWeekday(SCHOOL_YEAR_START, 7, 1)
   const second = firstWeekday(SCHOOL_YEAR_START, 8, 1)
@@ -61,7 +62,7 @@ test('third occurrence starts formal tracking and fourth requires a verbal warni
 
   let status = getEmployeeAttendanceStatus(employeeId)
   assert.equal(status.occurrenceCount, 3)
-  assert.equal(status.stage, 'formal_tracking')
+  assert.equal(status.stage, 'monitoring')
   assert.equal(isFlagged(employeeId), true)
 
   checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
@@ -74,149 +75,12 @@ test('third occurrence starts formal tracking and fourth requires a verbal warni
 
   status = getEmployeeAttendanceStatus(employeeId)
   assert.equal(status.occurrenceCount, 4)
-  assert.equal(status.stage, 'verbal_warning')
+  assert.equal(status.stage, 'formal_action')
+  // The app says something is owed. It never says which step was taken —
+  // naming one would make this file read as proof it happened.
+  assert.equal(getAttendanceStageLabel(status), 'Formal attendance tracking needed')
 })
 
-test('two consecutive NCNS workdays reset seniority across a weekend', async () => {
-  const employeeId = 'seniority-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
-  const monday = addDays(friday, 3)
-  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'NCNS'],
-    [monday, 'NCNS'],
-  ))
-  await flushPendingWrites()
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.seniorityReset, true)
-  assert.equal(status.seniorityResetAt, monday)
-  assert.equal(isFlagged(employeeId), true)
-})
-
-test('district blackout holidays are skipped between consecutive NCNS workdays', async () => {
-  const employeeId = 'holiday-seniority-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 8, 5)
-  const mondayHoliday = addDays(friday, 3)
-  const tuesday = addDays(friday, 4)
-
-  saveBlackoutDateRange(mondayHoliday, mondayHoliday, 'District holiday')
-  await flushPendingWrites()
-  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'NCNS'],
-    [tuesday, 'NCNS'],
-  ))
-  await flushPendingWrites()
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.seniorityReset, true)
-  assert.equal(status.seniorityResetAt, tuesday)
-})
-
-// Liz, 2026-09-01: a call-in is not a no-show. Back-to-back UNEX days are two
-// occurrences and nothing more; only NCNS reaches the seniority stage.
-test('consecutive UNEX call-ins do not reset seniority', async () => {
-  const employeeId = 'unex-no-seniority-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 9, 5)
-  const monday = addDays(friday, 3)
-
-  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'UNEX'],
-    [monday, 'UNEX'],
-  ))
-  await flushPendingWrites()
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.seniorityReset, false)
-  assert.equal(status.seniorityResetAt, null)
-  assert.equal(status.occurrenceCount, 2)
-})
-
-test('only NCNS records can trigger a seniority reset', async () => {
-  const employeeId = 'ncns-only-seniority-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 11, 5)
-  const monday = addDays(friday, 3)
-
-  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'NCNS'],
-    [monday, 'CC'],
-  ))
-  await flushPendingWrites()
-
-  assert.equal(getEmployeeAttendanceStatus(employeeId).seniorityReset, false)
-})
-
-test('NCNS records on weekends or blackout holidays do not count', async () => {
-  const employeeId = 'closed-day-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 10, 5)
-  const saturday = addDays(friday, 1)
-  const mondayHoliday = addDays(friday, 3)
-
-  saveBlackoutDateRange(mondayHoliday, mondayHoliday, 'District holiday')
-  await flushPendingWrites()
-  checkAndFlag(employeeId, SCHOOL_YEAR_START, records(
-    [friday, 'NCNS'],
-    [saturday, 'NCNS'],
-    [mondayHoliday, 'NCNS'],
-  ))
-  await flushPendingWrites()
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.occurrenceCount, 1)
-  assert.equal(status.seniorityReset, false)
-})
-
-// Statuses saved before the rule changed still carry "seniorityReset: true" from
-// a pair of UNEX days. They are recomputed on read, so the wrongly flagged
-// employees clear themselves at deploy instead of waiting for the next edit to
-// their attendance.
-test('a status stored under the old consecutive-UNEX rule clears on read', () => {
-  const employeeId = 'stale-unex-status-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
-  const monday = addDays(friday, 3)
-
-  localStorage.setItem('hr-attendance-progress-v2', JSON.stringify({
-    [`${employeeId}-${SCHOOL_YEAR_START}`]: {
-      empId: employeeId,
-      schoolYearStart: SCHOOL_YEAR_START,
-      occurrenceCount: 2,
-      stage: 'documented',
-      updatedAt: new Date().toISOString(),
-      triggers: [{ date: friday, code: 'UNEX' }, { date: monday, code: 'UNEX' }],
-      seniorityReset: true,
-      seniorityResetAt: monday,
-    },
-  }))
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.seniorityReset, false)
-  assert.equal(status.seniorityResetAt, null)
-  // The occurrences themselves are untouched — only the seniority verdict moved.
-  assert.equal(status.occurrenceCount, 2)
-  assert.equal(isFlagged(employeeId), false)
-})
-
-test('a stored NCNS pair still reads as a seniority reset', () => {
-  const employeeId = 'stored-ncns-status-test'
-  const friday = firstWeekday(SCHOOL_YEAR_START, 7, 5)
-  const monday = addDays(friday, 3)
-
-  localStorage.setItem('hr-attendance-progress-v2', JSON.stringify({
-    [`${employeeId}-${SCHOOL_YEAR_START}`]: {
-      empId: employeeId,
-      schoolYearStart: SCHOOL_YEAR_START,
-      occurrenceCount: 2,
-      stage: 'documented',
-      updatedAt: new Date().toISOString(),
-      triggers: [{ date: friday, code: 'NCNS' }, { date: monday, code: 'NCNS' }],
-      seniorityReset: false,
-      seniorityResetAt: null,
-    },
-  }))
-
-  const status = getEmployeeAttendanceStatus(employeeId)
-  assert.equal(status.seniorityReset, true)
-  assert.equal(status.seniorityResetAt, monday)
-})
 
 test('prior school-year stages do not carry into the active July-June year', async () => {
   const employeeId = 'year-boundary-test'
@@ -262,17 +126,13 @@ test('severity turns yellow at the third occurrence and red at the fourth', () =
   assert.equal(attendanceSeverityOf({ occurrenceCount: 12 }), 'action')
 })
 
-test('a seniority reset is red immediately, whatever the occurrence count', () => {
-  assert.equal(attendanceSeverityOf({ occurrenceCount: 2, seniorityReset: true }), 'action')
-  assert.equal(attendanceSeverityOf({ occurrenceCount: 3, seniorityReset: true }), 'action')
-})
 
 test('the main page list drops third occurrences and keeps fourth and up', () => {
   const third = { empId: 'a', occurrenceCount: 3 }
   const fourth = { empId: 'b', occurrenceCount: 4 }
-  const reset = { empId: 'c', occurrenceCount: 2, seniorityReset: true }
+  const seventh = { empId: 'c', occurrenceCount: 7 }
   assert.deepEqual(
-    mainPageFlagged([third, fourth, reset]).map(entry => entry.empId),
+    mainPageFlagged([third, fourth, seventh]).map(entry => entry.empId),
     ['b', 'c']
   )
   assert.deepEqual(mainPageFlagged([third]), [])
@@ -293,4 +153,35 @@ test('the building watch list keeps third occurrences that the main page hides',
   assert.equal(attendanceSeverityOf(status), 'tracking')
   assert.equal(isFlagged(employeeId), true, 'still on the building watch list')
   assert.deepEqual(mainPageFlagged([status]), [], 'but not on the main page')
+})
+
+// Liz, 2026-10-19: the HR manager had been treating what this shows as the
+// formal documentation. It is a count. These assertions exist so that no
+// future wording change quietly turns it back into a disciplinary claim.
+test('no stage label names a disciplinary step', () => {
+  const labels = [1, 2, 3, 4, 5, 6, 7, 12].map(occurrenceCount => getAttendanceStageLabel({
+    occurrenceCount,
+    stage: occurrenceCount >= 4 ? 'formal_action' : occurrenceCount >= 3 ? 'monitoring' : 'documented',
+  }))
+  for (const label of labels) {
+    for (const forbidden of ['verbal', 'written', 'termination', 'seniority', 'warning', 'discipline']) {
+      assert.ok(
+        !label.toLowerCase().includes(forbidden),
+        `"${label}" names ${forbidden}, which this app must not claim happened`
+      )
+    }
+  }
+})
+
+test('stage names written before 2026-10-19 still read correctly', () => {
+  assert.equal(getAttendanceStageLabel({ stage: 'verbal_warning', occurrenceCount: 4 }),
+    'Formal attendance tracking needed')
+  assert.equal(getAttendanceStageLabel({ stage: 'formal_tracking', occurrenceCount: 3 }),
+    'Tracked by manager')
+})
+
+test('a count below the first threshold just says how many', () => {
+  assert.match(getAttendanceStageLabel({ stage: 'documented', occurrenceCount: 2 }), /2 documented occurrences/)
+  assert.match(getAttendanceStageLabel({ stage: 'documented', occurrenceCount: 1 }), /1 documented occurrence/)
+  assert.equal(getAttendanceStageLabel(null), 'No active attendance action')
 })

@@ -46,10 +46,10 @@ test('with nothing saved, every resolver returns the shipped default', () => {
 })
 
 test('a saved change takes effect and is stamped with who made it', () => {
-  saveProgramSettings({ occurrence: { tracking: 2, verbalWarning: 5 } }, { changedBy: 'Liz' })
+  saveProgramSettings({ occurrence: { tracking: 2, formalAction: 5 } }, { changedBy: 'Liz' })
   flushPendingWrites()
 
-  assert.deepEqual(occurrenceThresholds(), { tracking: 2, verbalWarning: 5 })
+  assert.deepEqual(occurrenceThresholds(), { tracking: 2, formalAction: 5 })
   assert.deepEqual(customisedSections(), ['occurrence'])
   const audit = settingsAudit()
   assert.equal(audit.changedBy, 'Liz')
@@ -60,7 +60,7 @@ test('a saved change takes effect and is stamped with who made it', () => {
 // whether somebody is being tracked, not just the settings screen.
 test('changing the thresholds changes what the attendance screens show', () => {
   assert.equal(attendanceSeverityOf({ occurrenceCount: 2 }), 'none')
-  saveProgramSettings({ occurrence: { tracking: 2, verbalWarning: 3 } }, { changedBy: 'Liz' })
+  saveProgramSettings({ occurrence: { tracking: 2, formalAction: 3 } }, { changedBy: 'Liz' })
   flushPendingWrites()
   assert.equal(attendanceSeverityOf({ occurrenceCount: 2 }), 'tracking')
   assert.equal(attendanceSeverityOf({ occurrenceCount: 3 }), 'action')
@@ -142,11 +142,11 @@ test('a section that survives validation empty falls back rather than erasing th
 
 test('thresholds that would invert the stages are ignored', () => {
   for (const occurrence of [
-    { tracking: 4, verbalWarning: 2 },
-    { tracking: 0, verbalWarning: 1 },
-    { tracking: 3, verbalWarning: 3 },
-    { tracking: 2.5, verbalWarning: 4 },
-    { tracking: 'three', verbalWarning: 'four' },
+    { tracking: 4, formalAction: 2 },
+    { tracking: 0, formalAction: 1 },
+    { tracking: 3, formalAction: 3 },
+    { tracking: 2.5, formalAction: 4 },
+    { tracking: 'three', formalAction: 'four' },
   ]) {
     store({ occurrence })
     assert.deepEqual(occurrenceThresholds(), DEFAULT_OCCURRENCE_THRESHOLDS, JSON.stringify(occurrence))
@@ -159,8 +159,8 @@ test('validation refuses what the resolvers would have thrown away', () => {
     [{ starLevels: [{ name: '', minimum: 5 }] }, /needs a name/],
     [{ starLevels: [{ name: 'A', minimum: 0 }] }, /at least 1/],
     [{ starLevels: [{ name: 'A', minimum: 5 }, { name: 'B', minimum: 5 }] }, /both start at 5/],
-    [{ occurrence: { tracking: 0, verbalWarning: 2 } }, /occurrence 1 or later/],
-    [{ occurrence: { tracking: 3, verbalWarning: 2 } }, /after formal tracking/],
+    [{ occurrence: { tracking: 0, formalAction: 2 } }, /occurrence 1 or later/],
+    [{ occurrence: { tracking: 3, formalAction: 2 } }, /after manager tracking/],
     [{ trainingHours: { Cook: -1 } }, /number of hours/],
     [{ trainingHours: { Cook: 500 } }, /looks like a mistake/],
     [{ criterionLabels: { 'a reason': { name: '' } } }, /needs a name/],
@@ -174,17 +174,17 @@ test('validation refuses what the resolvers would have thrown away', () => {
 })
 
 test('a refused save changes nothing that was already in force', () => {
-  saveProgramSettings({ occurrence: { tracking: 2, verbalWarning: 5 } }, { changedBy: 'Liz' })
+  saveProgramSettings({ occurrence: { tracking: 2, formalAction: 5 } }, { changedBy: 'Liz' })
   flushPendingWrites()
-  assert.throws(() => saveProgramSettings({ occurrence: { tracking: 9, verbalWarning: 1 } }))
+  assert.throws(() => saveProgramSettings({ occurrence: { tracking: 9, formalAction: 1 } }))
   flushPendingWrites()
-  assert.deepEqual(occurrenceThresholds(), { tracking: 2, verbalWarning: 5 })
+  assert.deepEqual(occurrenceThresholds(), { tracking: 2, formalAction: 5 })
 })
 
 // Reset removes the override rather than writing today's default in as a
 // value, so a district that resets still follows the default if it changes.
 test('resetting a section removes the override entirely', () => {
-  saveProgramSettings({ occurrence: { tracking: 2, verbalWarning: 5 }, trainingHours: { Cook: 8 } }, { changedBy: 'Liz' })
+  saveProgramSettings({ occurrence: { tracking: 2, formalAction: 5 }, trainingHours: { Cook: 8 } }, { changedBy: 'Liz' })
   flushPendingWrites()
   assert.deepEqual(customisedSections().sort(), ['occurrence', 'trainingHours'])
 

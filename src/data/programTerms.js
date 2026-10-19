@@ -44,10 +44,14 @@ export function attendanceDescriptionKey(code) {
 // baked into a key the caller cannot pluralise.
 export function attendanceStageTerm(status) {
   if (!status) return { key: 'hr.none' }
-  if (status.seniorityReset && status.stage === 'verbal_warning') return { key: 'hr.seniorityResetVerbal' }
-  if (status.seniorityReset) return { key: 'hr.seniorityReset' }
-  if (status.stage === 'verbal_warning') return { key: 'hr.verbalWarning' }
-  if (status.stage === 'formal_tracking') return { key: 'hr.formalTracking' }
+  // The pre-2026-10-19 stage names are mapped rather than migrated; the
+  // stage is recomputed on every write, so they age out on their own.
+  if (status.stage === 'formal_action' || status.stage === 'verbal_warning') {
+    return { key: 'hr.formalActionNeeded' }
+  }
+  if (status.stage === 'monitoring' || status.stage === 'formal_tracking') {
+    return { key: 'hr.managerTracked' }
+  }
   return { key: 'hr.occurrences', count: Number(status.occurrenceCount) || 0 }
 }
 

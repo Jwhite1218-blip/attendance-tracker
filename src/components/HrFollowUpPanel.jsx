@@ -13,6 +13,11 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
   return (
     <div id="hr-follow-up" className="scroll-mt-24 bg-white rounded-xl border border-red-200 p-5 mb-8">
       <h2 className="text-sm font-semibold text-red-700 mb-1">HR Attendance Follow-Up</h2>
+      <p className="mb-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[11px] leading-relaxed text-gray-600">
+        <strong className="text-gray-800">A count, not a record.</strong> This list shows how many occurrences
+        somebody has. It is not documentation of any warning or disciplinary step, and it does not replace the
+        district&apos;s HR forms or process.
+      </p>
       <p className="text-xs text-gray-400 mb-1">
         Active employees only. Occurrences are counted per school year (July–June).
       </p>
@@ -25,13 +30,14 @@ export default function HrFollowUpPanel({ flaggedEmployees, onEmployeeSelect, sh
             <span className="font-semibold text-gray-700">Documented occurrences</span> — each no-call/no-show (NCNS), unexcused call-in absence (UNEX), late-in (LI), or early-out (EO) on record for this school year. Approved and protected leave never counts.
           </p>
           <p>
-            <span className="font-semibold text-amber-700">Formal attendance tracking</span> — reached at the 3rd occurrence. The employee is now formally being tracked for attendance.
+            <span className="font-semibold text-amber-700">Tracked by manager</span> — occurrences 1 to 3. The building manager is keeping an eye on it.
           </p>
           <p>
-            <span className="font-semibold text-red-900">Verbal warning required</span> — reached at the 4th occurrence. A verbal warning needs to be given and documented.
+            <span className="font-semibold text-red-900">Formal attendance tracking needed</span> — from the 4th occurrence. Something is owed <strong>outside this app</strong>, on the district&apos;s own forms.
           </p>
-          <p>
-            <span className="font-semibold text-red-900">Union seniority reset</span> — triggered by two no-call/no-shows (NCNS) on back-to-back scheduled workdays. An unexcused call-in (UNEX) does not trigger this: it still counts as an occurrence, but the employee did call. Under the union agreement a reset changes the employee&apos;s seniority standing, so it is flagged separately and listed first. Weekends and district holidays do not break the streak — two NCNS days on either side of them still count as back-to-back.
+          <p className="pt-1">
+            Warren&apos;s ladder, for reference: <strong>4th</strong> verbal warning · <strong>5th</strong> written
+            warning · <strong>6th</strong> final written warning · <strong>7th</strong> possible termination.
           </p>
         </div>
       </details>

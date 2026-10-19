@@ -254,7 +254,7 @@ function OccurrenceSection({ customised, onSave, onReset }) {
   return (
     <Section
       title="Attendance occurrence stages"
-      description="Which occurrence starts formal tracking, and which requires a verbal warning."
+      description="Which occurrence a manager starts tracking at, and which one needs formal tracking outside the app."
       customised={customised}
       onReset={onReset}
       warning={'Changing these re-reads every employee’s record against the new numbers. Somebody at the old threshold may move stage immediately, in either direction.'}
@@ -262,12 +262,12 @@ function OccurrenceSection({ customised, onSave, onReset }) {
       <form
         onSubmit={event => {
           event.preventDefault()
-          onSave({ tracking: Number(stages.tracking), verbalWarning: Number(stages.verbalWarning) })
+          onSave({ tracking: Number(stages.tracking), formalAction: Number(stages.formalAction) })
         }}
         className="flex flex-wrap items-end gap-3"
       >
         <label className="text-xs font-semibold text-gray-700">
-          <span className="block">Formal tracking starts at</span>
+          <span className="block">Manager tracking starts at</span>
           <input
             type="number"
             min="1"
@@ -277,12 +277,12 @@ function OccurrenceSection({ customised, onSave, onReset }) {
           />
         </label>
         <label className="text-xs font-semibold text-gray-700">
-          <span className="block">Verbal warning at</span>
+          <span className="block">Formal tracking needed at</span>
           <input
             type="number"
             min="2"
-            value={stages.verbalWarning}
-            onChange={event => setStages(current => ({ ...current, verbalWarning: event.target.value }))}
+            value={stages.formalAction}
+            onChange={event => setStages(current => ({ ...current, formalAction: event.target.value }))}
             className="mt-1 w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm"
           />
         </label>
