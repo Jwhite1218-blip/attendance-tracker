@@ -4,6 +4,7 @@ import {
   aceBuckRecipientAllowed,
   monthlyDrawingStatus,
   quarterWindowFor,
+  recognitionRecipients,
   recognitionTypeAllowedForRole,
 } from './recognitionRules.js'
 
@@ -78,4 +79,45 @@ test('the other recognition types are unchanged by the new one', () => {
   assert.equal(recognitionTypeAllowedForRole('school', 'star-of-day'), true)
   assert.equal(recognitionTypeAllowedForRole('school', 'warren-employee-month', false), false)
   assert.equal(recognitionTypeAllowedForRole('admin', 'warren-employee-month', true), true)
+})
+
+// Shipped broken on 2026-10-19: the page scopes its employee list to the
+// building in view, so the Shout-Out picker offered only that school's own
+// lead even though the server was sending all eighteen managers.
+test('a Shout-Out can reach managers at other buildings', () => {
+  const own = [{ id: 'a', position: 'Cook' }, { id: 'b', position: 'Food Service Worker Lead' }]
+  const peers = [{ id: 'c', position: 'Food Service Worker Lead' }, { id: 'd', position: 'Food Service Manager' }]
+  const isManager = employee => ['b', 'c', 'd'].includes(employee.id)
+
+  const shoutOut = recognitionRecipients('star-shout-out', { scoped: own, peerManagers: peers, isManager })
+  assert.deepEqual(shoutOut.map(e => e.id), ['a', 'b', 'c', 'd'], 'own building plus every peer manager')
+})
+
+test('a Daily Star stays inside the building', () => {
+  const own = [{ id: 'a', position: 'Cook' }]
+  const peers = [{ id: 'c', position: 'Food Service Worker Lead' }]
+  const isManager = employee => employee.id === 'c'
+  for (const type of ['star-of-day', 'shooting-star', 'warren-employee-month']) {
+    assert.deepEqual(
+      recognitionRecipients(type, { scoped: own, peerManagers: peers, isManager }).map(e => e.id),
+      ['a'],
+      type
+    )
+  }
+})
+
+test('an ACE Star Buck reaches managers and nobody else', () => {
+  const own = [{ id: 'a', position: 'Cook' }, { id: 'b', position: 'Food Service Worker Lead' }]
+  const peers = [{ id: 'c', position: 'Food Service Manager' }]
+  const isManager = employee => ['b', 'c'].includes(employee.id)
+  assert.deepEqual(
+    recognitionRecipients('ace-buck', { scoped: own, peerManagers: peers, isManager }).map(e => e.id),
+    ['b', 'c'],
+    'the cook is not offered'
+  )
+})
+
+test('the recipient rule copes with nothing passed to it', () => {
+  assert.deepEqual(recognitionRecipients('star-shout-out'), [])
+  assert.deepEqual(recognitionRecipients('star-of-day', { scoped: [] }), [])
 })

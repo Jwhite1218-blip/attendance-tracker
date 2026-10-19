@@ -64,3 +64,19 @@ export function quarterWindowFor(dateValue = new Date()) {
     label: `${new Date(Date.UTC(year, startMonth - 1, 1)).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' })}–${new Date(Date.UTC(year, endMonth - 1, 1)).toLocaleDateString('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })}`,
   }
 }
+
+// Who a given recognition type may be given to, from the lists a page holds.
+//
+// Extracted from the form so the rule can be tested without rendering
+// anything: it decides whether a manager at another building appears in the
+// picker at all, and getting it wrong looks like a save that worked and did
+// nothing, because the server drops what the rule should have excluded.
+//
+//   ace-buck        manager-grade only, any building (district award)
+//   star-shout-out  this building, plus every other building's managers
+//   everything else this building only
+export function recognitionRecipients(type, { scoped = [], peerManagers = [], isManager = () => false } = {}) {
+  if (type === 'ace-buck') return [...scoped.filter(isManager), ...peerManagers]
+  if (type === 'star-shout-out') return [...scoped, ...peerManagers]
+  return [...scoped]
+}

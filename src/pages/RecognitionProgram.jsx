@@ -42,6 +42,7 @@ import {
 import {
   monthlyDrawingStatus,
   quarterWindowFor,
+  recognitionRecipients,
   recognitionTypeAllowedForRole,
 } from '../data/recognitionRules.js'
 import { coachMilestones } from '../data/programSettings.js'
@@ -171,6 +172,14 @@ export default function RecognitionProgram() {
   const scopedEmployees = scopeLocation === 'all'
     ? employees
     : employees.filter(employee => employee.location === scopeLocation)
+  // Manager-grade staff the current view does NOT already include. A
+  // building session is scoped to its own school, so without this the
+  // Shout-Out picker offers only that school's own lead — which is what it
+  // did when this first shipped. The server sends these eighteen to every
+  // session precisely so they can be chosen.
+  const scopedKeys = new Set(scopedEmployees.map(employeeKey))
+  const peerManagers = employees.filter(employee =>
+    managerIds.has(employeeKey(employee)) && !scopedKeys.has(employeeKey(employee)))
   const scopedRecords = scopeLocation === 'all'
     ? records
     : records.filter(record => record.locationId === scopeLocation)
@@ -569,6 +578,7 @@ export default function RecognitionProgram() {
               title="Star of the Day"
               subtitle="Catch someone shining. This is the daily award that earns stars."
               employees={scopedEmployees}
+              peerManagers={peerManagers}
               managerIds={managerIds}
               ownLocationId={locationId}
               canEdit={canEditRecognition}
@@ -613,6 +623,7 @@ export default function RecognitionProgram() {
                 title="Bonus recognition"
                 subtitle="Nominations, shout-outs and ACE Star Bucks."
                 employees={scopedEmployees}
+                peerManagers={peerManagers}
                 managerIds={managerIds}
                 ownLocationId={locationId}
                 canEdit={canEditRecognition}
@@ -675,6 +686,7 @@ function RecognitionEntryForm({
   title,
   subtitle,
   employees,
+  peerManagers = [],
   managerIds,
   ownLocationId,
   canEdit,
@@ -695,11 +707,22 @@ function RecognitionEntryForm({
   // outside these sets, so offering a name it would discard would be a
   // silent failure rather than a refusal.
   const isManager = employee => managerIds?.has(employeeKey(employee)) === true
-  const recipients = form.type === 'ace-buck'
-    ? employees.filter(isManager)
-    : form.type === 'star-shout-out'
-      ? employees
-      : employees.filter(employee => !isManager(employee) || employee.location === ownLocationId || !ownLocationId)
+  const byName = (left, right) => employeeListName(left).localeCompare(employeeListName(right))
+
+  // Who each type may actually be given to. The server drops anything
+  // outside these sets, so offering a name it would discard would look like
+  // a save that worked and did nothing.
+  //
+  //   ACE Star Buck  — manager-grade only, any building. District award.
+  //   Shout-Out      — this building, plus every other building's managers.
+  //                    It earns nothing and decides nothing, which is what
+  //                    makes it safe to send across a boundary.
+  //   everything else — this building only.
+  const recipients = recognitionRecipients(form.type, {
+    scoped: employees,
+    peerManagers,
+    isManager,
+  }).sort(byName)
   const recipientLabel = form.type === 'ace-buck'
     ? 'Which leader'
     : form.type === 'star-shout-out' ? 'Who is being thanked' : 'Team member'
@@ -769,7 +792,9 @@ function RecognitionEntryForm({
                 {recipients.map(employee => (
                   <option key={employeeKey(employee)} value={employeeKey(employee)}>
                     {employeeListName(employee)}
-                    {employee.location && managerIds?.has(employeeKey(employee)) ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}` : ''}
+                    {employee.location && !employees.includes(employee)
+                      ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}`
+                      : ''}
                   </option>
                 ))}
               </select>
