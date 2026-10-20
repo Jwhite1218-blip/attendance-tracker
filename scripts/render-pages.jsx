@@ -60,7 +60,9 @@ const PAGES = [
   ['LocationView', LocationView, '/location/CrestonMS', [LIZ, MANAGER]],
   ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
   ['Training', Training, '/training', [LIZ, MANAGER]],
-  ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER]],
+  ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER], {
+    admin: ['Star milestones', 'ACE Coach milestones'],
+  }],
   ['AccessAdmin', AccessAdmin, '/access', [LIZ, MANAGER]],
   ['LedgerView', LedgerView, '/ledger', [LIZ, MANAGER]],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
@@ -72,7 +74,7 @@ const PAGES = [
 
 export function render() {
   const results = []
-  for (const [name, Page, path, roles] of PAGES) {
+  for (const [name, Page, path, roles, expect = {}] of PAGES) {
     for (const access of roles) {
       const who = access.role === 'admin' ? 'admin' : 'manager'
       try {
@@ -83,7 +85,12 @@ export function render() {
             </AuthContext.Provider>
           </MemoryRouter>
         )
-        results.push({ name, who, ok: true, length: html.length })
+        const missing = (expect[who] || []).filter(text => !html.includes(text))
+        if (missing.length) {
+          results.push({ name, who, ok: false, error: `rendered without: ${missing.join(', ')}` })
+        } else {
+          results.push({ name, who, ok: true, length: html.length })
+        }
       } catch (error) {
         results.push({ name, who, ok: false, error: String(error?.message || error) })
       }

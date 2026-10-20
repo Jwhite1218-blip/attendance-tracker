@@ -13,6 +13,7 @@ import { hasLizAdminAccess } from '../data/futureTools.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { DEFAULT_CRITERION_LABELS } from '../data/programDefaults.js'
 import {
+  coachMilestones,
   criterionLabels,
   customisedSections,
   occurrenceThresholds,
@@ -90,9 +91,26 @@ export default function ProgramSettings() {
 
       <MilestonesSection
         key={`levels-${savedCount}`}
+        title="Star milestones"
+        description="What an employee's star count is called, and how many stars it takes."
+        read={starLevels}
+        unit="stars"
+        defaultSymbol="⭐"
         customised={customised.includes('starLevels')}
-        onSave={levels => commit({ starLevels: levels }, 'Milestones')}
-        onReset={() => revert('starLevels', 'Milestones')}
+        onSave={levels => commit({ starLevels: levels }, 'Star milestones')}
+        onReset={() => revert('starLevels', 'Star milestones')}
+      />
+
+      <MilestonesSection
+        key={`coach-${savedCount}`}
+        title="ACE Coach milestones"
+        description="The Leadership Track, counted separately. These apply to kitchen managers earning ACE Coach Bucks, and share nothing with the star milestones above."
+        read={coachMilestones}
+        unit="Coach Bucks"
+        defaultSymbol="◆"
+        customised={customised.includes('coachMilestones')}
+        onSave={levels => commit({ coachMilestones: levels }, 'ACE Coach milestones')}
+        onReset={() => revert('coachMilestones', 'ACE Coach milestones')}
       />
 
       <OccurrenceSection
@@ -168,8 +186,8 @@ function SaveButton({ children = 'Save' }) {
   )
 }
 
-function MilestonesSection({ customised, onSave, onReset }) {
-  const [levels, setLevels] = useState(() => starLevels().map(level => ({ ...level })))
+function MilestonesSection({ title, description, read, unit, defaultSymbol, customised, onSave, onReset }) {
+  const [levels, setLevels] = useState(() => read().map(level => ({ ...level })))
 
   const update = (index, field, value) => {
     setLevels(current => current.map((level, position) =>
@@ -178,8 +196,8 @@ function MilestonesSection({ customised, onSave, onReset }) {
 
   return (
     <Section
-      title="Star milestones"
-      description="What an employee's star count is called, and how many stars it takes."
+      title={title}
+      description={description}
       customised={customised}
       onReset={onReset}
     >
@@ -211,10 +229,10 @@ function MilestonesSection({ customised, onSave, onReset }) {
                   min="1"
                   value={level.minimum}
                   onChange={event => update(index, 'minimum', event.target.value)}
-                  aria-label={`${level.name} star count`}
+                  aria-label={`${level.name} ${unit} count`}
                   className="w-20 rounded-lg border border-gray-200 px-2 py-1.5 text-sm"
                 />
-                stars
+                {unit}
               </label>
               {levels.length > 1 && (
                 <button
@@ -236,7 +254,7 @@ function MilestonesSection({ customised, onSave, onReset }) {
               id: `level-${Date.now()}`,
               name: '',
               minimum: (Math.max(0, ...current.map(level => Number(level.minimum) || 0)) + 10),
-              symbol: '⭐',
+              symbol: defaultSymbol,
             }])}
             className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
           >
