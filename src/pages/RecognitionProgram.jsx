@@ -930,7 +930,7 @@ function RecognitionEntryForm({
               />
               {form.type === 'star-of-day' && (
                 <span className="mt-1 block text-[11px] font-semibold text-[#9a651b]">
-                  This prints on the card in place of the word “Other”, so keep it short.
+                  This prints on the card with the star message.
                 </span>
               )}
             </label>

@@ -81,7 +81,9 @@ test('the card carries both languages so one card serves everybody', () => {
   assert.ok(html.includes('Reliability') && html.includes('Responsabilidad'))
 })
 
-test('a star given for Other prints what it was, not the word', () => {
+test('what Other was reads with the message, not in the reason list', () => {
+  // Liz, 2026-10-19: the reason list stays the fixed set of words a manager
+  // ticks; the explanation belongs where the card is written on.
   const html = buildStarCardHtml([{
     name: 'Maria G.',
     date: '2026-10-19',
@@ -91,11 +93,26 @@ test('a star given for Other prints what it was, not the word', () => {
     recognizedBy: 'Liz',
   }], { pad: false })
 
-  assert.ok(html.includes('Covered a double shift'))
-  // The placeholder is gone from that card, and so is its translation —
-  // what the manager typed is the reason, in whatever language they typed it.
-  assert.ok(!html.includes('>Other<'))
-  assert.ok(!html.includes('>Otro<'))
+  assert.ok(html.includes('<p class="msg">Covered a double shift</p>'))
+  assert.ok(html.includes('<p class="msg">Stayed late twice this week.</p>'))
+  // "other" is still printed and ticked, in both languages, like any reason.
+  assert.ok(html.includes('>Other<') && html.includes('>Otro<'))
+})
+
+test('every card rules out to the same height, written on or not', () => {
+  // The writing area is two slots whatever fills them, so the footer sits in
+  // the same place on every card and a sheet still cuts straight.
+  const slots = html => (html.match(/class="msg"/g) || []).length + (html.match(/class="ruled"/g) || []).length
+
+  const card = entry => buildStarCardHtml([entry], { pad: false })
+  const base = { name: 'A', date: '2026-10-19', criteria: ['Service'] }
+
+  assert.equal(slots(card({ ...base })), 2)
+  assert.equal(slots(card({ ...base, message: 'Good work.' })), 2)
+  assert.equal(slots(card({ ...base, criteria: ['Other'], otherReason: 'Covered a shift' })), 2)
+  assert.equal(slots(card({ ...base, criteria: ['Other'], otherReason: 'Covered a shift', message: 'Good work.' })), 2)
+  // Six blank cards on a padded sheet, two slots each.
+  assert.equal(slots(buildStarCardHtml([], { pad: true })), 12)
 })
 
 test('a blank card still offers Other as a choice to tick', () => {

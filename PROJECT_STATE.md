@@ -324,7 +324,9 @@ nobody authorised. The screen flags a request whose record has moved since
 it was written, field by field, and one older than a month.
 
 **The Star of the Day card.** "Other" takes a short free-text line saying
-what it was, which replaces the word on the printed card. Required for a
+what it was. It prints with the star message, not in the reason list —
+Liz, 2026-10-19: the list stays the fixed set of words a manager ticks, and
+the explanation belongs where the card is written on. Required for a
 Star of the Day only — that is the one that gets printed — and the
 nomination surfaces keep carrying their reason in the message they already
 require.
@@ -334,6 +336,9 @@ versions, so a manager never chooses which card somebody gets. Reason words
 come from the shared Spanish dictionary, so the Spanish review reaches the
 card; only the four fixed labels live with the card. What a manager types
 for "Other" is not translated.
+
+The writing area is always two slots, filled or ruled, so the footer sits
+at the same height on every card and a sheet still cuts straight.
 
 A print layout cannot be verified by a passing test. This one was checked
 by rendering a sheet with the real Sacramento, Bebas and Antonio faces and

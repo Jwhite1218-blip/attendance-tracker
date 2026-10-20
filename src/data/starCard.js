@@ -17,7 +17,7 @@
 // where a .woff2 import would not resolve. With no assets the card still prints
 // correctly in system faces — it just isn't the branded version.
 
-import { ALL_STAR_REASON_OPTIONS, OTHER_REASON } from './recognitionStore.js'
+import { ALL_STAR_REASON_OPTIONS } from './recognitionStore.js'
 import { PROGRAM_STRINGS } from './programVocabulary.js'
 
 // The card is handed to the person it is about, and a good share of the
@@ -60,25 +60,24 @@ export function formatCardDate(value) {
 function renderCard(entry) {
   const filled = Boolean(entry)
   const chosen = new Set(entry?.criteria || [])
-  // "Other" is a placeholder until somebody says what it was. When they
-  // have, that text replaces the word outright — in both languages, because
-  // what was typed is the reason and translating it is not ours to do.
-  const otherText = filled ? String(entry.otherReason || '').trim() : ''
   const reasons = ALL_STAR_REASON_OPTIONS
     .map(name => {
       const on = filled && chosen.has(name)
-      const useOther = name === OTHER_REASON && on && otherText
-      const english = useOther ? otherText : name
-      const spanish = useOther ? '' : spanishReason(name)
-      return `<span class="reason${on ? ' reason-on' : ''}"><span class="en">${escapeHtml(english)}</span>${
-        spanish ? `<span class="es">${escapeHtml(spanish)}</span>` : ''
-      }</span>`
+      return `<span class="reason${on ? ' reason-on' : ''}">`
+        + `<span class="en">${escapeHtml(name)}</span>`
+        + `<span class="es">${escapeHtml(spanishReason(name))}</span>`
+        + '</span>'
     })
     .join('<span class="sep">-</span>')
 
-  const message = filled
-    ? `<p class="msg">${escapeHtml(entry.message || '')}</p><span class="ruled"></span>`
-    : '<span class="ruled"></span><span class="ruled"></span>'
+  const written = filled
+    ? [String(entry.otherReason || '').trim(), String(entry.message || '').trim()].filter(Boolean)
+    : []
+  // Always two slots, so a card with one line of writing and a blank card
+  // rule out to the same height and the footer never shifts.
+  const slots = written.map(line => `<p class="msg">${escapeHtml(line)}</p>`)
+  while (slots.length < 2) slots.push('<span class="ruled"></span>')
+  const message = slots.join('')
 
   return `<article class="card">
   <div class="frame">
