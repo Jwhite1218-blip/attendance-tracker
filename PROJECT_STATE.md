@@ -370,6 +370,9 @@ Answered by Liz directly, so these are settled unless she reopens them.
 - **Training backfill is manual.** Her documentation is not in a shape worth
   importing, so no importer will be built. Every member of staff reads as
   "short" until she enters it, which is correct.
+- **A manager's stars count towards their building's monthly total, but put
+  no entry in that building's drawing.** Settled 2026-10-19; this is what
+  the code already did, now tested as one thing and stated on the page.
 - **"Other" belongs on the printed Star of the Day card, and the card should
   be bilingual.** Both shipped — free text line, both languages on one card.
 
@@ -377,16 +380,19 @@ Answered by Liz directly, so these are settled unless she reopens them.
 
 1. **Approval workflow — built, not yet exercised.** No real request has
    been made or decided. The first one is worth watching end to end.
-2. **Spanish sign-off** on the sixty drafted terms. Liz asked what this is on
-   2026-10-19 and has been told; nothing is blocked on it except the notice
-   itself. Until somebody is recorded as having approved the wording, every
-   Spanish screen carries "still a draft under review". She clears it in
-   Settings, which records who approved it and when.
+2. **Spanish sign-off.** The review sheet is built and linked from Settings;
+   what is left is a Spanish speaker reading it. Until somebody is recorded
+   as having approved the wording, every Spanish screen carries "still a
+   draft under review".
+
+   **The gap worth knowing:** corrections coming back on paper cannot be
+   typed in by Liz. The Spanish wording is in `programVocabulary.js`, not in
+   settings, so applying them is still a code change through Jon. If the
+   review produces more than a handful, making the wording editable is the
+   obvious next step — `programSettings` already has the
+   override-not-replacement pattern to copy.
 3. **All-Stars page reorganisation.** Jon flagged layout changes on
    2026-10-19 and will come back with them. Liz: "re-circle back to that".
-4. Whether a manager's stars should still count in their building's "Stars by
-   month" total while being off that building's leaderboard and out of its
-   drawing. Liz is holding this until she discusses it with her team.
 
 ## Open, waiting on Jon
 1. **Deploy previews are publicly reachable and accept real district PINs**
