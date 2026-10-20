@@ -1,24 +1,27 @@
 # Attendance Tracker — Project State
 
-Last verified: 2026-10-18
+Last verified: 2026-10-19
 
 ## Current stage
 Production / live pilot. The recognition work was demonstrated to Liz's team on
 2026-09-29; her follow-up notes of 2026-10-10 are built and live apart from the
 approval workflow.
 
-Two pieces of work are in flight as of 2026-10-18, both aimed at the same
-thing — Liz changing the system without going through Jon. The settings half
-is finished. The access half is one phase in of three.
+Three threads as of 2026-10-19. Liz changing the system without going
+through Jon: the settings page is done and the access rework is two phases
+of three. The ACE Coach Bucks programme is built and awaiting its first
+award. And the attendance side has been deliberately stripped of anything
+that reads as HR documentation.
 
 ## Canonical source
 - Repository: `Jwhite1218-blip/attendance-tracker`
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `942fd0aaab2beba8f488e0faa9f36bdfb42d1dad`
-- Test suite: 292 passing (`npm test`)
-- Confirmed live: `/version.json` returns that commit, 2026-10-18
+- Verified production commit: `56a68c22cafca61de22304356139479f82106028`
+- Test suite: 331 passing (`npm test`)
+- Page render check: 19 clean (`npm run verify:pages`)
+- Confirmed live: `/version.json` returns that commit, 2026-10-19
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
@@ -85,6 +88,16 @@ traceable and isolated from production data.
   to undefined identifiers without complaint — a missing import shipped to
   production on 2026-09-28 with a green build and 192 passing tests. Scan for
   JSX components that are neither imported nor declared before shipping.
+- `vite build` passing is not evidence a page renders, and neither is a
+  green test suite. Run `npm run verify:pages`: it renders all 13 signed-in
+  pages under Node as each role that can reach them, and a reference to
+  something never imported throws there instead of in front of a manager.
+  That failure has shipped twice — a component on 2026-09-28, a function on
+  2026-10-19 that would have blanked the All-Stars page.
+- A render check proves a page does not throw. It says nothing about whether
+  the data reaching it is right. The Shout-Out picker rendered perfectly
+  while showing the wrong names on 2026-10-19; what caught that was moving
+  the rule into a pure function and testing it.
 - An environment variable change does not reach the functions until a
   redeploy. A flag can be set perfectly and do nothing because the live build
   predates it. Check `/version.json` against `git rev-parse HEAD` before
@@ -217,26 +230,95 @@ so removing that blob in Phase 3 would have logged every signed-in user out
 at once. Table-sourced sessions now carry `profileId` instead of a
 credential fingerprint and skip that path. Both scenarios have tests.
 
+## Shipped 2026-10-19
+
+**Access rework, Phases 2a and 2b.** `/access` in Liz's nav lists every
+sign-in code: what it reaches, what it can do, when it was last used, and
+the code itself, masked until she presses Show. She can add a login, change
+a code, edit what it reaches, and disable one — all without a deploy.
+
+The guardrails live in `access-guards.mjs` with their own tests, because
+each is a way to lock nineteen people out with no way back but SQL: no
+disabling your own login, no stripping your own administrator access, the
+last full administrator cannot be stood down, nobody grants a capability
+they do not hold, and a school login must name a real school. All enforced
+in the function, not the page; the tests call the endpoint over HTTP to
+prove a manager cannot skip the UI. No hard delete — unwanted logins are
+disabled, which keeps the record of what they could reach.
+
+Nineteen credentials migrated themselves out of the environment variable
+within a day of the flag going on, with no failures.
+
+**ACE Coach Bucks.** The Leadership Track, in its own green section on the
+All-Stars page, administrator-only. Awarded by the district office to the
+fifteen kitchen managers — eligibility is keyed on WHERE somebody works,
+not their job title, so a Food Service Manager posted to a building would
+be eligible while the same title at the district office is not. Eight
+categories from Liz's document, five coach milestones from 25 to 200, both
+editable in Settings. Counted separately from Daily Stars, which managers
+keep on the blue leaderboard: a manager holding both has two totals on
+purpose, and a kitchen manager sees their own Buck count on their employee
+record.
+
+**Peer Shout-Outs.** A building session now also receives the eighteen
+manager-grade staff, so Worker Leads can send each other a Warren Star
+Shout-Out. A Daily Star for the same person is still dropped — a Shout-Out
+earns nothing and decides nothing, whereas a Daily Star would let one
+building inflate another's monthly drawing.
+
+**The attendance side is no longer HR documentation.** The HR manager had
+begun treating what the app showed as the formal record. So: "verbal
+warning required" is gone, replaced by "formal attendance tracking needed"
+from the fourth occurrence; occurrences below that have no stage of their
+own, just a count; union seniority reset is removed entirely, display and
+computation; the HR ladder (4 verbal, 5 written, 6 final written, 7
+possible termination) is shown as reference under "handled outside this
+app"; and the panel and every printout now say "a count, not a record".
+
+A test asserts that no stage label contains "verbal", "written",
+"termination", "seniority", "warning" or "discipline", so wording cannot
+drift back.
+
+**Employee cards carry less.** Phone numbers removed outright — display,
+both forms, the code behind them, stripped server-side, and the stored
+values purged from production on 2026-10-19 (0 rows remaining, confirmed).
+Hire date off the card and moved to the administrator-only part of the
+roster payload. Names on the card and the printed ledger read as a full
+first name and a last initial; rosters, recognition and the printed Star of
+the Day card still use full names, because a manager marking attendance
+has to know exactly who they are marking.
+
+**Print full record.** Beside Print ledger: employment status with last
+day, termination date and reason; schools worked; the attendance year with
+comments; manager notes with author and date; recognition earned. Carries
+the same "not a disciplinary file" warning, which matters more on paper.
+
 ## Open, waiting on Liz
-1. **ACE Bucks / Leadership Track.** No ACE Buck record type exists — manager
-   "stars" are ordinary `star-of-day` records shown on a blue board labelled
-   ACE Coach, which reads as ACE Bucks while counting something else. Blocking:
-   who awards one (her 2026-08-26 transcript says she and Marrese do, which
-   contradicts the peer-award model Jon described on 2026-09-28), any cap, is
-   there a manager drawing, does it print a card, and whether employee
-   milestone names change from Bronze/Silver/Gold to Rookie All-Star/Rising
-   Star/MVP/Hall of Fame/All-Star Legend.
-2. **Approval workflow.** "Other admin logins can request to edit/transfer with
+1. **ACE Coach Bucks — the remaining questions.** The programme is built and
+   awarding works. Still unanswered, none of them blocking:
+   - Is there a monthly ACE drawing? `drawManagerAllStar` and
+     `getManagerDrawingEntries` exist and are tested but are wired to no
+     screen, waiting on this.
+   - Does a Coach Buck print a card, and is it the Star of the Day card or
+     its own?
+   - Any cap or monthly allowance per awarder.
+   - Do employee milestone names change from Bronze/Silver/Gold to Rookie
+     All-Star/Rising Star/MVP/Hall of Fame/All-Star Legend? **Liz can now
+     make this change herself** in Settings; it stopped being a code change
+     on 2026-10-18.
+2. **All-Stars page reorganisation.** Jon flagged further layout changes on
+   2026-10-19 and will come back with them.
+3. **Approval workflow.** "Other admin logins can request to edit/transfer with
    my approval?" — still a question in her own notes, so unspecified.
    `pending-approvals-v1` is already admitted by the SQL allowlist, so building
    it needs no further migration.
-3. **Spanish sign-off** on the sixty drafted terms.
-4. Whether "other" belongs on the printed card, and whether the card should be
+4. **Spanish sign-off** on the sixty drafted terms.
+5. Whether "other" belongs on the printed card, and whether the card should be
    bilingual.
-5. Whether a manager's stars should still count in their building's "Stars by
+6. Whether a manager's stars should still count in their building's "Stars by
    month" total while being off that building's leaderboard and out of its
    drawing.
-6. **Training backfill.** Liz is emailing what she already holds. Until it is
+7. **Training backfill.** Liz is emailing what she already holds. Until it is
    loaded every member of staff reads as "short", which is correct — the
    2026-27 counter started in July and nothing has been entered. If her
    history is mostly district-wide events it is five or six manual entries
@@ -253,26 +335,31 @@ credential fingerprint and skip that path. Both scenarios have tests.
    Production, so no preview can sign anybody in against the table or migrate
    a production credential into it. The blob exposure remains until the
    variable is scoped to Production, or until Phase 3 removes it.
-2. **Access rework, Phase 2** is gated on the migration filling out. Check
-   `select display_name, role, location_id, source, last_used_at from
-   public.access_profiles order by last_used_at desc nulls last;` — when most
-   of the sixteen are present, the admin screen is worth building against
-   real rows. That query is also the first real inventory of who has access.
-3. **`ATTENDANCE_PIN_KEY` must be recorded outside Netlify.** It encrypts
+2. **Access rework, Phase 3** — the cutover. Remove
+   `ATTENDANCE_ACCESS_CODES_JSON`, the five additive variables, and the
+   fallback path in `resolveAccessForPin`. Gate: every login present in
+   `access_profiles` and signing in from it for a few days. The hazard is
+   written down in `ACCESS_REDESIGN.md` — `sessionFromRequest` must not
+   re-resolve a session against a blob that no longer exists, which is
+   already handled for table-sourced sessions and has a test.
+3. **Phone numbers purged** from production on 2026-10-19, 0 rows remaining,
+   confirmed. Nothing to do — recorded so the field is not mistaken for
+   still-held data.
+4. **`ATTENDANCE_PIN_KEY` must be recorded outside Netlify.** It encrypts
    every PIN and cannot be read back once secret-flagged. Losing it after
    migration means reissuing every PIN in the district. It is the one piece
    of this with no recovery path.
-4. **`feature/offline-working-mode`** is unmerged and stale. Re-apply it over
+5. **`feature/offline-working-mode`** is unmerged and stale. Re-apply it over
    main's `canWriteManagedKeyForAccess` rather than the reverse, or live school
    recognition access is silently reverted — the commit message explains.
-5. **The Supabase connector does not list the production project**, though it
+6. **The Supabase connector does not list the production project**, though it
    reaches it by ref. Worth reconnecting on the District 9 account so future
    sessions are not misled by an incomplete listing. Also decide what the
    *Localis* project is for, or remove it.
-6. Whether building managers should be able to log their own training (safety
+7. Whether building managers should be able to log their own training (safety
    briefs and huddles are building-level events). Currently administrator-only,
    which matches the entry form Liz described.
-7. **Attendance code badge colours are muddy**, deferred 2026-10-11 — nobody
+8. **Attendance code badge colours are muddy**, deferred 2026-10-11 — nobody
    has complained, so left alone. `LI` (#EC9126) against `EO` (#E8A32B) is a
    1.12 contrast ratio and effectively one colour under a deuteranopia
    simulation; `UNEX` (#E56E6A) against `LI` is 1.28. The two-letter labels
