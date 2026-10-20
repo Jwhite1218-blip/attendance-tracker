@@ -4,9 +4,15 @@ import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { transferEmployee, updateEmployeeRecord } from '../data/employeeLocations.js'
 import { normalizeBirthday, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
+import { submitRequest } from '../data/approvalStore.js'
 
 export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
-  const { displayName } = useAuth()
+  const access = useAuth()
+  const { displayName } = access
+  // Liz saves; anybody else sends the same change to her for review.
+  const mode = rosterActionMode(access)
+  const [sent, setSent] = useState(false)
   const [form, setForm] = useState({
     first_name: employee.first_name || '',
     last_name: employee.last_name || '',
@@ -30,8 +36,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
       if (!form.first_name.trim() || !form.last_name.trim()) throw new Error('First and last name are required.')
       if (!form.location) throw new Error('Choose a location.')
       const empKey = employee.kronos_id || employee.id
-      if (form.location !== employee.location) transferEmployee(empKey, form.location, displayName)
-      const saved = updateEmployeeRecord(empKey, {
+      const updates = {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
         display_name: `${form.first_name.trim()} ${form.last_name.trim()}`,
@@ -41,11 +46,60 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
         hire_date: form.hire_date,
         service_date: form.service_date,
         t_shirt_size: form.t_shirt_size.trim(),
-      })
+      }
+
+      if (mode === 'request') {
+        // Only what actually differs, so Liz reads a short list rather than
+        // every field on the card, and so an untouched field cannot overwrite
+        // a correction somebody else makes before she decides.
+        const changed = Object.fromEntries(
+          Object.entries(updates).filter(([field, value]) => String(value ?? '') !== String(employee[field] ?? ''))
+        )
+        const moving = form.location !== employee.location
+        if (!Object.keys(changed).length && !moving) throw new Error('Nothing has been changed.')
+
+        const payload = moving ? { ...changed, location: form.location } : changed
+        const baseline = Object.fromEntries(
+          Object.keys(payload).map(field => [field, field === 'location' ? employee.location : employee[field] ?? ''])
+        )
+
+        submitRequest({
+          type: 'edit',
+          empId: empKey,
+          employeeName: `${employee.first_name} ${employee.last_name}`,
+          summary: describeChanges(payload, employee),
+          payload,
+          baseline,
+          requestedBy: displayName,
+        })
+        setSent(true)
+        return
+      }
+
+      if (form.location !== employee.location) transferEmployee(empKey, form.location, displayName)
+      const saved = updateEmployeeRecord(empKey, updates)
       onSaved(saved)
     } catch (submitError) {
       setError(submitError.message || 'Unable to save employee details.')
     }
+  }
+
+  if (sent) {
+    return (
+      <div className="bg-white rounded-xl border border-emerald-200 p-4 sm:p-5">
+        <h3 className="text-sm font-bold text-emerald-800">Sent to Liz for review</h3>
+        <p className="mt-1 text-xs text-gray-600">
+          The card has not changed yet. Liz sees this in Change requests and the edit is applied only if she approves it.
+        </p>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="mt-3 rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+        >
+          Close
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -109,4 +163,29 @@ function Field({ label, value, onChange, type = 'text', required = false, placeh
       />
     </label>
   )
+}
+
+// A one-line description of what is being asked for, so Liz can decide from
+// the list without opening each request.
+function describeChanges(payload, employee) {
+  const names = {
+    first_name: 'first name',
+    last_name: 'last name',
+    position: 'job title',
+    location: 'school',
+    birthdate: 'birthdate',
+    hire_date: 'hire date',
+    service_date: 'service date',
+    t_shirt_size: 'T-shirt size',
+  }
+  const parts = Object.keys(payload)
+    // display_name and job are written alongside the fields they mirror;
+    // listing them would make one change read as three.
+    .filter(field => field !== 'display_name' && field !== 'job')
+    .map(field => {
+      const before = field === 'location' ? employee.location : employee[field]
+      const label = names[field] || field
+      return `${label}: ${before || '—'} → ${payload[field] || '—'}`
+    })
+  return parts.join(', ')
 }

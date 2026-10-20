@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useAuth } from './PinGate.jsx'
 import { LOCATIONS } from '../data/locations.js'
 import { addEmployee } from '../data/employeeLocations.js'
 import { T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
+import { submitRequest } from '../data/approvalStore.js'
 
 const EMPTY_FORM = {
   first_name: '',
@@ -16,10 +19,35 @@ const EMPTY_FORM = {
 }
 
 export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocation = '' }) {
+  const access = useAuth()
+  const mode = rosterActionMode(access)
   const [form, setForm] = useState(() => ({ ...EMPTY_FORM, location: defaultLocation }))
   const [error, setError] = useState('')
+  const [sent, setSent] = useState(false)
 
   if (!open) return null
+
+  if (sent) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center">
+        <button type="button" className="absolute inset-0 bg-black/45" onClick={onClose} aria-label="Close" />
+        <div role="dialog" aria-modal="true" className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md p-5">
+          <h2 className="text-lg font-bold text-emerald-800">Sent to Liz for review</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            {form.first_name} {form.last_name} has not been added to the roster. Liz sees this in Change requests and the
+            record is created only if she approves it.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="mt-4 px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   const update = (field, value) => {
     setForm(current => ({ ...current, [field]: value }))
@@ -29,6 +57,22 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
   const handleSubmit = event => {
     event.preventDefault()
     try {
+      if (mode === 'request') {
+        if (!String(form.first_name || '').trim() || !String(form.last_name || '').trim()) {
+          throw new Error('First and last name are required.')
+        }
+        if (!String(form.kronos_id || '').trim()) throw new Error('Personnel ID is required.')
+        submitRequest({
+          type: 'add',
+          employeeName: `${form.first_name.trim()} ${form.last_name.trim()}`,
+          summary: `${form.position || 'No job title'} · ${LOCATIONS.find(l => l.id === form.location)?.name || form.location || 'No school'}`,
+          payload: { ...form },
+          requestedBy: access.displayName,
+        })
+        setError('')
+        setSent(true)
+        return
+      }
       const employee = addEmployee(form)
       setForm(EMPTY_FORM)
       setError('')
@@ -51,7 +95,11 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
         <div className="p-5 border-b border-gray-100 flex items-start justify-between sticky top-0 bg-white z-10">
           <div>
             <h2 id="add-employee-title" className="text-lg font-bold text-gray-900">Add employee</h2>
-            <p className="text-xs text-gray-500 mt-1">Creates an active employee record in the shared roster.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {mode === 'request'
+                ? 'Sends the new employee to Liz for review. Nothing is added to the roster until she approves it.'
+                : 'Creates an active employee record in the shared roster.'}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -91,7 +139,9 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
 
         <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-          <button type="submit" className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700">Add employee</button>
+          <button type="submit" className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700">
+            {mode === 'request' ? 'Send to Liz for review' : 'Add employee'}
+          </button>
         </div>
       </form>
     </div>

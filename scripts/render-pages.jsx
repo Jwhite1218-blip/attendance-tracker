@@ -24,6 +24,7 @@ import RecognitionProgram from '../src/pages/RecognitionProgram.jsx'
 import Training from '../src/pages/Training.jsx'
 import ProgramSettings from '../src/pages/ProgramSettings.jsx'
 import AccessAdmin from '../src/pages/AccessAdmin.jsx'
+import ChangeRequests from '../src/pages/ChangeRequests.jsx'
 import LedgerView from '../src/pages/LedgerView.jsx'
 import CustomReport from '../src/pages/CustomReport.jsx'
 import MasterReport from '../src/pages/MasterReport.jsx'
@@ -43,6 +44,21 @@ const LIZ = {
   dataVersion: 1,
 }
 
+// An administrator who is not Liz. Since 2026-10-19 this tier proposes
+// roster changes rather than making them, which is a whole code path with
+// its own buttons and confirmations — worth rendering, not just reasoning
+// about.
+const LIMITED_ADMIN = {
+  role: 'admin',
+  displayName: 'District Assistant',
+  canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRoster: true,
+  canManageBlackouts: false,
+  canWriteEmployeeNotes: true,
+  dataVersion: 1,
+}
+
 const MANAGER = {
   role: 'school',
   locationId: 'CrestonMS',
@@ -57,26 +73,32 @@ const MANAGER = {
 const PAGES = [
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
-  ['LocationView', LocationView, '/location/CrestonMS', [LIZ, MANAGER]],
+  ['LocationView', LocationView, '/location/CrestonMS', [LIZ, LIMITED_ADMIN, MANAGER]],
   ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
   ['Training', Training, '/training', [LIZ, MANAGER]],
   ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER], {
     admin: ['Star milestones', 'ACE Coach milestones'],
   }],
   ['AccessAdmin', AccessAdmin, '/access', [LIZ, MANAGER]],
+  ['ChangeRequests', ChangeRequests, '/requests', [LIZ, LIMITED_ADMIN, MANAGER], {
+    admin: ['Change requests', 'Nothing is waiting for review'],
+    // A limited administrator proposes but does not review, so this page
+    // must turn them away rather than showing the queue.
+    limited: ['Only a district administrator reviews change requests'],
+  }],
   ['LedgerView', LedgerView, '/ledger', [LIZ, MANAGER]],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],
   ['CalendarView', CalendarView, '/calendar', [LIZ]],
-  ['StaffAdmin', StaffAdmin, '/staff', [LIZ]],
+  ['StaffAdmin', StaffAdmin, '/staff', [LIZ, LIMITED_ADMIN]],
 ]
 
 export function render() {
   const results = []
   for (const [name, Page, path, roles, expect = {}] of PAGES) {
     for (const access of roles) {
-      const who = access.role === 'admin' ? 'admin' : 'manager'
+      const who = access === LIMITED_ADMIN ? 'limited' : access.role === 'admin' ? 'admin' : 'manager'
       try {
         const html = renderToStaticMarkup(
           <MemoryRouter initialEntries={[path]}>

@@ -6,6 +6,7 @@ export const EMPLOYEE_NOTES_KEY = 'employee-manager-notes-v1'
 export const ASSIGNMENT_HISTORY_KEY = 'employee-assignment-history-v1'
 export const TRAINING_KEY = 'training-records-v1'
 export const PROGRAM_SETTINGS_KEY = 'program-settings-v1'
+export const APPROVALS_KEY = 'pending-approvals-v1'
 export const RECOGNITION_KEY = 'all-star-recognition-v1'
 export const HR_STATUS_KEY = 'hr-attendance-progress-v2'
 export const LEGACY_HR_STATUS_KEY = 'hr-flags'
@@ -36,6 +37,7 @@ export const MANAGED_FIXED_STATE_KEYS = Object.freeze([
   RECOGNITION_KEY,
   TRAINING_KEY,
   PROGRAM_SETTINGS_KEY,
+  APPROVALS_KEY,
   HR_STATUS_KEY,
   LEGACY_HR_STATUS_KEY,
 ])
@@ -82,7 +84,23 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   if (key === PROGRAM_SETTINGS_KEY) {
     return session.canManageRoster === true && session.canManageBlackouts === true
   }
-  if (ROSTER_KEYS.has(key)) return session.canManageRoster === true
+  // Every roster change goes through Liz's review (her instruction,
+  // 2026-10-19), so changing the roster is a full district administrator's
+  // act. A limited administrator proposes instead, by writing to the
+  // approvals key below.
+  //
+  // This is enforced on the server deliberately. The browser already refused
+  // card edits and new employees at this tier, but a refusal that lives only
+  // in the page is a suggestion: the state endpoint would still have accepted
+  // the write. Transfers were not even refused in the page.
+  if (ROSTER_KEYS.has(key)) {
+    return session.canManageRoster === true && session.canManageBlackouts === true
+  }
+  // Proposing is the other half of the same rule, so any administrator who
+  // holds roster rights may write here — that is precisely the person who can
+  // no longer change the roster directly. Liz writes here too, to record her
+  // decision.
+  if (key === APPROVALS_KEY) return session.canManageRoster === true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false
 }

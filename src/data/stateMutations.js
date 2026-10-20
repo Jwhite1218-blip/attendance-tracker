@@ -1,5 +1,11 @@
 const BLACKOUTS_KEY = 'attendance-blackout-dates'
 const CUSTOM_EMPLOYEES_KEY = 'employee-custom-records'
+const APPROVALS_KEY = 'pending-approvals-v1'
+
+// Arrays whose entries have a stable identity, so two people editing the
+// list at once merge instead of overwriting each other. Anything else
+// falls through to a whole-value replace, where the last write wins.
+const KEYED_ARRAY_KEYS = [BLACKOUTS_KEY, CUSTOM_EMPLOYEES_KEY, APPROVALS_KEY]
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -13,11 +19,15 @@ function arrayIdentity(key, item) {
   if (!item || typeof item !== 'object') return ''
   if (key === BLACKOUTS_KEY) return String(item.date || '')
   if (key === CUSTOM_EMPLOYEES_KEY) return String(item.kronos_id || item.id || '')
+  // Two administrators can be submitting requests at the same moment, and a
+  // replace would drop whichever arrived first. Each request carries its own
+  // id, so the list merges per entry.
+  if (key === APPROVALS_KEY) return String(item.id || '')
   return ''
 }
 
 export function createStateMutation(key, previousValue, nextValue) {
-  if (key === BLACKOUTS_KEY || key === CUSTOM_EMPLOYEES_KEY) {
+  if (KEYED_ARRAY_KEYS.includes(key)) {
     const previous = new Map(
       (Array.isArray(previousValue) ? previousValue : [])
         .map(item => [arrayIdentity(key, item), item])
@@ -75,7 +85,10 @@ export function applyStateMutation(key, currentValue, mutation) {
   }
 
   if (mutation.type === 'keyed-array-patch') {
-    if (key !== BLACKOUTS_KEY && key !== CUSTOM_EMPLOYEES_KEY) {
+    // Same list the mutation is built from, so a key cannot produce a patch
+    // that the apply side then refuses — that failure would only appear on a
+    // real write, long after the build went green.
+    if (!KEYED_ARRAY_KEYS.includes(key)) {
       throw new Error('Keyed array patches are not supported for this state key.')
     }
 

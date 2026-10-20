@@ -18,6 +18,7 @@ import TransferModal from '../components/TransferModal.jsx'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
 
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00')
@@ -37,6 +38,8 @@ export default function LocationView() {
   const access = useAuth()
   const { role, locationId: myLocationId, canManageRoster, canEditAttendance, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
+  const rosterMode = rosterActionMode(access)
+  const canTouchRoster = rosterMode !== 'none'
   const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   // School-role sessions are always locked to their own school, regardless of URL
@@ -181,7 +184,7 @@ export default function LocationView() {
         </div>
       </div>
 
-      {lizAdminAccess && (
+      {canTouchRoster && (
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <button type="button" onClick={() => setShowAddEmployee(true)} className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">+ Add employee</button>
           <p className="text-xs text-charcoal-200">Add to {location.name}, or use Edit beside an employee’s name.</p>
@@ -299,8 +302,8 @@ export default function LocationView() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
-                {lizAdminAccess && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
-                {role === 'admin' && canManageRoster && (
+                {canTouchRoster && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
+                {canTouchRoster && (
                   <button
                     onClick={() => setTransferTarget(emp)}
                     title={`Transfer ${emp.first_name} ${emp.last_name} to another school`}
@@ -421,8 +424,8 @@ export default function LocationView() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                         </svg>
                       </button>
-                      {lizAdminAccess && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
-                      {role === 'admin' && canManageRoster && (
+                      {canTouchRoster && <button type="button" onClick={() => setEditTarget(emp)} aria-label={`Edit ${emp.first_name} ${emp.last_name}`} className="text-xs font-semibold text-brand-700 px-2 py-1.5">Edit</button>}
+                      {canTouchRoster && (
                         <button
                           onClick={() => setTransferTarget(emp)}
                           title={`Transfer ${emp.first_name} ${emp.last_name} to another school`}
@@ -494,14 +497,14 @@ export default function LocationView() {
 
       {/* Footer actions */}
       <div className="mt-4">
-        <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history{role === 'admin' && canManageRoster ? ', or 🔄 to transfer that employee.' : '.'}</p>
+        <p className="text-xs text-charcoal-300">{canEditAttendance ? 'Select a day to mark an exception or add a comment.' : 'Attendance is read-only.'} Select a name for full-year history{canTouchRoster ? ', or 🔄 to transfer that employee.' : '.'}</p>
         <div className="flex items-center gap-3 mt-1 text-[10px] text-charcoal-300">
           <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-gray-300 border border-gray-400" /> Weekend</span>
           <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded bg-charcoal-800 border border-charcoal-500" /> Admin blackout</span>
         </div>
       </div>
 
-      {role === 'admin' && canManageRoster && transferTarget && (
+      {canTouchRoster && transferTarget && (
         <TransferModal
           employee={transferTarget}
           onClose={() => setTransferTarget(null)}
@@ -509,10 +512,10 @@ export default function LocationView() {
         />
       )}
 
-      {lizAdminAccess && showAddEmployee && (
+      {canTouchRoster && showAddEmployee && (
         <AddEmployeeModal key={id} open defaultLocation={id} onClose={() => setShowAddEmployee(false)} onAdded={() => { setShowAddEmployee(false); setRefreshKey(k => k + 1) }} />
       )}
-      {lizAdminAccess && editTarget && (
+      {canTouchRoster && editTarget && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/45 p-3" role="dialog" aria-modal="true" aria-label={`Edit ${editTarget.first_name} ${editTarget.last_name}`} onKeyDown={event => { if (event.key === 'Escape') setEditTarget(null) }}>
           <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <EmployeeEditForm key={editTarget.kronos_id || editTarget.id} employee={editTarget} onCancel={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); setRefreshKey(k => k + 1) }} />

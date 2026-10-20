@@ -311,3 +311,54 @@ test('the manager pool is the only thing that crosses a building boundary', asyn
     !MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
   assert.equal(others.length, employees.length - 18)
 })
+
+// --- roster changes go through Liz's review (her instruction, 2026-10-19) ---
+
+const rosterAdmin = {
+  role: 'admin',
+  canManageRoster: true,
+  canManageBlackouts: false,
+}
+
+const schoolManager = {
+  role: 'school',
+  locationId: 'CrestonMS',
+  canManageRoster: false,
+}
+
+test('an administrator who is not Liz can no longer change the roster directly', () => {
+  for (const key of [
+    'employee-record-overrides',
+    'employee-custom-records',
+    'employee-location-overrides',
+    'employee-assignment-history-v1',
+  ]) {
+    assert.equal(canWriteStateKey(rosterAdmin, key), false, key)
+    assert.equal(canWriteStateKey(liz, key), true, key)
+  }
+})
+
+test('the same administrator can propose a change', () => {
+  assert.equal(canWriteStateKey(rosterAdmin, 'pending-approvals-v1'), true)
+  // Liz writes here too — her decision is recorded in the same place.
+  assert.equal(canWriteStateKey(liz, 'pending-approvals-v1'), true)
+})
+
+test('proposing is for administrators, not building managers or read-only viewers', () => {
+  assert.equal(canWriteStateKey(schoolManager, 'pending-approvals-v1'), false)
+  assert.equal(canWriteStateKey(limitedDistrictAdmin, 'pending-approvals-v1'), false)
+  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'pending-approvals-v1'), false)
+})
+
+test('a transfer and its history entry are refused together, never one without the other', () => {
+  // The pair must move as one: a location change with no history entry would
+  // leave somebody relocated with no record of the move.
+  assert.equal(
+    canWriteStateKey(rosterAdmin, 'employee-location-overrides'),
+    canWriteStateKey(rosterAdmin, 'employee-assignment-history-v1')
+  )
+  assert.equal(
+    canWriteStateKey(liz, 'employee-location-overrides'),
+    canWriteStateKey(liz, 'employee-assignment-history-v1')
+  )
+})

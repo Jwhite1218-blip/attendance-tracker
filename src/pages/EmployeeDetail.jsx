@@ -5,6 +5,7 @@ import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
 import { ATTENDANCE_SEVERITY_CHIP, ATTENDANCE_SEVERITY_CLASS, attendanceSeverity, getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
 import { addEmployeeNote, getEmployeeByKey, setEmployeeActive } from '../data/employeeLocations.js'
+import { submitRequest } from '../data/approvalStore.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { LOCATION_MAP } from '../data/locations.js'
@@ -17,6 +18,7 @@ import TransferModal from '../components/TransferModal.jsx'
 import { assignmentTimeline } from '../data/assignmentHistory.js'
 import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
 import {
   buildEmployeeHistoryRows,
   buildEmployeeHistorySheetRows,
@@ -78,6 +80,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const access = useAuth()
   const { role, displayName, canEditAttendance, canManageRoster, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
+  // 'direct' for Liz, 'request' for an administrator who now proposes
+  // roster changes rather than making them, 'none' for everybody else.
+  const rosterMode = rosterActionMode(access)
+  const canTouchRoster = rosterMode !== 'none'
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const [year, setYear] = useState(new Date().getFullYear())
   const [mode, setMode] = useState(readCalendarMode)
@@ -91,6 +97,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [terminationDate, setTerminationDate] = useState('')
   const [lastDayWorked, setLastDayWorked] = useState('')
   const [statusError, setStatusError] = useState('')
+  const [statusSent, setStatusSent] = useState('')
   const [noteAdded, setNoteAdded] = useState(false)
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
@@ -350,7 +357,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   </button>
                 </>
               )}
-              {role === 'admin' && canManageRoster && (
+              {canTouchRoster && (
                 <button
                   type="button"
                   onClick={() => setShowTransfer(true)}
@@ -360,7 +367,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   Transfer school
                 </button>
               )}
-              {lizAdminAccess && (
+              {canTouchRoster && (
                 <button
                   type="button"
                   onClick={() => setShowEditEmployee(value => !value)}
@@ -630,7 +637,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         </section>
       )}
 
-      {role === 'admin' && canManageRoster && showTransfer && (
+      {canTouchRoster && showTransfer && (
         <TransferModal
           employee={employee}
           onClose={() => setShowTransfer(false)}
@@ -638,7 +645,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         />
       )}
 
-      {lizAdminAccess && showEditEmployee && (
+      {canTouchRoster && showEditEmployee && (
         <EmployeeEditForm
           employee={employee}
           onCancel={() => setShowEditEmployee(false)}
@@ -714,7 +721,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               )}
             </div>
 
-            {lizAdminAccess && <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
+            {canTouchRoster && <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Employee status</p>
               {isInactive ? (
                 <>
@@ -729,13 +736,30 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   <button
                     type="button"
                     onClick={() => {
-                      setEmployeeActive(empKey, true)
-                      onStatusChange?.()
+                      try {
+                        if (rosterMode === 'request') {
+                          submitRequest({
+                            type: 'deactivate',
+                            empId: empKey,
+                            employeeName: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
+                            summary: 'Return to active',
+                            payload: { active: true },
+                            baseline: { active: false },
+                            requestedBy: displayName,
+                          })
+                          setStatusSent('Sent to Liz for review. This employee is still inactive until she approves it.')
+                          return
+                        }
+                        setEmployeeActive(empKey, true)
+                        onStatusChange?.()
+                      } catch (error) { setStatusError(error.message) }
                     }}
                     className="mt-2 px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
                   >
                     Reactivate employee
                   </button>
+                  {statusError && <p role="alert" className="mt-2 text-xs text-red-700">{statusError}</p>}
+                  {statusSent && <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{statusSent}</p>}
                 </>
               ) : (
                 <>
@@ -760,6 +784,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   />
                   </label>
                   {statusError && <p role="alert" className="mt-2 text-xs text-red-700">{statusError}</p>}
+                  {statusSent && <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{statusSent}</p>}
                   {confirmInactive ? (
                     <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-3">
                       <p className="text-xs font-semibold text-red-700">Move {employee?.first_name} to inactive employees?</p>
@@ -769,7 +794,23 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                           type="button"
                           onClick={() => {
                             try {
-                              setEmployeeActive(empKey, false, { inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked })
+                              const details = { inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked }
+                              if (rosterMode === 'request') {
+                                validateInactiveDetails(details)
+                                submitRequest({
+                                  type: 'deactivate',
+                                  empId: empKey,
+                                  employeeName: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
+                                  summary: `Mark inactive · last day ${lastDayWorked || 'not given'} · ${inactiveReason || 'no reason given'}`,
+                                  payload: { active: false, ...details },
+                                  baseline: { active: true },
+                                  requestedBy: displayName,
+                                })
+                                setConfirmInactive(false)
+                                setStatusSent('Sent to Liz for review. This employee is still active until she approves it.')
+                                return
+                              }
+                              setEmployeeActive(empKey, false, details)
                               onStatusChange?.()
                             } catch (error) { setStatusError(error.message) }
                           }}

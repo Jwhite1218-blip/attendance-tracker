@@ -45,3 +45,38 @@ test('keyed array patches merge independent blackout changes', () => {
     { date: '2026-09-02', label: 'Training' },
   ])
 })
+
+test('two administrators submitting change requests at once do not overwrite each other', () => {
+  const key = 'pending-approvals-v1'
+  const base = [{ id: 'req-1', type: 'edit', requestedBy: 'Dana' }]
+
+  // Each loads the same list, then adds their own request without seeing the
+  // other's. A whole-value replace would lose whichever landed first.
+  const dana = createStateMutation(key, base, [...base, { id: 'req-2', type: 'transfer', requestedBy: 'Dana' }])
+  const pat = createStateMutation(key, base, [...base, { id: 'req-3', type: 'add', requestedBy: 'Pat' }])
+
+  assert.equal(dana.type, 'keyed-array-patch')
+
+  let server = base
+  server = applyStateMutation(key, server, dana)
+  server = applyStateMutation(key, server, pat)
+
+  assert.deepEqual(server.map(request => request.id).sort(), ['req-1', 'req-2', 'req-3'])
+})
+
+test('a decision on one request leaves the others alone', () => {
+  const key = 'pending-approvals-v1'
+  const base = [
+    { id: 'req-1', status: 'pending' },
+    { id: 'req-2', status: 'pending' },
+  ]
+  const decided = [
+    { id: 'req-1', status: 'approved', decidedBy: 'Liz' },
+    { id: 'req-2', status: 'pending' },
+  ]
+
+  const mutation = createStateMutation(key, base, decided)
+  assert.equal(mutation.upsert.length, 1)
+  assert.deepEqual(mutation.remove, [])
+  assert.deepEqual(applyStateMutation(key, base, mutation), decided)
+})

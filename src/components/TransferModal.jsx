@@ -3,10 +3,16 @@ import { useAuth } from './PinGate.jsx'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations, transferEmployee } from '../data/employeeLocations.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
+import { submitRequest } from '../data/approvalStore.js'
 
 export default function TransferModal({ employee, onClose, onTransferred }) {
-  const { displayName } = useAuth()
+  const access = useAuth()
+  const { displayName } = access
+  const mode = rosterActionMode(access)
   const [selectedLocation, setSelectedLocation] = useState('')
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
   const empKey = employee?.kronos_id || employee?.id
   const currentLoc = employee?.location
   const currentLocInfo = LOCATIONS.find(l => l.id === currentLoc)
@@ -15,6 +21,23 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
 
   const handleTransfer = () => {
     if (!selectedLocation) return
+    if (mode === 'request') {
+      try {
+        submitRequest({
+          type: 'transfer',
+          empId: empKey,
+          employeeName: `${employee.first_name} ${employee.last_name}`,
+          summary: `${LOCATIONS.find(l => l.id === currentLoc)?.name || currentLoc || 'Unassigned'} → ${LOCATIONS.find(l => l.id === selectedLocation)?.name || selectedLocation}`,
+          payload: { to: selectedLocation },
+          baseline: { location: currentLoc || '' },
+          requestedBy: displayName,
+        })
+        setSent(true)
+      } catch (submitError) {
+        setError(submitError.message || 'Unable to send this request.')
+      }
+      return
+    }
     transferEmployee(empKey, selectedLocation, displayName)
     onTransferred?.()
     onClose()
@@ -76,25 +99,45 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
               ))}
           </select>
 
-          <div className="flex gap-2 mt-4">
-            <button
-              onClick={handleTransfer}
-              disabled={!selectedLocation}
-              className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Transfer Employee
-            </button>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
+          {error && <p role="alert" className="mt-3 text-xs text-red-700">{error}</p>}
 
-          <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100">
-            This is a permanent change to the employee's assigned school, not temporary coverage. It should be rare — use it only when someone is actually moving schools.
-          </p>
+          {sent ? (
+            <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-sm font-semibold text-emerald-800">Sent to Liz for review</p>
+              <p className="mt-1 text-xs text-emerald-700">
+                Nobody has moved yet. The transfer happens only if Liz approves it.
+              </p>
+              <button
+                onClick={onClose}
+                className="mt-3 px-4 py-2 rounded-lg text-sm font-medium border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-100"
+              >
+                Close
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={handleTransfer}
+                  disabled={!selectedLocation}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {mode === 'request' ? 'Send to Liz for review' : 'Transfer Employee'}
+                </button>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <p className="text-xs text-gray-400 mt-4 pt-3 border-t border-gray-100">
+                This is a permanent change to the employee's assigned school, not temporary coverage. It should be rare — use it only when someone is actually moving schools.
+                {mode === 'request' && ' Liz reviews every transfer before it takes effect.'}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

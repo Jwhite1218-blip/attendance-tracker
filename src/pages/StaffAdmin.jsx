@@ -6,6 +6,8 @@ import { LOCATION_MAP } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
 import { getAllFlaggedEmployees, getAttendanceStageLabel, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import { rosterActionMode } from '../data/approvalRequests.js'
+import { submitRequest } from '../data/approvalStore.js'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
@@ -17,6 +19,9 @@ export default function StaffAdmin() {
   const access = useAuth()
   const navigate = useNavigate()
   const lizAdminAccess = hasLizAdminAccess(access)
+  const rosterMode = rosterActionMode(access)
+  const [requestNotice, setRequestNotice] = useState('')
+  const canTouchRoster = rosterMode !== 'none'
   const [directoryVersion, setDirectoryVersion] = useState(0)
   const [showAddEmployee, setShowAddEmployee] = useState(false)
 
@@ -70,7 +75,7 @@ export default function StaffAdmin() {
               New employees appear in every building list in alphabetical order.
             </p>
           </div>
-          {lizAdminAccess ? (
+          {canTouchRoster ? (
             <button
               type="button"
               onClick={() => setShowAddEmployee(true)}
@@ -84,6 +89,10 @@ export default function StaffAdmin() {
             </span>
           )}
         </div>
+
+        {requestNotice && (
+          <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{requestNotice}</p>
+        )}
 
         {inactiveEmployees.length > 0 ? (
           <div className="mt-4 pt-4 border-t border-gray-100">
@@ -115,16 +124,31 @@ export default function StaffAdmin() {
                         </p>
                       )}
                     </button>
-                    {lizAdminAccess && (
+                    {canTouchRoster && (
                       <button
                         type="button"
                         onClick={() => {
+                          if (rosterMode === 'request') {
+                            try {
+                              submitRequest({
+                                type: 'deactivate',
+                                empId: empKey,
+                                employeeName: `${employee.first_name} ${employee.last_name}`,
+                                summary: 'Return to active',
+                                payload: { active: true },
+                                baseline: { active: false },
+                                requestedBy: access.displayName,
+                              })
+                              setRequestNotice(`Sent to Liz for review. ${employee.first_name} stays inactive until she approves it.`)
+                            } catch (error) { setRequestNotice(error.message) }
+                            return
+                          }
                           setEmployeeActive(empKey, true)
                           refreshDirectory()
                         }}
                         className="self-start sm:self-auto px-3 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-semibold hover:bg-emerald-100"
                       >
-                        Reactivate
+                        {rosterMode === 'request' ? 'Request reactivation' : 'Reactivate'}
                       </button>
                     )}
                   </div>

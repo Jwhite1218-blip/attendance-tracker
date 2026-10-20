@@ -10,6 +10,7 @@ const FIXED_STORAGE_KEYS = new Set([
   'all-star-recognition-v1',
   'training-records-v1',
   'program-settings-v1',
+  'pending-approvals-v1',
   'hr-attendance-progress-v2',
   'hr-flags',
 ])
@@ -45,9 +46,18 @@ export function canWriteManagedKeyForAccess(access, key) {
   }
   if (key === 'attendance-blackout-dates') return access.canManageBlackouts === true
   // A transfer writes the location override and the history entry together,
-  // so they share one permission — see ROSTER_KEYS in permissions.mjs.
+  // so they share one permission — see ROSTER_KEYS in permissions.mjs. Both
+  // sit at Liz's tier since 2026-10-19: a limited administrator proposes a
+  // transfer rather than making one.
   if (key === 'employee-location-overrides' || key === 'employee-assignment-history-v1') {
-    return access.canManageRoster === true
+    return access.role === 'admin'
+      && access.canManageRoster === true
+      && access.canManageBlackouts === true
+  }
+  // The queue of roster changes awaiting Liz. Writable by the administrators
+  // who can no longer change the roster themselves, which is the point of it.
+  if (key === 'pending-approvals-v1') {
+    return access.role === 'admin' && access.canManageRoster === true
   }
   if (key === 'training-records-v1') {
     return access.role === 'admin' && access.canManageRoster === true
