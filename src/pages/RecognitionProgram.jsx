@@ -669,7 +669,7 @@ export default function RecognitionProgram() {
                 selectableTypes={bonusTypes}
                 compact
                 title="Bonus recognition"
-                subtitle="Nominations and shout-outs. Coach Bucks have their own section below."
+                subtitle="Shooting Star nominations, Warren Star Shout-Outs, and Employee of the Month. Coach Bucks have their own section below."
                 employees={scopedEmployees}
                 peerManagers={peerManagers}
                 managerIds={managerIds}
