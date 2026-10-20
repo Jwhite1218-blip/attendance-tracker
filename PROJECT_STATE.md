@@ -293,6 +293,45 @@ day, termination date and reason; schools worked; the attendance year with
 comments; manager notes with author and date; recognition earned. Carries
 the same "not a disciplinary file" warning, which matters more on paper.
 
+## Shipped 2026-10-19 (evening)
+
+**ACE Coach milestones are editable.** They were always a separate list in
+the data; what was missing was the screen. Settings now has its own section
+for them below the star one. The render harness could not have caught this —
+the page rendered clean with the section simply absent — so it now also
+takes text that must survive to the markup, checked per role.
+
+**Roster changes go through Liz.** An administrator who is not a full
+district administrator proposes card edits, transfers, status changes and
+new employees; Liz approves or declines at `/requests`, with the waiting
+count on the nav label.
+
+Three of those four were previously refused at that tier with no way to
+ask, and transfers went straight through. Now all four behave alike. The
+boundary is the existing one — roster plus blackout management, labelled
+"District administrator" on the Access page — so there is no new notion of
+who Liz is.
+
+Enforced in `permissions.mjs`, not in the page: `ROSTER_KEYS` moved to
+Liz's tier and `pending-approvals-v1` opened to the administrators who can
+no longer write them. The browser already hid two of these, but the state
+endpoint would have accepted the write.
+
+Approving calls the same functions the direct path calls. The decision is
+recorded before the change is applied, so a failure leaves a request
+approved and unapplied — visible and retryable — rather than a change
+nobody authorised. The screen flags a request whose record has moved since
+it was written, field by field, and one older than a month.
+
+## Open hazards from that change
+
+- **The rule keys on who holds both roster and blackout management.** Any
+  other login with both bypasses the review entirely. Liz should check
+  `/access` and confirm she is the only "District administrator"; anybody
+  else who should be proposing needs blackout management turned off.
+- Nothing notifies a requester of the decision. They see it next time they
+  open the record.
+
 ## Decided by Liz, 2026-10-19
 
 Answered by Liz directly, so these are settled unless she reopens them.
@@ -312,13 +351,8 @@ Answered by Liz directly, so these are settled unless she reopens them.
 
 ## Open, waiting on Liz
 
-1. **Approval workflow.** Liz asked on 2026-10-19 whether another admin can
-   request an employee card edit or transfer that she approves. Not built —
-   today every administrator edits directly and nothing queues. Her question
-   is the first time anyone has asked for it rather than mused about it, so
-   it needs a decision from her on scope, not more design.
-   `pending-approvals-v1` is already admitted by the SQL allowlist, so
-   building it needs no migration.
+1. **Approval workflow — built, not yet exercised.** No real request has
+   been made or decided. The first one is worth watching end to end.
 2. **Spanish sign-off** on the sixty drafted terms. Liz asked what this is on
    2026-10-19 and has been told; nothing is blocked on it except the notice
    itself. Until somebody is recorded as having approved the wording, every
