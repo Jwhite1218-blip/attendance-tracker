@@ -95,6 +95,9 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [confirmInactive, setConfirmInactive] = useState(false)
   const [showEditEmployee, setShowEditEmployee] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
+  // 'ledger' is the attendance year; 'record' is everything kept about
+  // somebody. Both are print-only blocks, so exactly one may be mounted.
+  const [printMode, setPrintMode] = useState('ledger')
   const [exportingHistory, setExportingHistory] = useState(false)
   const [visibleMonths, setVisibleMonths] = useState(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
@@ -269,7 +272,19 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      <PrintableAttendanceLedger employee={employee} attendance={attendance} yearLabel={formatYearLabel(year, mode)} />
+      {printMode === 'ledger'
+        ? <PrintableAttendanceLedger employee={employee} attendance={attendance} yearLabel={formatYearLabel(year, mode)} />
+        : (
+          <PrintableEmployeeRecord
+            employee={employee}
+            attendance={attendance}
+            yearLabel={formatYearLabel(year, mode)}
+            attendanceStatus={attendanceStatus}
+            recognitionRecords={recognitionRecords}
+            assignmentStops={assignmentStops}
+            starCount={starCount}
+          />
+        )}
 
       <div className="print:hidden space-y-4 sm:space-y-6">
       {/* Employee Header */}
@@ -319,11 +334,19 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   </button>
                   <button
                     type="button"
-                    onClick={() => window.print()}
+                    onClick={() => { setPrintMode('ledger'); setTimeout(() => window.print(), 0) }}
                     title={`Print the ${formatYearLabel(year, mode)} attendance ledger for the paper employee file`}
                     className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
                   >
                     Print ledger
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPrintMode('record'); setTimeout(() => window.print(), 0) }}
+                    title="Print everything kept about this employee, for a personnel file"
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
+                  >
+                    Print full record
                   </button>
                 </>
               )}
@@ -1079,6 +1102,142 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 // Screen-hidden, print-only view. A separate flat list rather than trying to
 // print the interactive calendar grid — easier to read on paper and includes
 // every comment, which is the point of putting this in a personnel file.
+// Everything the app holds about one person, on paper.
+//
+// Asked for on 2026-10-19 for the case the ledger does not cover: somebody
+// leaving, or a file being closed, where the attendance grid alone leaves
+// out the notes and the status changes that explain it.
+//
+// It carries the same warning the HR panel does. This is a printout of what
+// a tracking tool recorded; it is not a disciplinary file and nothing on it
+// is evidence that any step was taken. That line matters more on paper than
+// on screen, because paper is what ends up in a folder.
+function PrintableEmployeeRecord({
+  employee,
+  attendance,
+  yearLabel,
+  attendanceStatus,
+  recognitionRecords,
+  assignmentStops,
+  starCount,
+}) {
+  const term = useProgramTerms()
+  const rows = buildEmployeeHistoryRows(attendance)
+  const notes = Array.isArray(employee?.notes) ? employee.notes : []
+  const printedOn = new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })
+
+  return (
+    <div className="hidden print:block text-black">
+      <h1 className="text-xl font-bold">Employee Record — {yearLabel}</h1>
+      <div className="mt-2 text-sm">
+        <p className="font-semibold">
+          {employeeCardName(employee)}{SHOW_EMPLOYEE_CARD_IDS && <> · ID: {employee?.kronos_id}</>}
+        </p>
+        <p>{employee?.position} · {LOCATION_MAP[employee?.location]?.name || employee?.location || 'Unassigned'}</p>
+        <p className="text-gray-600">Printed {printedOn}</p>
+      </div>
+
+      <p className="mt-3 border border-black p-2 text-xs">
+        <strong>A tracking record, not a disciplinary file.</strong> This page shows what was entered in the
+        attendance tracker. It is not documentation of any warning or disciplinary step, and it does not
+        replace the district&apos;s HR forms or process.
+      </p>
+
+      <h2 className="mt-4 text-sm font-bold uppercase">Employment</h2>
+      <table className="mt-1 w-full text-xs">
+        <tbody>
+          <tr><td className="w-40 py-0.5 align-top text-gray-600">Status</td><td className="py-0.5">{employee?.active === false ? 'Inactive' : 'Active'}</td></tr>
+          {employee?.service_date && (
+            <tr><td className="py-0.5 align-top text-gray-600">Service date</td><td className="py-0.5">{employee.service_date}</td></tr>
+          )}
+          {employee?.active === false && (
+            <>
+              <tr><td className="py-0.5 align-top text-gray-600">Last day worked</td><td className="py-0.5">{employee?.last_day_worked || '—'}</td></tr>
+              <tr><td className="py-0.5 align-top text-gray-600">Termination date</td><td className="py-0.5">{employee?.termination_date || '—'}</td></tr>
+              <tr><td className="py-0.5 align-top text-gray-600">Reason</td><td className="py-0.5">{employee?.inactive_reason || '—'}</td></tr>
+            </>
+          )}
+        </tbody>
+      </table>
+
+      {assignmentStops?.length > 1 && (
+        <>
+          <h2 className="mt-4 text-sm font-bold uppercase">Schools worked</h2>
+          <p className="mt-1 text-xs">
+            {assignmentStops.map(stop => LOCATION_MAP[stop.locationId]?.name || stop.locationId).join(' → ')}
+          </p>
+          <p className="text-[10px] text-gray-600">Transfers recorded from 11 Oct 2026. Earlier moves were not logged.</p>
+        </>
+      )}
+
+      <h2 className="mt-4 text-sm font-bold uppercase">Attendance — {yearLabel}</h2>
+      <p className="mt-1 text-xs">
+        {attendanceStatus
+          ? `${term.stageLabel(attendanceStatus)} · ${attendanceStatus.occurrenceCount} occurrence${attendanceStatus.occurrenceCount === 1 ? '' : 's'} this school year`
+          : 'No qualifying occurrences recorded this school year.'}
+      </p>
+      {rows.length === 0 ? (
+        <p className="mt-1 text-xs text-gray-600">No attendance exceptions recorded for this year.</p>
+      ) : (
+        <table className="mt-1 w-full border-collapse text-xs">
+          <thead>
+            <tr className="border-b border-black text-left">
+              <th className="py-1 pr-2">Date</th>
+              <th className="py-1 pr-2">Code</th>
+              <th className="py-1">Comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.date} className="border-b border-gray-300 align-top">
+                <td className="py-0.5 pr-2 whitespace-nowrap">{row.date}</td>
+                <td className="py-0.5 pr-2 whitespace-nowrap">{row.code}</td>
+                <td className="py-0.5">{row.note || ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h2 className="mt-4 text-sm font-bold uppercase">Manager notes</h2>
+      {notes.length === 0 ? (
+        <p className="mt-1 text-xs text-gray-600">No notes recorded.</p>
+      ) : (
+        <ul className="mt-1 space-y-1 text-xs">
+          {notes.map((note, index) => (
+            <li key={index} className="border-b border-gray-300 pb-1">
+              <span className="text-gray-600">
+                {note.at ? new Date(note.at).toLocaleDateString('en-US', { dateStyle: 'medium' }) : 'Undated'}
+                {note.author ? ` · ${note.author}` : ''}
+              </span>
+              <br />
+              {note.text}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 className="mt-4 text-sm font-bold uppercase">Recognition</h2>
+      <p className="mt-1 text-xs">{starCount} earned star{starCount === 1 ? '' : 's'} this school year.</p>
+      {recognitionRecords?.length > 0 && (
+        <ul className="mt-1 space-y-0.5 text-xs">
+          {recognitionRecords.slice(0, 40).map(record => (
+            <li key={record.id}>
+              {record.date} · {RECOGNITION_TYPE_MAP[record.type]?.label || record.type}
+              {record.criteria?.length ? ` · ${record.criteria.join(', ')}` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-6 text-[10px] text-gray-600">
+        Generated by the Warren Township attendance tracker on {printedOn}. Figures reflect what had been
+        entered at that moment.
+      </p>
+    </div>
+  )
+}
+
 function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
   const term = useProgramTerms()
   const [showAllRecognition, setShowAllRecognition] = useState(false)
