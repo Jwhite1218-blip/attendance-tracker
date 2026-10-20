@@ -146,7 +146,7 @@ export default function RecognitionProgram() {
   // main column; nominations and shout-outs are occasional extras and live in
   // the side panel, so the two never compete for a manager's attention.
   const [starForm, setStarForm] = useState(() => emptyRecognitionForm('star-of-day'))
-  const [bonusForm, setBonusForm] = useState(() => emptyRecognitionForm('shooting-star'))
+  const [bonusForm, setBonusForm] = useState(() => emptyRecognitionForm(''))
   const [aceForm, setAceForm] = useState(() => emptyRecognitionForm('ace-buck'))
   const [feedback, setFeedback] = useState(null)
   const [submittingSurface, setSubmittingSurface] = useState(null)
@@ -337,6 +337,8 @@ export default function RecognitionProgram() {
       otherReason: '',
       note: '',
       sourceName: '',
+      // The bonus panel folds back up; the other two have a fixed type.
+      ...(surface === 'bonus' ? { type: '' } : {}),
     }))
     setLocalVersion(version => version + 1)
     setFeedback({ type: 'success', message })
@@ -601,8 +603,28 @@ export default function RecognitionProgram() {
           </div>
         )}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <div className="space-y-6">
+        {/* Liz, 2026-10-19: the page had too many boxes. Split down the
+            middle under the command centre — the feed on the left, the thing
+            a manager came here to do on the right. Everything that is a
+            report rather than an action moved below the fold. */}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          {/* Stacked on a narrow screen the feed would come first, which is
+              the wrong order for a manager standing in a kitchen with a
+              phone: they came to give a star, not to read. The form goes
+              first until there is room for both side by side. */}
+          <div className="space-y-6 order-2 lg:order-none">
+            <RecentRecognition
+              key={`${scopeLocation}-${historyType}`}
+              records={scopedRecords}
+              employeeMap={employeeMap}
+              managerIds={managerIds}
+              type={historyType}
+              onTypeChange={setHistoryType}
+              onPrintSheet={handlePrintSheet}
+            />
+          </div>
+
+          <div className="space-y-6 order-1 lg:order-none">
             <RecognitionEntryForm
               surface="star"
               form={starForm}
@@ -623,29 +645,6 @@ export default function RecognitionProgram() {
               onPrintCard={() => handlePrintCard('star')}
             />
 
-            <BuildingStarCounts
-              summary={buildingCounts}
-              months={boardMonths}
-              schoolYearStart={schoolYearStart}
-              records={schoolYearRecords}
-              employeeMap={employeeMap}
-            />
-            {/* Liz, 2026-09-01: pulled up out of the footer to close the gap the
-                shorter main column left beside the taller side column. */}
-            <RecentRecognition key={`${scopeLocation}-${historyType}`} records={scopedRecords} employeeMap={employeeMap} managerIds={managerIds} type={historyType} onTypeChange={setHistoryType} onPrintSheet={handlePrintSheet} />
-          </div>
-
-          <div className="space-y-6">
-            {/* Liz, 2026-09-01: Recognition Levels leads the side column. A school
-                login has no bonus surface, so the levels card already sat at the
-                top there; an admin saw the bonus form pushed above it and the two
-                views disagreed. */}
-            <LeaderboardPanel
-              staff={staffLeaderboard}
-              managers={managerLeaderboard}
-              schoolYearStart={schoolYearStart}
-            />
-            <StarLevels />
             {bonusTypes.length > 0 && (
               <RecognitionEntryForm
                 surface="bonus"
@@ -668,6 +667,16 @@ export default function RecognitionProgram() {
                 onPrintCard={() => handlePrintCard('bonus')}
               />
             )}
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <LeaderboardPanel
+            staff={staffLeaderboard}
+            managers={managerLeaderboard}
+            schoolYearStart={schoolYearStart}
+          />
+          <div className="space-y-6">
             {/* Drawing a monthly winner stays with the district even though
                 building managers now record the daily stars that enter it: the
                 draw awards a title, it does not catch someone shining. */}
@@ -695,7 +704,6 @@ export default function RecognitionProgram() {
           </div>
         </div>
 
-
         {role === 'admin' && (
           <AceBucksSection
             leaderboard={aceLeaderboard}
@@ -716,7 +724,14 @@ export default function RecognitionProgram() {
           />
         )}
 
-        <SubmissionsByBuilding counts={starSubmissionsByLocation} schoolYearStart={schoolYearStart} />
+        <StarActivity
+          summary={buildingCounts}
+          months={boardMonths}
+          schoolYearStart={schoolYearStart}
+          records={schoolYearRecords}
+          employeeMap={employeeMap}
+          submissions={starSubmissionsByLocation}
+        />
         <div className="mt-6">
           <AnnualCelebration />
         </div>
@@ -754,6 +769,10 @@ function RecognitionEntryForm({
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
   const messageRequired = requiresStarMessage(form.type)
+  // The rest of the form waits on the type, not only the reasons: who can
+  // receive a recognition depends on which one it is (a Shout-Out reaches
+  // other buildings), so a recipient list shown first would be the wrong one.
+  const awaitingType = selectableTypes?.length > 0 && !form.type
 
   // Who this type can actually be given to. The server drops anything
   // outside these sets, so offering a name it would discard would be a
@@ -820,9 +839,18 @@ function RecognitionEntryForm({
                         className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-400"
                       />
                       <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 font-semibold text-gray-900">
+                        <span className="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900">
                           <span className={typeAccent.mark} aria-hidden="true">{typeAccent.glyph}</span>
                           {term.recognitionLabel(type.id, type.label)}
+                          {/* The description still says this arrives from a
+                              student or teacher, which reads as though staff
+                              cannot give one. Liz is rewriting that copy; the
+                              badge says the part that matters now. */}
+                          {typeId === 'star-shout-out' && (
+                            <span className="rounded-full border border-[#c28b24] bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#7a4b12]">
+                              Peer to peer
+                            </span>
+                          )}
                         </span>
                         <span className="mt-0.5 block text-[11px] leading-relaxed text-gray-500">{type.description}</span>
                       </span>
@@ -831,6 +859,25 @@ function RecognitionEntryForm({
                 })}
               </div>
             </div>
+          )}
+
+          {awaitingType && (
+            <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-500">
+              Choose a recognition above and the rest of the form will open.
+            </p>
+          )}
+
+          {!awaitingType && <>
+          {/* A Shout-Out is the one recognition anybody can give to anybody,
+              including across buildings. Liz, 2026-10-19: say so where the
+              person is choosing, not in the description they have already
+              read past. */}
+          {form.type === 'star-shout-out' && (
+            <p className="rounded-lg border border-[#c28b24] bg-amber-50 px-3 py-2.5 text-xs font-semibold text-[#7a4b12]">
+              <span className="mr-1" aria-hidden="true">★</span>
+              Nominate a peer. Anyone in the district can be named here, in any building — this is the one
+              recognition that is not limited to your own team.
+            </p>
           )}
 
           <div className={compact ? 'space-y-4' : 'grid gap-4 md:grid-cols-2'}>
@@ -877,7 +924,7 @@ function RecognitionEntryForm({
               </span>
               <span className="text-[11px] font-semibold text-[#9a651b]">Pick at least one</span>
             </div>
-            <div className={`mt-2 grid gap-2 ${compact ? '' : 'sm:grid-cols-2'}`}>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {criteriaOptions.map(criterion => {
                 const selected = form.criteria.includes(criterion)
                 return (
@@ -971,7 +1018,9 @@ function RecognitionEntryForm({
             )}
           </label>
 
-          {canEdit ? (
+          </>}
+
+          {canEdit && !awaitingType ? (
             <div>
               <button
                 type="submit"
@@ -1017,7 +1066,10 @@ function RecognitionEntryForm({
                 </div>
               )}
             </div>
-          ) : (
+          ) : null}
+          {/* Separate from the submit block: waiting for a type is not the
+              same as being read-only, and saying so would be a lie. */}
+          {!canEdit && (
             <p className="rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800">Recognition entry is read-only for this login.</p>
           )}
         </fieldset>
@@ -1063,7 +1115,8 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
   }
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="p-4 sm:p-5">
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
       <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
       <p className="mt-1 text-xs text-gray-500">
@@ -1155,16 +1208,61 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
           Back to the top 10
         </button>
       )}
+      </div>
+      {/* Liz, 2026-10-19: the levels belong with the board they are earned
+          on, not in a box of their own. Same section, one dark band. */}
+      <StarLevels />
     </section>
   )
 }
+// Where recognition is happening, asked two ways: by the building somebody
+// works in, and by the building that gave the star. They were two boxes
+// stacked down the page; they are one window with tabs.
+function StarActivity({ summary, months, schoolYearStart, records, employeeMap, submissions }) {
+  const [view, setView] = useState('received')
+  const tabs = [
+    { id: 'received', label: 'Stars by month' },
+    { id: 'given', label: 'Who is giving stars' },
+  ]
+  // A tab that would open on nothing is worse than no tab.
+  const available = tabs.filter(tab => tab.id === 'received' ? summary.length : submissions.length)
+  if (!available.length) return null
+  const active = available.some(tab => tab.id === view) ? view : available[0].id
+
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-3 sm:px-4">
+        {available.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setView(tab.id)}
+            aria-current={active === tab.id ? 'true' : undefined}
+            className={`rounded-t-lg px-4 py-2.5 text-xs font-black uppercase tracking-wide transition-colors ${
+              active === tab.id
+                ? 'border border-b-white border-gray-200 bg-white text-[#9a651b]'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      <div className="p-5 sm:p-6">
+        {active === 'received'
+          ? <BuildingStarCounts summary={summary} months={months} schoolYearStart={schoolYearStart} records={records} employeeMap={employeeMap} />
+          : <SubmissionsByBuilding counts={submissions} schoolYearStart={schoolYearStart} />}
+      </div>
+    </section>
+  )
+}
+
 function SubmissionsByBuilding({ counts, schoolYearStart }) {
   if (!counts.length) return null
   const total = counts.reduce((sum, entry) => sum + entry.count, 0)
   return (
-    <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Who is giving stars</p>
-      <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Stars submitted by building</h2>
+    <div>
+      <h2 className="all-star-display text-xl uppercase text-gray-950">Stars submitted by building</h2>
       <p className="mt-1 text-sm text-gray-500">
         {total} Star{total === 1 ? '' : 's'} of the Day recorded in {schoolYearStart}-{schoolYearStart + 1}, grouped by the building signed in when it was given.
       </p>
@@ -1184,7 +1282,7 @@ function SubmissionsByBuilding({ counts, schoolYearStart }) {
           )
         })}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -1207,23 +1305,25 @@ function Metric({ label, value, detail }) {
   )
 }
 
+// The band at the foot of the leaderboard, not a card of its own: what the
+// levels are and who is near them is one question, and it was being asked in
+// two boxes.
 function StarLevels() {
   return (
-    <section className="overflow-hidden rounded-2xl border border-[#3d3322] bg-[#15120e] text-white shadow-sm">
-      <div className="border-b border-amber-200/15 px-5 py-4">
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-[#e3b93f]">Earn your stars</p>
-        <h2 className="all-star-display mt-1 text-2xl uppercase">Recognition Levels</h2>
+    <div className="bg-[#15120e] text-white">
+      <div className="border-b border-amber-200/15 px-5 py-3">
+        <h3 className="all-star-display text-lg uppercase">Recognition Levels</h3>
       </div>
       <div className="divide-y divide-white/10">
         {STAR_LEVELS.map(level => (
-          <div key={level.id} className="flex items-center gap-3 px-5 py-3">
-            <span className="text-xl" aria-hidden="true">{level.symbol}</span>
+          <div key={level.id} className="flex items-center gap-3 px-5 py-2.5">
+            <span className="text-lg" aria-hidden="true">{level.symbol}</span>
             <span className="flex-1 text-sm font-bold">{level.name}</span>
             <span className="text-xs font-semibold text-amber-100/70">{level.minimum} recognitions</span>
           </div>
         ))}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -1510,16 +1610,30 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
   return (
     <section id="recognition-history" className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
       <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">All-Star board</p>
-      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Recognition history</h2>
-      <p className="mt-2 text-xs text-gray-500">All recorded dates, newest first. Uses the Building view selected above.</p>
-      <label className="mt-4 block text-xs font-semibold text-gray-700">
-        Filter recognition history
-        <select value={type} onChange={event => onTypeChange(event.target.value)} className="mt-1 block w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm">
-          <option value="all">All recognition types</option>
-          {RECOGNITION_TYPES.map(item => <option key={item.id} value={item.id}>{term.recognitionLabel(item.id, item.label)}</option>)}
-        </select>
-      </label>
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">The feed</h2>
+      <p className="mt-2 text-xs text-gray-500">Newest first, for the building view selected above.</p>
+
+      {/* Chips rather than a select: on a feed the filter is something you
+          flick between, and a labelled dropdown cost a line of its own. */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {[{ id: 'all', label: 'Everything' }, ...RECOGNITION_TYPES.map(item => ({ id: item.id, label: term.recognitionLabel(item.id, item.shortLabel || item.label) }))].map(item => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onTypeChange(item.id)}
+            aria-pressed={type === item.id}
+            className={`rounded-full border px-3 py-1 text-[11px] font-bold transition-colors ${
+              type === item.id
+                ? 'border-[#c28b24] bg-[#fdf7e8] text-[#7a4b12]'
+                : 'border-gray-200 text-gray-500 hover:border-amber-200 hover:text-gray-700'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p role="status" className="text-xs text-gray-500">Showing {recent.length} of {filtered.length} records</p>
         {printableCount > 0 && (
           <button
@@ -1620,11 +1734,10 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
   const districtTotal = summary.reduce((total, entry) => total + entry.total, 0)
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+    <div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">By building</p>
-          <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Stars by month</h2>
+          <h2 className="all-star-display text-xl uppercase text-gray-950">Stars by month</h2>
           <p className="mt-1 text-sm text-gray-500">
             Star of the Day only, counted for the building the person works in. Manager stars count here;
             they do not go into the building&apos;s monthly drawing.
@@ -1634,7 +1747,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
       </div>
 
       {/* Wide on purpose — the table scrolls rather than the page. */}
-      <div className="mt-5 -mx-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
+      <div className="mt-5 overflow-x-auto">
         <table className="w-full min-w-[34rem] border-collapse text-sm">
           <thead>
             <tr className="border-b border-gray-200">
@@ -1746,7 +1859,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
           A building showing no stars has not recognized anyone this school year.
         </p>
       )}
-    </section>
+    </div>
   )
 }
 
