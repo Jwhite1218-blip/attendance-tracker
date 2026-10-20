@@ -830,11 +830,18 @@ function RecognitionEntryForm({
                       key={typeId}
                       className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-sm transition-colors ${form.type === typeId ? 'border-[#c28b24] bg-amber-50 ring-1 ring-amber-100' : 'border-gray-200 hover:border-amber-200'}`}
                     >
+                      {/* Liz, 2026-10-19: clicking the chosen type again
+                          folds the form back up. A radio fires no change
+                          event when it is already checked, so the second
+                          press is caught on click and clears the type. */}
                       <input
                         type="radio"
                         name={`${surface}-recognition-type`}
                         value={typeId}
                         checked={form.type === typeId}
+                        onClick={() => {
+                          if (form.type === typeId) onFieldChange(surface, 'type', '')
+                        }}
                         onChange={() => onFieldChange(surface, 'type', typeId)}
                         className="mt-0.5 h-4 w-4 border-gray-300 text-amber-600 focus:ring-amber-400"
                       />
@@ -842,13 +849,13 @@ function RecognitionEntryForm({
                         <span className="flex flex-wrap items-center gap-1.5 font-semibold text-gray-900">
                           <span className={typeAccent.mark} aria-hidden="true">{typeAccent.glyph}</span>
                           {term.recognitionLabel(type.id, type.label)}
-                          {/* The description still says this arrives from a
-                              student or teacher, which reads as though staff
-                              cannot give one. Liz is rewriting that copy; the
-                              badge says the part that matters now. */}
+                          {/* "Peer nominations" rather than "peer to peer":
+                              a Shout-Out can also arrive from a student or a
+                              teacher, and a badge claiming otherwise would
+                              trade one wrong impression for another. */}
                           {typeId === 'star-shout-out' && (
                             <span className="rounded-full border border-[#c28b24] bg-amber-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-[#7a4b12]">
-                              Peer to peer
+                              Peer nominations
                             </span>
                           )}
                         </span>
@@ -875,8 +882,8 @@ function RecognitionEntryForm({
           {form.type === 'star-shout-out' && (
             <p className="rounded-lg border border-[#c28b24] bg-amber-50 px-3 py-2.5 text-xs font-semibold text-[#7a4b12]">
               <span className="mr-1" aria-hidden="true">★</span>
-              Nominate a peer. Anyone in the district can be named here, in any building — this is the one
-              recognition that is not limited to your own team.
+              A Shout-Out can come from a student, teacher, staff member, or another manager — and a manager
+              can nominate a peer manager. The list below is your own team plus managers from every building.
             </p>
           )}
 
@@ -991,7 +998,7 @@ function RecognitionEntryForm({
                 maxLength={200}
                 value={form.sourceName}
                 onChange={event => onFieldChange(surface, 'sourceName', event.target.value)}
-                placeholder="Student, teacher, staff member, or group"
+                placeholder="Student, teacher, staff member, or another manager"
                 className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
               />
             </label>

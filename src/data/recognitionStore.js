@@ -28,7 +28,7 @@ export const RECOGNITION_TYPES = [
     id: 'star-shout-out',
     label: 'Warren Star Shout-Out',
     shortLabel: 'Shout-Out',
-    description: 'A special recognition received from a student, teacher, or staff member.',
+    description: 'A special recognition received from a student, teacher, staff member, or another manager.',
     earnsStar: false,
     actionLabel: 'Record Warren Star Shout-Out',
   },
