@@ -7,20 +7,27 @@ Production / live pilot. The recognition work was demonstrated to Liz's team on
 2026-09-29; her follow-up notes of 2026-10-10 are built and live apart from the
 approval workflow.
 
-Three threads as of 2026-10-19. Liz changing the system without going
-through Jon: the settings page is done and the access rework is two phases
-of three. The ACE Coach Bucks programme is built and awaiting its first
-award. And the attendance side has been deliberately stripped of anything
-that reads as HR documentation.
+As of the night of 2026-10-19, after a long session working directly with
+Liz. Liz changing the system without going through Jon: settings, the
+access screen and now an approval queue for every other administrator. The
+ACE Coach Bucks programme is built and still awaiting its first award. The
+attendance side has been stripped of anything that reads as HR
+documentation. And the All-Stars page was rebuilt around roughly half as
+many boxes.
+
+Four defects were found and fixed during that session, three of them by
+Liz using the thing rather than by any test. They are written up under
+"What went wrong tonight" because the pattern matters more than the
+individual bugs.
 
 ## Canonical source
 - Repository: `Jwhite1218-blip/attendance-tracker`
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `56a68c22cafca61de22304356139479f82106028`
-- Test suite: 331 passing (`npm test`)
-- Page render check: 19 clean (`npm run verify:pages`)
+- Verified production commit: `82d247d26ca7016a63ed1f2d3159c0fe8a10a718`
+- Test suite: 374 passing (`npm test`)
+- Page render check: 26 clean (`npm run verify:pages`)
 - Confirmed live: `/version.json` returns that commit, 2026-10-19
 
 ## Environment roles
@@ -94,6 +101,22 @@ traceable and isolated from production data.
   something never imported throws there instead of in front of a manager.
   That failure has shipped twice — a component on 2026-09-28, a function on
   2026-10-19 that would have blanked the All-Stars page.
+- A screen that renders is not a screen that works. Anything with a click in
+  it — a tab, a toggle, a form that opens — is checked by driving it in a
+  browser, not by reading the markup. The harness for that is two temporary
+  files and a dev-server entry in `.claude/launch.json`: mount the real page
+  with `createRoot`, seed `sessionStorage` (`attendance-source-roster-v1`) and
+  `localStorage` (`all-star-recognition-v1`, a MAP keyed by id, not an array),
+  then click it. Delete all three afterwards.
+- When a quick assertion disagrees with the screenshot, believe the
+  screenshot. Three times on 2026-10-19 a one-line check was wrong: state
+  read before React re-rendered, an `innerText` test that came back false for
+  a band plainly in the DOM, and a coordinate click that landed on a
+  different element after the page grew. Each would have had somebody
+  "fixing" working code.
+- A print layout is verified by rendering it with the real fonts and looking
+  at it. Against fallback faces the Star of the Day card wraps differently
+  and the layout reads wrong, so tuning to it makes the real card worse.
 - A render check proves a page does not throw. It says nothing about whether
   the data reaching it is right. The Shout-Out picker rendered perfectly
   while showing the wrong names on 2026-10-19; what caught that was moving
@@ -347,6 +370,70 @@ title wrapped onto two lines and collided with the Spanish subtitle — a
 layout that never prints, and tuning to it would have made the real card
 worse. Do the same for any further change to this card.
 
+## Shipped 2026-10-19 (late) — working session with Liz
+
+**The All-Stars page, rebuilt.** Under the command centre the page splits
+down the middle: a tabbed panel on the left holding the feed and the
+leaderboard, and on the right the things a manager came to do — Star of the
+Day with Bonus recognition beneath it. Recognition levels moved inside the
+leaderboard. Stars by month and who is giving stars became one tabbed
+window. Net: about half the boxes there were that morning.
+
+The bonus panel stays folded until a recognition type is chosen and folds
+back when the same type is clicked again. Not only the reasons wait — who
+can receive one depends on which it is, so a recipient list shown first
+would be the wrong list.
+
+A Shout-Out now says what it is: it can come from a student, teacher, staff
+member or another manager, and a manager can nominate a peer manager. An
+earlier draft claimed anyone in the district could be named, which
+overstated the reach; Liz corrected it.
+
+**The Star of the Day card.** "Other" takes a free-text line saying what it
+actually was, printed with the star message rather than in the reason list.
+The card prints English and Spanish together.
+
+**Roster changes go through Liz.** Any administrator who is not a full
+district administrator proposes card edits, transfers, status changes and
+new employees; Liz approves or declines at `/requests`, with the waiting
+count on the nav label. Enforced on the server, not in the page.
+
+**The Spanish review sheet** at `/settings/spanish-review`, linked from
+Settings: sixty terms, the English beside each, a tick column and ruled
+space for corrections.
+
+## What went wrong tonight, and the shape of it
+
+Four defects, three reported by Liz. All four are the same mistake: a thing
+that looked right from the inside.
+
+1. **The ACE Coach milestones had no screen.** They had always been a
+   separate list in the data. The render harness proved the Settings page did
+   not throw, which was true while the section was simply absent. The harness
+   now also takes text that must survive to the markup, checked per role.
+
+2. **The request path was gated on the permission its users lack.** The rule
+   said "an administrator who holds roster management but is not Liz", which
+   is an empty set — the district logins have roster management off, which is
+   why they must ask. Every check passed because the test double carried
+   `canManageRoster: true`, a combination no real login has. **A role double
+   that does not match a live profile is not a test, it is a decoration.**
+
+3. **The access screen switched off capabilities nobody set.** A profile
+   stores only explicit flags; the rest are derived at sign-in. The screen was
+   sent the stored half only, so a derived capability showed unticked, and
+   saving the form wrote it off for real. Liz lost Employee of the Month that
+   way. The API now resolves effective flags through `normalizeAccessProfile`,
+   the same function sign-in uses.
+
+4. **An ACE Coach Buck counted as a Star of the Day.** A Buck earns, so it
+   passed `recognitionEarnsStar`, so seven figures counted it as a star —
+   including the employee record, where one award appeared twice and four
+   Bucks would have carried somebody to Bronze Star on a currency they had
+   not earned. Found while building a preview Liz asked for, before any Buck
+   had been awarded. `earnsDailyStar` now answers the question those places
+   are actually asking.
+
 ## Open hazards from that change
 
 - **The rule keys on who holds both roster and blackout management.** Any
@@ -378,9 +465,35 @@ Answered by Liz directly, so these are settled unless she reopens them.
 
 ## Open, waiting on Liz
 
-1. **Approval workflow — built, not yet exercised.** No real request has
+1. **Restore Liz's award-draws capability.** SQL, not a code change: her
+   `access_profiles` row carries an explicit
+   `canManageRecognitionAwards: false`, written by the access screen before
+   it was fixed. Until it is removed, Warren Food Services Employee of the
+   Month does not appear for her. She cannot do it from the screen — a guard
+   refuses to let anybody grant a capability they do not hold, which is the
+   right rule and exactly the wrong one here. The statement was sent on
+   2026-10-19; it deletes the key rather than writing `true`, so the flag
+   goes back to being derived. Sign out and in afterwards.
+
+   The other four admin logins are unaffected: none holds roster or blackout
+   management, so award draws would be off regardless.
+
+2. **Approval workflow — built, not yet exercised.** No real request has
    been made or decided. The first one is worth watching end to end.
-2. **Spanish sign-off.** The review sheet is built and linked from Settings;
+
+3. **ACE Coach standings for managers — a decision, not a task.** Today a
+   manager sees their own Coach Buck count and next milestone on their own
+   record, and nothing about anyone else. Two reasons: the section is
+   admin-only, and a building login is only sent recognition for its own
+   roster, so lifting the gate alone would show a leaderboard of one or two
+   people. Three options were put to Liz on 2026-10-19 — leave it, show a
+   rank without names, or show the full standings. She is discussing it with
+   her team. Recommended: rank without names.
+
+4. **The first real ACE Coach Buck.** The programme has never been exercised
+   with live data. Award one and look at the manager's record and the
+   standings; the preview that was built was seeded.
+5. **Spanish sign-off.** The review sheet is built and linked from Settings;
    what is left is a Spanish speaker reading it. Until somebody is recorded
    as having approved the wording, every Spanish screen carries "still a
    draft under review".
@@ -391,8 +504,14 @@ Answered by Liz directly, so these are settled unless she reopens them.
    review produces more than a handful, making the wording editable is the
    obvious next step — `programSettings` already has the
    override-not-replacement pattern to copy.
-3. **All-Stars page reorganisation.** Jon flagged layout changes on
-   2026-10-19 and will come back with them. Liz: "re-circle back to that".
+6. **Reason wording.** Liz said on 2026-10-19 she would revise the wording
+   of the recognition reasons. Those live in `recognitionStore.js` and in
+   both languages in `programVocabulary.js`, so they are a code change, not
+   a setting.
+
+7. **All-Stars page reorganisation — largely done.** Six changes were made
+   on the night of 2026-10-19 plus the feed/leaderboard tabs. Liz asked for
+   fewer boxes and has them; anything further is new.
 
 ## Open, waiting on Jon
 1. **Deploy previews are publicly reachable and accept real district PINs**
