@@ -47,6 +47,7 @@ export function starCardFromRecognition(record, name) {
     name: name || String(record?.employeeId || ''),
     date: record?.date,
     criteria: record?.criteria || [],
+    otherReason: record?.otherReason || '',
     message: record?.note || '',
     recognizedBy: record?.recognizedBy || '',
   }

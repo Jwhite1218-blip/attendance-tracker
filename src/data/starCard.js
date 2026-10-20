@@ -17,7 +17,29 @@
 // where a .woff2 import would not resolve. With no assets the card still prints
 // correctly in system faces — it just isn't the branded version.
 
-import { ALL_STAR_REASON_OPTIONS } from './recognitionStore.js'
+import { ALL_STAR_REASON_OPTIONS, OTHER_REASON } from './recognitionStore.js'
+import { PROGRAM_STRINGS } from './programVocabulary.js'
+
+// The card is handed to the person it is about, and a good share of the
+// kitchens are Spanish-speaking. Liz, 2026-10-19: both languages on the one
+// card rather than printing two versions, so a manager never has to pick
+// which card somebody gets.
+//
+// The reason words come from the same Spanish dictionary the screens use, so
+// a correction made during the Spanish review reaches the printed card too.
+// The four fixed labels are the card's own furniture and live here.
+const ES = PROGRAM_STRINGS.es
+
+const CARD_LABELS = {
+  title: ['Star of the Day', 'Estrella del Día'],
+  why: ['Why they shine :', 'Por qué brillan :'],
+  date: ['Date', 'Fecha'],
+  by: ['Recognized by', 'Reconocido por'],
+}
+
+function spanishReason(name) {
+  return ES[`reason.${name}`] || ''
+}
 
 export const CARDS_PER_PAGE = 6
 
@@ -38,8 +60,20 @@ export function formatCardDate(value) {
 function renderCard(entry) {
   const filled = Boolean(entry)
   const chosen = new Set(entry?.criteria || [])
+  // "Other" is a placeholder until somebody says what it was. When they
+  // have, that text replaces the word outright — in both languages, because
+  // what was typed is the reason and translating it is not ours to do.
+  const otherText = filled ? String(entry.otherReason || '').trim() : ''
   const reasons = ALL_STAR_REASON_OPTIONS
-    .map(name => `<span class="reason${filled && chosen.has(name) ? ' reason-on' : ''}">${escapeHtml(name)}</span>`)
+    .map(name => {
+      const on = filled && chosen.has(name)
+      const useOther = name === OTHER_REASON && on && otherText
+      const english = useOther ? otherText : name
+      const spanish = useOther ? '' : spanishReason(name)
+      return `<span class="reason${on ? ' reason-on' : ''}"><span class="en">${escapeHtml(english)}</span>${
+        spanish ? `<span class="es">${escapeHtml(spanish)}</span>` : ''
+      }</span>`
+    })
     .join('<span class="sep">-</span>')
 
   const message = filled
@@ -49,19 +83,19 @@ function renderCard(entry) {
   return `<article class="card">
   <div class="frame">
     <header class="head">
-      <h2 class="title">Star of the Day</h2>
+      <h2 class="title">${CARD_LABELS.title[0]}<span class="subtitle">${CARD_LABELS.title[1]}</span></h2>
       <span class="brand"></span>
     </header>
     <span class="bigstar" aria-hidden="true"></span>
     <div class="namezone">
       <span class="nameline">${filled ? escapeHtml(entry.name || '') : ''}</span>
     </div>
-    <p class="why">Why they shine :</p>
+    <p class="why">${CARD_LABELS.why[0]}<span class="why-es">${CARD_LABELS.why[1]}</span></p>
     <p class="reasons">${reasons}</p>
     <div class="message">${message}</div>
     <div class="footrow">
-      <div class="field"><span class="lbl">Date</span><span class="line">${filled ? formatCardDate(entry.date) : ''}</span></div>
-      <div class="field"><span class="lbl">Recognized by</span><span class="line">${filled ? escapeHtml(entry.recognizedBy || '') : ''}</span></div>
+      <div class="field"><span class="lbl">${CARD_LABELS.date[0]}<span class="lbl-es">${CARD_LABELS.date[1]}</span></span><span class="line">${filled ? formatCardDate(entry.date) : ''}</span></div>
+      <div class="field"><span class="lbl">${CARD_LABELS.by[0]}<span class="lbl-es">${CARD_LABELS.by[1]}</span></span><span class="line">${filled ? escapeHtml(entry.recognizedBy || '') : ''}</span></div>
     </div>
   </div>
 </article>`
@@ -106,6 +140,12 @@ const STYLES = `
   .title { margin: 0; font-family: CardScript, "Segoe Script", "Brush Script MT", cursive;
            font-size: 33px; line-height: .95; font-weight: 400; color: var(--ink);
            text-shadow: 2px 2px 0 rgba(150,150,150,.5); }
+  /* The Spanish title hangs below the script without adding to the head's
+     height, so the gold star and the name rule stay where they were. */
+  .subtitle { display: block; position: absolute; margin-top: -2px;
+              font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
+              font-size: 10px; font-weight: 400; letter-spacing: .06em;
+              text-transform: uppercase; color: var(--gold); text-shadow: none; }
   .brand { flex: none; width: 0.78in; height: 0.3in; background-repeat: no-repeat;
            background-position: right top; background-size: contain; }
 
@@ -124,12 +164,21 @@ const STYLES = `
   .why { margin: 7px 0 1px; font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
          font-size: 11px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase;
          color: var(--gold); position: relative; z-index: 2; }
+  .why-es { margin-left: 5px; text-transform: none; font-style: italic;
+            color: #8d97a4; letter-spacing: .02em; }
   .reasons { margin: 0; position: relative; z-index: 2;
              font-family: CardDisplay, "Arial Narrow", Impact, sans-serif;
              font-size: 11px; font-weight: 700; letter-spacing: .005em;
              text-transform: lowercase; color: var(--ink); line-height: 1.3; }
+  /* Each reason is a stacked pair, so the two languages stay together when
+     the row wraps instead of drifting onto separate lines. */
+  .reason { display: inline-block; vertical-align: top; text-align: center; }
+  .reason .en { display: block; }
+  .reason .es { display: block; font-size: 8px; font-weight: 600; line-height: 1.15;
+                color: #6b7280; font-style: italic; }
   .reason-on { color: var(--gold); border-bottom: 2px solid var(--goldlt); padding-bottom: 1px; }
-  .sep { margin: 0 3px; color: #8d97a4; }
+  .reason-on .es { color: var(--gold); }
+  .sep { margin: 0 3px; color: #8d97a4; vertical-align: top; }
 
   .message { flex: 1; display: flex; flex-direction: column;
              justify-content: space-evenly; padding: 5px 0 3px; min-height: 0;
@@ -144,7 +193,10 @@ const STYLES = `
   .footrow .field:first-child { flex: 1; }
   .footrow .field:nth-child(2) { flex: 1.7; }
   .lbl { font-family: CardLabel, "Arial Narrow", Impact, sans-serif; font-size: 9px;
-         letter-spacing: .05em; text-transform: uppercase; color: var(--ink); flex: none; }
+         letter-spacing: .05em; text-transform: uppercase; color: var(--ink); flex: none;
+         line-height: 1.1; }
+  .lbl-es { display: block; font-size: 7.5px; font-style: italic; letter-spacing: .02em;
+            text-transform: none; color: #6b7280; }
   .line { flex: 1; border-bottom: 1px solid var(--ink); min-height: 13px; font-size: 9.5px;
           font-weight: 600; padding: 0 2px 1px; min-width: 0;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

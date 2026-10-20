@@ -66,3 +66,52 @@ test('a malformed date is passed through rather than guessed at', () => {
   assert.equal(formatCardDate(''), '')
   assert.equal(formatCardDate('not-a-date'), 'not-a-date')
 })
+
+test('the card carries both languages so one card serves everybody', () => {
+  const html = buildStarCardHtml([], { pad: true })
+
+  // Liz, 2026-10-19: both languages on the one card, not two versions.
+  assert.ok(html.includes('Star of the Day') && html.includes('Estrella del Día'))
+  assert.ok(html.includes('Why they shine :') && html.includes('Por qué brillan :'))
+  assert.ok(html.includes('>Date<') && html.includes('>Fecha<'))
+  assert.ok(html.includes('Recognized by') && html.includes('Reconocido por'))
+
+  // Reason words come from the shared Spanish dictionary, not a copy.
+  assert.ok(html.includes('Teamwork') && html.includes('Trabajo en equipo'))
+  assert.ok(html.includes('Reliability') && html.includes('Responsabilidad'))
+})
+
+test('a star given for Other prints what it was, not the word', () => {
+  const html = buildStarCardHtml([{
+    name: 'Maria G.',
+    date: '2026-10-19',
+    criteria: ['Other'],
+    otherReason: 'Covered a double shift',
+    message: 'Stayed late twice this week.',
+    recognizedBy: 'Liz',
+  }], { pad: false })
+
+  assert.ok(html.includes('Covered a double shift'))
+  // The placeholder is gone from that card, and so is its translation —
+  // what the manager typed is the reason, in whatever language they typed it.
+  assert.ok(!html.includes('>Other<'))
+  assert.ok(!html.includes('>Otro<'))
+})
+
+test('a blank card still offers Other as a choice to tick', () => {
+  const html = buildStarCardHtml([], { pad: true })
+  assert.ok(html.includes('>Other<'))
+  assert.ok(html.includes('>Otro<'))
+})
+
+test('the other line is escaped like everything else on the card', () => {
+  const html = buildStarCardHtml([{
+    name: 'Maria G.',
+    date: '2026-10-19',
+    criteria: ['Other'],
+    otherReason: '<script>alert(1)</script>',
+    recognizedBy: 'Liz',
+  }], { pad: false })
+  assert.ok(!html.includes('<script>alert(1)</script>'))
+  assert.ok(html.includes('&lt;script&gt;'))
+})

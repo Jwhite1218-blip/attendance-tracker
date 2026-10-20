@@ -39,6 +39,7 @@ import {
   submitterLocationLabel,
   getSubmissionCountsByLocation,
   DISTRICT_SUBMITTER_ID,
+  OTHER_REASON,
 } from '../data/recognitionStore.js'
 import {
   monthlyDrawingStatus,
@@ -118,7 +119,7 @@ function formatDate(dateKey) {
 
 
 function emptyRecognitionForm(type) {
-  return { employeeId: '', type, date: localDateKey(), criteria: [], note: '', sourceName: '' }
+  return { employeeId: '', type, date: localDateKey(), criteria: [], otherReason: '', note: '', sourceName: '' }
 }
 
 // The extras a manager may record beyond the daily star. Employee of the Month
@@ -306,7 +307,7 @@ export default function RecognitionProgram() {
       // Reasons are per-type, so switching type must drop the previous
       // selections rather than silently carrying invalid ones forward.
       name === 'type'
-        ? { ...current, type: value, criteria: [], sourceName: '' }
+        ? { ...current, type: value, criteria: [], otherReason: '', sourceName: '' }
         : { ...current, [name]: value }
     ))
   }
@@ -317,6 +318,11 @@ export default function RecognitionProgram() {
       criteria: current.criteria.includes(criterion)
         ? current.criteria.filter(value => value !== criterion)
         : [...current.criteria, criterion],
+      // Unticking Other clears what was typed against it, so it cannot
+      // reappear if the box is ticked again for a different reason.
+      ...(criterion === OTHER_REASON && current.criteria.includes(OTHER_REASON)
+        ? { otherReason: '' }
+        : {}),
     }))
   }
 
@@ -328,6 +334,7 @@ export default function RecognitionProgram() {
       ...current,
       employeeId: '',
       criteria: [],
+      otherReason: '',
       note: '',
       sourceName: '',
     }))
@@ -369,6 +376,7 @@ export default function RecognitionProgram() {
             name: employeeName(employee),
             date: draft.date,
             criteria: draft.criteria,
+            otherReason: draft.otherReason,
             message: draft.note,
             recognizedBy: draft.recognizedBy,
           },
@@ -441,6 +449,7 @@ export default function RecognitionProgram() {
           name: employeeName(employee),
           date: record.date,
           criteria: record.criteria,
+          otherReason: record.otherReason,
           message: record.note,
           recognizedBy: record.recognizedBy,
         }
@@ -903,6 +912,29 @@ function RecognitionEntryForm({
               })}
             </div>
           </div>
+
+          {form.criteria.includes(OTHER_REASON) && (
+            <label className="block">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
+                Other — what was it?
+                {form.type === 'star-of-day' && <span className="ml-1.5 text-[#b3261e]" aria-hidden="true">*</span>}
+              </span>
+              <input
+                type="text"
+                maxLength={120}
+                required={form.type === 'star-of-day'}
+                value={form.otherReason}
+                onChange={event => onFieldChange(surface, 'otherReason', event.target.value)}
+                placeholder="Covered a double shift"
+                className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 placeholder:text-gray-300 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
+              />
+              {form.type === 'star-of-day' && (
+                <span className="mt-1 block text-[11px] font-semibold text-[#9a651b]">
+                  This prints on the card in place of the word “Other”, so keep it short.
+                </span>
+              )}
+            </label>
+          )}
 
           {form.type === 'star-shout-out' && (
             <label className="block">

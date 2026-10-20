@@ -82,6 +82,9 @@ export const ANNUAL_AWARD_CATEGORIES = [
   { name: 'Positivity All-Star', description: 'Brings a positive attitude and helps create a welcoming workplace.' },
 ]
 
+// The one reason that cannot stand alone — see createRecognitionRecord.
+export const OTHER_REASON = 'Other'
+
 export const ALL_STAR_REASON_OPTIONS = [
   'Teamwork',
   'Service',
@@ -182,6 +185,18 @@ export function createRecognitionRecord(input, options = {}) {
     throw new Error('Choose at least one reason for the recognition.')
   }
 
+  // "Other" on its own tells the person holding the card nothing. Liz,
+  // 2026-10-19: it takes a free-text line saying what it actually was, and
+  // that line is what prints on the card in place of the word.
+  const otherReason = String(input.otherReason || '').trim().slice(0, 120)
+  // Required only where it is printed. A Star of the Day card lists the
+  // reasons on its face, so "other" with nothing beside it is a blank on a
+  // card somebody is handed. The nomination surfaces carry their reason in
+  // the message instead and are left as they were.
+  if (type === 'star-of-day' && criteria.includes(OTHER_REASON) && !otherReason) {
+    throw new Error('Say what the other reason was.')
+  }
+
   const note = String(input.note || '').trim().slice(0, 1000)
   // A Star of the Day has to say why the person shines. Without it managers can
   // click names onto the board with no reason attached, which is the whole point
@@ -204,6 +219,9 @@ export function createRecognitionRecord(input, options = {}) {
     date,
     monthKey,
     criteria,
+    // Only kept when it is actually in use, so a record cannot carry a
+    // stale explanation for a reason that was unticked before saving.
+    otherReason: criteria.includes(OTHER_REASON) ? otherReason : '',
     note,
     sourceName: String(input.sourceName || '').trim().slice(0, 200),
     recognizedBy: String(input.recognizedBy || '').trim().slice(0, 200),
@@ -428,6 +446,7 @@ export function toStarCardEntries(records, resolveName) {
       name: resolveName(record.employeeId) || String(record.employeeId || ''),
       date: record.date,
       criteria: record.criteria || [],
+      otherReason: record.otherReason || '',
       message: record.note || '',
       recognizedBy: record.recognizedBy || '',
     }))

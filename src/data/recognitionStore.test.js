@@ -23,6 +23,7 @@ function recognition(overrides = {}) {
     date: '2026-08-20',
     monthKey: null,
     criteria: ['Service'],
+    otherReason: '',
     note: '',
     sourceName: '',
     recognizedBy: 'Manager',
@@ -192,4 +193,48 @@ test('submission counts group earned stars by the building that gave them', () =
     { locationId: 'A', count: 2 },
     { locationId: 'B', count: 1 },
   ])
+})
+
+test('a Star of the Day given for Other has to say what the other reason was', () => {
+  const base = {
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'star-of-day',
+    date: '2026-08-20',
+    criteria: ['Other'],
+    note: 'She stayed late to cover the serving line.',
+  }
+
+  // "Other" alone prints as a blank on a card somebody is handed.
+  assert.throws(() => createRecognitionRecord(base), /what the other reason was/)
+
+  const record = createRecognitionRecord({ ...base, otherReason: 'Covered a double shift' })
+  assert.equal(record.otherReason, 'Covered a double shift')
+})
+
+test('the other line is dropped when Other is not one of the reasons', () => {
+  const record = createRecognitionRecord({
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'star-of-day',
+    date: '2026-08-20',
+    criteria: ['Service'],
+    otherReason: 'left over from an earlier edit',
+    note: 'Great service during lunch.',
+  })
+  assert.equal(record.otherReason, '')
+})
+
+test('a nomination can still be given for Other without the extra line', () => {
+  // Those surfaces carry the reason in the required message instead, and
+  // nothing about them is printed on a card.
+  const record = createRecognitionRecord({
+    employeeId: '123',
+    locationId: 'SchoolA',
+    type: 'star-shout-out',
+    date: '2026-08-20',
+    criteria: ['Other'],
+    note: 'A parent wrote in to say thank you.',
+  })
+  assert.equal(record.criteria.includes('Other'), true)
 })

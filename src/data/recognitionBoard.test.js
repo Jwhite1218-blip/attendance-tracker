@@ -122,6 +122,7 @@ test('only daily stars become printable cards', () => {
     name: 'Annie Chaney',
     date: '2026-09-03',
     criteria: ['Teamwork'],
+    otherReason: '',
     message: 'Covered the line.',
     recognizedBy: 'Stony Brook MS',
   })
