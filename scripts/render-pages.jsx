@@ -25,6 +25,7 @@ import Training from '../src/pages/Training.jsx'
 import ProgramSettings from '../src/pages/ProgramSettings.jsx'
 import AccessAdmin from '../src/pages/AccessAdmin.jsx'
 import ChangeRequests from '../src/pages/ChangeRequests.jsx'
+import SpanishReview from '../src/pages/SpanishReview.jsx'
 import LedgerView from '../src/pages/LedgerView.jsx'
 import CustomReport from '../src/pages/CustomReport.jsx'
 import MasterReport from '../src/pages/MasterReport.jsx'
@@ -80,6 +81,9 @@ const PAGES = [
     admin: ['Star milestones', 'ACE Coach milestones'],
   }],
   ['AccessAdmin', AccessAdmin, '/access', [LIZ, MANAGER]],
+  ['SpanishReview', SpanishReview, '/settings/spanish-review', [LIZ, MANAGER], {
+    admin: ['Spanish wording', 'Should say instead', 'Questions for the reviewer'],
+  }],
   ['ChangeRequests', ChangeRequests, '/requests', [LIZ, LIMITED_ADMIN, MANAGER], {
     admin: ['Change requests', 'Nothing is waiting for review'],
     // A limited administrator proposes but does not review, so this page

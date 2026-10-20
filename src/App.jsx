@@ -5,6 +5,7 @@ import ManagerHome from './pages/ManagerHome.jsx'
 import Training from './pages/Training.jsx'
 import ProgramSettings from './pages/ProgramSettings.jsx'
 import ChangeRequests from './pages/ChangeRequests.jsx'
+import SpanishReview from './pages/SpanishReview.jsx'
 import { pendingRequests } from './data/approvalRequests.js'
 import { getApprovalRequests } from './data/approvalStore.js'
 import AccessAdmin from './pages/AccessAdmin.jsx'
@@ -320,6 +321,9 @@ function AppShell() {
           <Route path="/training" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Training />} />
           <Route path="/settings" element={lizAdminAccess ? <ProgramSettings /> : <Navigate to={homePath} replace />} />
           <Route path="/requests" element={lizAdminAccess ? <ChangeRequests /> : <Navigate to={homePath} replace />} />
+          {/* Reached from the Spanish section of Settings, not the nav: it
+              is a sheet you print once, not a page you visit. */}
+          <Route path="/settings/spanish-review" element={lizAdminAccess ? <SpanishReview /> : <Navigate to={homePath} replace />} />
           <Route path="/access" element={lizAdminAccess ? <AccessAdmin /> : <Navigate to={homePath} replace />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />

@@ -1625,7 +1625,10 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">By building</p>
           <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">Stars by month</h2>
-          <p className="mt-1 text-sm text-gray-500">Star of the Day only, counted for the building the person works in.</p>
+          <p className="mt-1 text-sm text-gray-500">
+            Star of the Day only, counted for the building the person works in. Manager stars count here;
+            they do not go into the building&apos;s monthly drawing.
+          </p>
         </div>
         <span className="text-xs font-semibold text-gray-400">July {schoolYearStart} - June {schoolYearStart + 1}</span>
       </div>

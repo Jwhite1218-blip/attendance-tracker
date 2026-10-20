@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   buildingRecognitionSummary,
+  getMonthlyDrawingEntries,
   buildingMonthlyRecipients,
   schoolYearMonthKeys,
   toStarCardEntries,
@@ -253,4 +254,33 @@ test('only that building, only earned stars, only this school year', () => {
 test('a building nobody has recognized returns nothing rather than throwing', () => {
   assert.deepEqual(buildingMonthlyRecipients([], 2026, 'StonyBrkMS'), [])
   assert.deepEqual(buildingMonthlyRecipients(null, 2026, null), [])
+})
+
+// Liz, 2026-10-19, settling the question she had been holding for her team:
+// a manager's Star of the Day counts towards their building's total, but
+// does not put an entry in that building's monthly drawing.
+//
+// The two halves are set in different functions and nothing asserted them
+// together, so a change to either could quietly undo her decision.
+test('a manager\'s star counts for the building but not in its drawing', () => {
+  const records = [
+    star('mgr-1', '2026-10-05', 'StonyBrkMS'),
+    star('emp-1', '2026-10-06', 'StonyBrkMS'),
+    star('emp-2', '2026-10-07', 'StonyBrkMS'),
+  ]
+  const managers = new Set(['mgr-1'])
+
+  const [building] = buildingRecognitionSummary(records, 2026, ['StonyBrkMS'])
+  assert.equal(building.total, 3, 'the building is credited with every star earned in it')
+  assert.equal(building.months['2026-10'], 3)
+
+  const entries = getMonthlyDrawingEntries(records, 'StonyBrkMS', '2026-10', managers)
+  assert.deepEqual(entries.map(entry => entry.employeeId), ['emp-1', 'emp-2'])
+})
+
+test('without the manager split every star still draws, as it did before', () => {
+  // The split starts in July 2026; earlier months are left exactly as they
+  // were so last year's drawings cannot change retrospectively.
+  const records = [star('mgr-1', '2026-05-05', 'StonyBrkMS'), star('emp-1', '2026-05-06', 'StonyBrkMS')]
+  assert.equal(getMonthlyDrawingEntries(records, 'StonyBrkMS', '2026-05', null).length, 2)
 })

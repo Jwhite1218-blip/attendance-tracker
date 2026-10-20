@@ -8,6 +8,7 @@
 // Liz's tier only. These change what the app says about somebody's job, and
 // the server enforces the same bar.
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
@@ -430,6 +431,15 @@ function SpanishSection({ customised, actor, onSave, onReset }) {
       customised={customised}
       onReset={onReset}
     >
+      {/* The sheet comes before the sign-off, in reading order and in
+          practice: signing off wording nobody has read is the one way this
+          section can do harm. */}
+      <p className="mb-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+        <Link to="/settings/spanish-review" className="font-semibold text-brand-700 hover:underline">
+          Open the review sheet
+        </Link>{' '}
+        — all sixty terms with the English beside them, laid out to print and write on.
+      </p>
       {approved ? (
         <p className="text-sm text-gray-700">
           Approved by <strong>{approved.approvedBy}</strong> on {approved.approvedOn}. The review notice is hidden.
