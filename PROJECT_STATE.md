@@ -323,6 +323,25 @@ approved and unapplied — visible and retryable — rather than a change
 nobody authorised. The screen flags a request whose record has moved since
 it was written, field by field, and one older than a month.
 
+**The Star of the Day card.** "Other" takes a short free-text line saying
+what it was, which replaces the word on the printed card. Required for a
+Star of the Day only — that is the one that gets printed — and the
+nomination surfaces keep carrying their reason in the message they already
+require.
+
+The card prints in English and Spanish together rather than as two
+versions, so a manager never chooses which card somebody gets. Reason words
+come from the shared Spanish dictionary, so the Spanish review reaches the
+card; only the four fixed labels live with the card. What a manager types
+for "Other" is not translated.
+
+A print layout cannot be verified by a passing test. This one was checked
+by rendering a sheet with the real Sacramento, Bebas and Antonio faces and
+the star artwork, serving it, and looking at it. Against fallback fonts the
+title wrapped onto two lines and collided with the Spanish subtitle — a
+layout that never prints, and tuning to it would have made the real card
+worse. Do the same for any further change to this card.
+
 ## Open hazards from that change
 
 - **The rule keys on who holds both roster and blackout management.** Any
@@ -347,7 +366,7 @@ Answered by Liz directly, so these are settled unless she reopens them.
   importing, so no importer will be built. Every member of staff reads as
   "short" until she enters it, which is correct.
 - **"Other" belongs on the printed Star of the Day card, and the card should
-  be bilingual.** Not yet built.
+  be bilingual.** Both shipped — free text line, both languages on one card.
 
 ## Open, waiting on Liz
 
