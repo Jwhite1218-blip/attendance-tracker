@@ -49,12 +49,17 @@ const LIZ = {
 // roster changes rather than making them, which is a whole code path with
 // its own buttons and confirmations — worth rendering, not just reasoning
 // about.
+//
+// canManageRoster is false, which is what the real district logins carry:
+// it is why they could not edit a card and why the request path exists at
+// all. The first version of this double had it true, so every check passed
+// while the live screens showed those administrators nothing.
 const LIMITED_ADMIN = {
   role: 'admin',
   displayName: 'District Assistant',
   canEditAttendance: true,
   canEditRecognition: true,
-  canManageRoster: true,
+  canManageRoster: false,
   canManageBlackouts: false,
   canWriteEmployeeNotes: true,
   dataVersion: 1,
@@ -74,6 +79,9 @@ const MANAGER = {
 const PAGES = [
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
+  // No expectation here: without a roster under Node this page renders
+  // almost nothing for anybody, so it can only show that it does not throw.
+  // The gate it uses is tested directly in approvalRequests.test.js.
   ['LocationView', LocationView, '/location/CrestonMS', [LIZ, LIMITED_ADMIN, MANAGER]],
   ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
   ['Training', Training, '/training', [LIZ, MANAGER]],
@@ -95,7 +103,9 @@ const PAGES = [
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],
   ['CalendarView', CalendarView, '/calendar', [LIZ]],
-  ['StaffAdmin', StaffAdmin, '/staff', [LIZ, LIMITED_ADMIN]],
+  ['StaffAdmin', StaffAdmin, '/staff', [LIZ, LIMITED_ADMIN], {
+    limited: ['Add employee'],
+  }],
 ]
 
 export function render() {

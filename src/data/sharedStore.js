@@ -54,10 +54,11 @@ export function canWriteManagedKeyForAccess(access, key) {
       && access.canManageRoster === true
       && access.canManageBlackouts === true
   }
-  // The queue of roster changes awaiting Liz. Writable by the administrators
-  // who can no longer change the roster themselves, which is the point of it.
+  // The queue of roster changes awaiting Liz. Open to any administrator,
+  // not just roster-holders: the ones it exists for are those without roster
+  // rights, who have no other way to get a card changed.
   if (key === 'pending-approvals-v1') {
-    return access.role === 'admin' && access.canManageRoster === true
+    return access.role === 'admin' && access.recognitionOnly !== true
   }
   if (key === 'training-records-v1') {
     return access.role === 'admin' && access.canManageRoster === true

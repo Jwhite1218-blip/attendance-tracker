@@ -39,11 +39,19 @@ export function canDecideRequests(access = {}) {
   return hasLizAdminAccess(access)
 }
 
-// Everyone else holding administrator roster rights proposes instead. A
-// school manager is not in this at all: roster changes were never theirs.
+// Every other administrator proposes instead.
+//
+// Deliberately NOT conditional on canManageRoster. The administrators this
+// exists for are the ones who do not hold it — that is why they could not
+// edit a card in the first place. Gating the request path on the permission
+// they lack left the only people who needed it unable to see it, which is
+// what shipped on 2026-10-19 and had to be reported by Liz.
+//
+// A school manager is not in this at all: roster changes were never theirs.
+// Nor is a recognition-only login, which cannot reach an employee record.
 export function canRequestChanges(access = {}) {
   return access.role === 'admin'
-    && access.canManageRoster === true
+    && access.recognitionOnly !== true
     && !canDecideRequests(access)
 }
 

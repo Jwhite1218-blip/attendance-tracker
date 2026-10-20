@@ -96,11 +96,12 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   if (ROSTER_KEYS.has(key)) {
     return session.canManageRoster === true && session.canManageBlackouts === true
   }
-  // Proposing is the other half of the same rule, so any administrator who
-  // holds roster rights may write here — that is precisely the person who can
-  // no longer change the roster directly. Liz writes here too, to record her
-  // decision.
-  if (key === APPROVALS_KEY) return session.canManageRoster === true
+  // Proposing is the other half of the same rule, and is open to any
+  // administrator rather than to roster-holders only: the people it exists
+  // for are precisely those without roster rights. Liz writes here too, to
+  // record her decision. A recognition-only login cannot reach an employee
+  // record at all, so it has nothing to propose.
+  if (key === APPROVALS_KEY) return session.recognitionOnly !== true
   if (key === BLACKOUTS_KEY) return session.canManageBlackouts === true
   return false
 }

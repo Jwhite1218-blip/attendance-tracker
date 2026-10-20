@@ -18,8 +18,11 @@ import {
 } from './approvalRequests.js'
 
 const LIZ = { role: 'admin', canManageRoster: true, canManageBlackouts: true }
-const LIMITED_ADMIN = { role: 'admin', canManageRoster: true, canManageBlackouts: false }
-const READ_ONLY_ADMIN = { role: 'admin', canManageRoster: false, canManageBlackouts: false }
+// The shape the real district logins carry: roster management off, which is
+// why they could not edit a card and why they need to ask at all.
+const LIMITED_ADMIN = { role: 'admin', canManageRoster: false, canManageBlackouts: false }
+const ROSTER_ADMIN = { role: 'admin', canManageRoster: true, canManageBlackouts: false }
+const RECOGNITION_ONLY = { role: 'admin', recognitionOnly: true, canManageRoster: false }
 const MANAGER = { role: 'school', locationId: 'CrestonMS', canManageRoster: false }
 
 test('only a full district administrator decides requests', () => {
@@ -34,15 +37,32 @@ test('a limited administrator proposes, and never both proposes and decides', ()
   assert.equal(canRequestChanges(LIZ), false)
 })
 
-test('roster changes were never a school manager\'s, so they get neither route', () => {
+test('a school manager gets neither route, because the roster was never theirs', () => {
   assert.equal(rosterActionMode(MANAGER), 'none')
-  assert.equal(rosterActionMode(READ_ONLY_ADMIN), 'none')
-  assert.equal(rosterActionMode(LIMITED_ADMIN), 'request')
   assert.equal(rosterActionMode(LIZ), 'direct')
 })
 
+// Reported by Liz on 2026-10-19: the other admin login showed no request
+// button at all. The rule had been written as "an administrator who holds
+// roster rights but is not Liz", which is close to empty in practice — the
+// people this exists for are exactly the ones without roster rights.
+test('an administrator without roster rights is the one who needs to ask', () => {
+  assert.equal(rosterActionMode(LIMITED_ADMIN), 'request')
+  assert.equal(canRequestChanges(LIMITED_ADMIN), true)
+})
+
+test('an administrator with roster rights but not Liz also asks', () => {
+  assert.equal(rosterActionMode(ROSTER_ADMIN), 'request')
+  assert.equal(canDecideRequests(ROSTER_ADMIN), false)
+})
+
+test('a recognition-only login has no employee record to change', () => {
+  assert.equal(rosterActionMode(RECOGNITION_ONLY), 'none')
+  assert.equal(canRequestChanges(RECOGNITION_ONLY), false)
+})
+
 test('every roster screen gets exactly one answer for who it is serving', () => {
-  for (const access of [LIZ, LIMITED_ADMIN, READ_ONLY_ADMIN, MANAGER, {}]) {
+  for (const access of [LIZ, LIMITED_ADMIN, ROSTER_ADMIN, RECOGNITION_ONLY, MANAGER, {}]) {
     assert.ok(['direct', 'request', 'none'].includes(rosterActionMode(access)))
   }
 })

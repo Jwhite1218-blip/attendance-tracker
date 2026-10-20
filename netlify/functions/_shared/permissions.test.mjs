@@ -338,16 +338,27 @@ test('an administrator who is not Liz can no longer change the roster directly',
   }
 })
 
-test('the same administrator can propose a change', () => {
+test('any administrator can propose a change', () => {
   assert.equal(canWriteStateKey(rosterAdmin, 'pending-approvals-v1'), true)
   // Liz writes here too — her decision is recorded in the same place.
   assert.equal(canWriteStateKey(liz, 'pending-approvals-v1'), true)
 })
 
-test('proposing is for administrators, not building managers or read-only viewers', () => {
+// Reported by Liz on 2026-10-19: the other admin login had no way to ask.
+// This key had been gated on canManageRoster, which is exactly what those
+// logins do not have — the reason they must ask in the first place.
+test('an administrator without roster rights can still propose', () => {
+  assert.equal(canWriteStateKey(limitedDistrictAdmin, 'employee-record-overrides'), false)
+  assert.equal(canWriteStateKey(limitedDistrictAdmin, 'pending-approvals-v1'), true)
+})
+
+test('proposing is for administrators, not building managers', () => {
   assert.equal(canWriteStateKey(schoolManager, 'pending-approvals-v1'), false)
-  assert.equal(canWriteStateKey(limitedDistrictAdmin, 'pending-approvals-v1'), false)
-  assert.equal(canWriteStateKey(readOnlyDistrictViewer, 'pending-approvals-v1'), false)
+})
+
+test('a recognition-only login cannot propose, having no record to change', () => {
+  const recognitionOnly = { role: 'admin', recognitionOnly: true, canEditRecognition: true }
+  assert.equal(canWriteStateKey(recognitionOnly, 'pending-approvals-v1'), false)
 })
 
 test('a transfer and its history entry are refused together, never one without the other', () => {
