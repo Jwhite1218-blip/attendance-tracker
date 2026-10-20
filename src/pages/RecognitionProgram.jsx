@@ -139,6 +139,10 @@ export default function RecognitionProgram() {
   const [localVersion, setLocalVersion] = useState(0)
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
   const [historyType, setHistoryType] = useState('all')
+  // Which half of the board panel is showing. Lifted out of the panel
+  // because the command centre links straight to the feed, and that link
+  // has to be able to open the tab it is pointing at.
+  const [boardTab, setBoardTab] = useState('feed')
   const [drawingLocation, setDrawingLocation] = useState(role === 'school' ? locationId : '')
   const [drawingMonth, setDrawingMonth] = useState(localDateKey().slice(0, 7))
   const [pendingPreview, setPendingPreview] = useState(null)
@@ -582,7 +586,7 @@ export default function RecognitionProgram() {
               Tracked separately · not earned stars
             </p>
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-              <a href="#recognition-history" onClick={() => setHistoryType('star-shout-out')} className="rounded text-purple-800 underline underline-offset-4 hover:text-purple-600" aria-label={`View all shout-outs (${compilation.shoutOuts} this school year)`}>
+              <a href="#recognition-history" onClick={() => { setBoardTab('feed'); setHistoryType('star-shout-out') }} className="rounded text-purple-800 underline underline-offset-4 hover:text-purple-600" aria-label={`View all shout-outs (${compilation.shoutOuts} this school year)`}>
                 <SecondaryCount label="Shout-outs" value={compilation.shoutOuts} />
               </a>
               <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
@@ -612,15 +616,28 @@ export default function RecognitionProgram() {
               the wrong order for a manager standing in a kitchen with a
               phone: they came to give a star, not to read. The form goes
               first until there is room for both side by side. */}
-          <div className="space-y-6 order-2 lg:order-none">
-            <RecentRecognition
-              key={`${scopeLocation}-${historyType}`}
-              records={scopedRecords}
-              employeeMap={employeeMap}
-              managerIds={managerIds}
-              type={historyType}
-              onTypeChange={setHistoryType}
-              onPrintSheet={handlePrintSheet}
+          <div className="order-2 lg:order-none">
+            <BoardPanel
+              tab={boardTab}
+              onTabChange={setBoardTab}
+              feed={
+                <RecentRecognition
+                  key={`${scopeLocation}-${historyType}`}
+                  records={scopedRecords}
+                  employeeMap={employeeMap}
+                  managerIds={managerIds}
+                  type={historyType}
+                  onTypeChange={setHistoryType}
+                  onPrintSheet={handlePrintSheet}
+                />
+              }
+              leaderboard={
+                <LeaderboardPanel
+                  staff={staffLeaderboard}
+                  managers={managerLeaderboard}
+                  schoolYearStart={schoolYearStart}
+                />
+              }
             />
           </div>
 
@@ -671,11 +688,6 @@ export default function RecognitionProgram() {
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
-          <LeaderboardPanel
-            staff={staffLeaderboard}
-            managers={managerLeaderboard}
-            schoolYearStart={schoolYearStart}
-          />
           <div className="space-y-6">
             {/* Drawing a monthly winner stays with the district even though
                 building managers now record the daily stars that enter it: the
@@ -696,12 +708,12 @@ export default function RecognitionProgram() {
               drawingAvailability={drawingAvailability}
               onDraw={handleMonthlyDrawing}
             />
-            <ShootingStarNominations
-              records={shootingStarNominations}
-              employeeMap={employeeMap}
-              quarterLabel={nominationQuarter.label}
-            />
           </div>
+          <ShootingStarNominations
+            records={shootingStarNominations}
+            employeeMap={employeeMap}
+            quarterLabel={nominationQuarter.label}
+          />
         </div>
 
         {role === 'admin' && (
@@ -1093,6 +1105,47 @@ function RecognitionEntryForm({
 // dead space beside the shorter side column. As a single tabbed panel in the
 // rail they fill that space instead, and the two pools sit next to each other
 // where they can be compared rather than scrolled between.
+// Liz, 2026-10-19: one window for the two things you read rather than do.
+// The feed and the leaderboard answer different questions about the same
+// board, and neither needs to be on screen while you are looking at the
+// other.
+//
+// The tab lives in the page, not here, because the command centre links
+// straight to the feed and that link has to open the tab it points at.
+function BoardPanel({ tab, onTabChange, feed, leaderboard }) {
+  const tabs = [
+    { id: 'feed', label: 'The feed' },
+    { id: 'leaderboard', label: 'Leaderboard' },
+  ]
+  const active = tabs.some(item => item.id === tab) ? tab : 'feed'
+
+  return (
+    <section id="recognition-history" className="scroll-mt-24 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-3 sm:px-4">
+        {tabs.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onTabChange(item.id)}
+            aria-current={active === item.id ? 'true' : undefined}
+            className={`rounded-t-lg px-4 py-2.5 text-xs font-black uppercase tracking-wide transition-colors ${
+              active === item.id
+                ? 'border border-b-white border-gray-200 bg-white text-[#9a651b]'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div className="p-5 sm:p-6">{active === 'feed' ? feed : leaderboard}</div>
+      {/* Outside the padding on purpose: the levels band runs to the edge of
+          the panel the way it ran to the edge of its own card. */}
+      {active === 'leaderboard' && <StarLevels />}
+    </section>
+  )
+}
+
 function LeaderboardPanel({ staff, managers, schoolYearStart }) {
   const [pool, setPool] = useState('staff')
   // Condensed to a top ten at Liz's request, but never a dead end: a manager
@@ -1122,11 +1175,8 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="p-4 sm:p-5">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Earn your stars</p>
-      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">School-Year Leaderboard</h2>
-      <p className="mt-1 text-xs text-gray-500">
+    <div>
+      <p className="text-xs text-gray-500">
         Star of the Day only · July {schoolYearStart} – June {schoolYearStart + 1}
       </p>
 
@@ -1215,11 +1265,7 @@ function LeaderboardPanel({ staff, managers, schoolYearStart }) {
           Back to the top 10
         </button>
       )}
-      </div>
-      {/* Liz, 2026-10-19: the levels belong with the board they are earned
-          on, not in a box of their own. Same section, one dark band. */}
-      <StarLevels />
-    </section>
+    </div>
   )
 }
 // Where recognition is happening, asked two ways: by the building somebody
@@ -1615,10 +1661,10 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
   // prints everything listed, so the button must not promise fewer.
   const printableCount = filtered.filter(record => record.type === 'star-of-day').length
   return (
-    <section id="recognition-history" className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
-      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">All-Star board</p>
-      <h2 className="all-star-display mt-1 text-2xl uppercase text-gray-950">The feed</h2>
-      <p className="mt-2 text-xs text-gray-500">Newest first, for the building view selected above.</p>
+    <div>
+      {/* No heading of its own: the tab above says what this is, and a second
+          title inside the panel was the kind of box Liz is trying to lose. */}
+      <p className="text-xs text-gray-500">Newest first, for the building view selected above.</p>
 
       {/* Chips rather than a select: on a feed the filter is something you
           flick between, and a labelled dropdown cost a line of its own. */}
@@ -1699,7 +1745,7 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
         <p className="mt-4 rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">No recognitions match this building and recognition type.</p>
       )}
       {recent.length < filtered.length && <button type="button" onClick={() => setVisibleCount(count => count + 10)} className="mt-4 rounded-lg border border-amber-300 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-50">Show more recognition</button>}
-    </section>
+    </div>
   )
 }
 
