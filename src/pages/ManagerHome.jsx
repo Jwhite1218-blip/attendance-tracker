@@ -21,7 +21,7 @@ import { buildSchoolInsights, collectWeekExceptions } from '../data/dashboardIns
 import { getWeekDates } from '../data/weekDates.js'
 import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
 import { attendanceSeverityOf, getAllFlaggedEmployees } from '../data/hrFlags.js'
-import { getAllRecognitions, recognitionEarnsStar } from '../data/recognitionStore.js'
+import { earnsDailyStar, getAllRecognitions } from '../data/recognitionStore.js'
 import { translateCount } from '../data/i18n.js'
 
 function todayKey() {
@@ -56,7 +56,7 @@ export default function ManagerHome() {
     return getAllRecognitions().filter(record => (
       record.locationId === locationId
       && String(record.date || '').startsWith(monthPrefix)
-      && recognitionEarnsStar(record)
+      && earnsDailyStar(record)
     )).length
   }, [locationId, today, dataVersion])
 

@@ -258,7 +258,7 @@ export function submitterLocationLabel(record, locationMap = {}) {
 export function getSubmissionCountsByLocation(records) {
   const counts = new Map()
   ;(records || []).forEach(record => {
-    if (!recognitionEarnsStar(record)) return
+    if (!earnsDailyStar(record)) return
     const id = String(record?.recognizedByLocationId || '').trim() || 'unknown'
     counts.set(id, (counts.get(id) || 0) + 1)
   })
@@ -288,15 +288,32 @@ export function isRecognitionInSchoolYear(record, startYear) {
     && String(record?.date || '') <= `${startYear + 1}-06-30`
 }
 
+// "Does this recognition earn something" — true for a Daily Star and for an
+// ACE Coach Buck, false for a nomination. Used where the question is whether
+// an award counts at all, such as whether the feed should say "no star".
 export function recognitionEarnsStar(record) {
   return RECOGNITION_TYPE_MAP[record?.type]?.earnsStar === true
+}
+
+// "Is this a Star of the Day" — the question almost every figure on the
+// All-Star page is actually asking.
+//
+// Found on 2026-10-19 while previewing what an ACE Coach Buck would do to a
+// manager's record, before any had been awarded. A Buck earns, so it passed
+// recognitionEarnsStar, so it was being counted as a star by seven different
+// figures — including the employee record, where the same award appeared
+// once as a star and once as a Buck and could have pushed somebody to Silver
+// on a currency they had not earned. Each of those places says "Star of the
+// Day only" in a comment or on the screen.
+export function earnsDailyStar(record) {
+  return recognitionEarnsStar(record) && !isAceBuck(record)
 }
 
 export function getEmployeeStarCount(records, employeeId, startYear) {
   return records.filter(record =>
     String(record.employeeId) === String(employeeId)
     && isRecognitionInSchoolYear(record, startYear)
-    && recognitionEarnsStar(record)
+    && earnsDailyStar(record)
   ).length
 }
 
@@ -310,7 +327,7 @@ export function employeeStarsByLocation(records, employeeId, startYear = null) {
   for (const record of records || []) {
     if (String(record.employeeId) !== String(employeeId)) continue
     if (startYear != null && !isRecognitionInSchoolYear(record, startYear)) continue
-    if (!recognitionEarnsStar(record)) continue
+    if (!earnsDailyStar(record)) continue
     const locationId = String(record.locationId || '').trim() || 'unassigned'
     counts.set(locationId, (counts.get(locationId) || 0) + 1)
   }
@@ -341,8 +358,7 @@ export function getDailyStarCount(records, employeeId, startYear) {
   return (records || []).filter(record =>
     String(record.employeeId) === String(employeeId)
     && isRecognitionInSchoolYear(record, startYear)
-    && recognitionEarnsStar(record)
-    && !isAceBuck(record)
+    && earnsDailyStar(record)
   ).length
 }
 
@@ -411,7 +427,7 @@ export function buildingRecognitionSummary(records, startYear, locationIds = [])
   locationIds.forEach(ensure)
 
   for (const record of Array.isArray(records) ? records : []) {
-    if (!recognitionEarnsStar(record)) continue
+    if (!earnsDailyStar(record)) continue
     if (!isRecognitionInSchoolYear(record, startYear)) continue
     const locationId = String(record.locationId || '')
     if (!locationId) continue
@@ -644,7 +660,7 @@ export function buildingMonthlyRecipients(records, startYear, locationId) {
   const months = new Map()
 
   for (const record of Array.isArray(records) ? records : []) {
-    if (!recognitionEarnsStar(record)) continue
+    if (!earnsDailyStar(record)) continue
     if (!isRecognitionInSchoolYear(record, startYear)) continue
     if (String(record.locationId || '') !== String(locationId || '')) continue
     const monthKey = String(record.date || '').slice(0, 7)

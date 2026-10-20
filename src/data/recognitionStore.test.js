@@ -12,6 +12,12 @@ import {
   requiresStarMessage,
   submitterLocationLabel,
   getSubmissionCountsByLocation,
+  earnsDailyStar,
+  getDailyStarCount,
+  getAceBuckCount,
+  buildingRecognitionSummary,
+  employeeStarsByLocation,
+  recognitionEarnsStar,
 } from './recognitionStore.js'
 
 function recognition(overrides = {}) {
@@ -237,4 +243,52 @@ test('a nomination can still be given for Other without the extra line', () => {
     note: 'A parent wrote in to say thank you.',
   })
   assert.equal(record.criteria.includes('Other'), true)
+})
+
+// Found on 2026-10-19 while previewing what awarding an ACE Coach Buck would
+// do, before any had been given out. A Buck "earns", so it passed
+// recognitionEarnsStar and was counted as a Star of the Day by every figure
+// that uses it — including the employee record, where one award showed up
+// twice and could have pushed somebody to the next star level on a currency
+// they had not earned.
+test('an ACE Coach Buck is never counted as a Star of the Day', () => {
+  const buck = {
+    id: 'b1', employeeId: 'mgr-1', locationId: 'CrestonMS', type: 'ace-buck',
+    date: '2026-10-05', criteria: ['People & Culture'], note: 'Led the line.',
+  }
+  const star = {
+    id: 's1', employeeId: 'mgr-1', locationId: 'CrestonMS', type: 'star-of-day',
+    date: '2026-10-06', criteria: ['Service'], note: 'Covered a shift.',
+  }
+  const records = [buck, star]
+
+  assert.equal(earnsDailyStar(buck), false)
+  assert.equal(earnsDailyStar(star), true)
+  // Both still "earn" — a Buck is an award, not a nomination.
+  assert.equal(recognitionEarnsStar(buck), true)
+
+  // The manager's own record: one star, one Buck, never two of either.
+  assert.equal(getEmployeeStarCount(records, 'mgr-1', 2026), 1)
+  assert.equal(getDailyStarCount(records, 'mgr-1', 2026), 1)
+  assert.equal(getAceBuckCount(records, 'mgr-1', 2026), 1)
+
+  // And the star level is reached on stars alone.
+  assert.equal(getEmployeeStarCount([buck, buck, buck, buck, buck], 'mgr-1', 2026), 0)
+})
+
+test('a Buck does not inflate the building figures that say Star of the Day only', () => {
+  const records = [
+    { id: 'b1', employeeId: 'mgr-1', locationId: 'CrestonMS', type: 'ace-buck', date: '2026-10-05' },
+    { id: 's1', employeeId: 'emp-1', locationId: 'CrestonMS', type: 'star-of-day', date: '2026-10-06' },
+  ]
+
+  const [building] = buildingRecognitionSummary(records, 2026, ['CrestonMS'])
+  assert.equal(building.total, 1, 'the star, not the Buck')
+  assert.equal(building.months['2026-10'], 1)
+
+  assert.deepEqual(
+    employeeStarsByLocation(records, 'mgr-1'),
+    [],
+    'a Buck is not a star earned at a school'
+  )
 })

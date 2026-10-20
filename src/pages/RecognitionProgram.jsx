@@ -33,7 +33,7 @@ import {
   getMonthlyDrawingEntries,
   getNextStarLevel,
   getStarLevel,
-  recognitionEarnsStar,
+  earnsDailyStar,
   requiresStarMessage,
   schoolYearStartFor,
   submitterLocationLabel,
@@ -199,7 +199,7 @@ export default function RecognitionProgram() {
   const schoolYearRecords = scopedRecords.filter(record => (
     record.date >= `${schoolYearStart}-07-01` && record.date <= `${schoolYearStart + 1}-06-30`
   ))
-  const earnedStars = schoolYearRecords.filter(recognitionEarnsStar)
+  const earnedStars = schoolYearRecords.filter(earnsDailyStar)
   const thisMonth = localDateKey().slice(0, 7)
   const thisMonthStars = earnedStars.filter(record => record.date.startsWith(`${thisMonth}-`))
   // Everyone caught shining this month, pinned to the banner the way their
