@@ -26,9 +26,17 @@ function reachLabel(profile) {
   return LOCATION_MAP[profile.locationId]?.name || profile.locationId || '—'
 }
 
+// What a login actually signs in with. A profile stores only the flags
+// somebody set explicitly; the rest are derived at sign-in, and reading the
+// stored half makes an implicit capability look switched off. The server
+// resolves them for us — see effectiveCapabilities in access-admin.mjs.
+function capabilitiesOf(profile) {
+  return profile?.effectiveCapabilities || profile?.capabilities || {}
+}
+
 function tierLabel(profile) {
   if (profile.role !== 'admin') return 'School'
-  const { canManageRoster, canManageBlackouts } = profile.capabilities || {}
+  const { canManageRoster, canManageBlackouts } = capabilitiesOf(profile)
   return canManageRoster && canManageBlackouts ? 'District administrator' : 'District (limited)'
 }
 
@@ -211,7 +219,7 @@ export default function AccessAdmin() {
                     </p>
                     <div className="mt-1.5 flex flex-wrap gap-1">
                       {CAPABILITY_LABELS
-                        .filter(([flag]) => profile.capabilities?.[flag] === true)
+                        .filter(([flag]) => capabilitiesOf(profile)[flag] === true)
                         .map(([flag, label]) => (
                           <span key={flag} className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
                             {label}
@@ -297,12 +305,16 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
     role: profile?.role || 'school',
     locationId: profile?.locationId || '',
     pin: '',
+    // Seeded from what the login actually has, not from what is written
+    // down against it. Seeding from the stored half turned every implicit
+    // capability into an unticked box, and saving the form then switched it
+    // off for real.
     capabilities: {
-      canEditAttendance: profile?.capabilities?.canEditAttendance ?? true,
-      canEditRecognition: profile?.capabilities?.canEditRecognition ?? true,
-      canManageRoster: profile?.capabilities?.canManageRoster ?? false,
-      canManageBlackouts: profile?.capabilities?.canManageBlackouts ?? false,
-      canManageRecognitionAwards: profile?.capabilities?.canManageRecognitionAwards ?? false,
+      canEditAttendance: capabilitiesOf(profile).canEditAttendance ?? (profile ? false : true),
+      canEditRecognition: capabilitiesOf(profile).canEditRecognition ?? (profile ? false : true),
+      canManageRoster: capabilitiesOf(profile).canManageRoster ?? false,
+      canManageBlackouts: capabilitiesOf(profile).canManageBlackouts ?? false,
+      canManageRecognitionAwards: capabilitiesOf(profile).canManageRecognitionAwards ?? false,
     },
   }))
   const [newPin, setNewPin] = useState('')

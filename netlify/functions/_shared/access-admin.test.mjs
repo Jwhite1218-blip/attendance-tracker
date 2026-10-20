@@ -320,3 +320,71 @@ test('an unreadable PIN still lists the profile, marked unreadable', async () =>
     assert.equal(bad.displayName, 'Broken Row', 'still listed')
   })
 })
+
+// Liz, 2026-10-19: "I don't see the Employee of the Month as an option."
+//
+// A profile stores only the flags somebody set explicitly. Everything else
+// is derived at sign-in — an administrator holding roster and blackout
+// management gets award draws without anybody ticking a box. The admin
+// screen was only ever sent the stored half, so an implicit capability
+// showed as unticked, and saving the form wrote that off for real.
+test('a capability nobody ticked is still reported as held', () => {
+  const profile = publicProfile({
+    id: 'p1',
+    role: 'admin',
+    display_name: 'District administrator',
+    // Exactly what a migrated row looks like: the two flags that were set,
+    // and nothing about award draws.
+    capabilities: { canManageRoster: true, canManageBlackouts: true },
+    pin_length: 4,
+  })
+
+  assert.equal(profile.capabilities.canManageRecognitionAwards, undefined, 'nothing is stored')
+  assert.equal(profile.effectiveCapabilities.canManageRecognitionAwards, true, 'but it is held')
+  assert.equal(profile.effectiveCapabilities.canManageRoster, true)
+  assert.equal(profile.effectiveCapabilities.canEditAttendance, true)
+})
+
+test('an explicitly withheld capability stays withheld', () => {
+  const profile = publicProfile({
+    id: 'p2',
+    role: 'admin',
+    display_name: 'District assistant',
+    capabilities: { canManageRoster: true, canManageBlackouts: true, canManageRecognitionAwards: false },
+    pin_length: 4,
+  })
+  assert.equal(profile.effectiveCapabilities.canManageRecognitionAwards, false)
+})
+
+test('a building login is not credited with district capabilities', () => {
+  const profile = publicProfile({
+    id: 'p3',
+    role: 'school',
+    display_name: 'Creston MS',
+    location_id: 'CrestonMS',
+    capabilities: {},
+    pin_length: 4,
+  })
+  assert.equal(profile.effectiveCapabilities.canManageRoster, false)
+  assert.equal(profile.effectiveCapabilities.canManageRecognitionAwards, false)
+  assert.equal(profile.effectiveCapabilities.canEditRecognition, true, 'a building still records its own')
+})
+
+test('editing a profile cannot switch off a capability nobody touched', () => {
+  // The screen seeds its tick boxes from effectiveCapabilities and submits
+  // them back. With the stored half it submitted false for anything
+  // implicit, which is how the capability was lost.
+  const row = {
+    id: 'p4',
+    role: 'admin',
+    display_name: 'District administrator',
+    capabilities: { canManageRoster: true, canManageBlackouts: true },
+    pin_length: 4,
+  }
+  const seeded = publicProfile(row).effectiveCapabilities
+  assert.equal(seeded.canManageRecognitionAwards, true)
+
+  // Save it straight back with no change, and the capability survives.
+  const saved = publicProfile({ ...row, capabilities: seeded })
+  assert.equal(saved.effectiveCapabilities.canManageRecognitionAwards, true)
+})

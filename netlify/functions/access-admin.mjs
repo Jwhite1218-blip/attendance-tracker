@@ -10,9 +10,9 @@
 // a valid server session, Liz's tier, and HTTPS in production.
 import { randomUUID } from 'node:crypto'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
-import { jsonResponse } from './_shared/auth.mjs'
+import { jsonResponse, normalizeAccessProfile } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
-import { ConflictError, getAccessStore, tableAuthEnabled } from './_shared/access-store.mjs'
+import { ConflictError, getAccessStore, profileFromRow, tableAuthEnabled } from './_shared/access-store.mjs'
 import {
   GuardError,
   assertNoPrivilegeEscalation,
@@ -35,6 +35,31 @@ function safePin(row) {
   }
 }
 
+// The flags a login actually signs in with, as opposed to the ones written
+// down against it.
+//
+// A profile stores only what was set explicitly; everything else is derived
+// at sign-in by normalizeAccessProfile — an administrator who has roster and
+// blackout management gets award draws without anybody ticking a box. The
+// screen was only ever shown the stored half, so an implicit capability
+// looked switched off, and saving the form wrote that lie down. Liz lost
+// Employee of the Month that way on 2026-10-19.
+//
+// Resolved here, through the same function the sign-in path uses, so there
+// is no second set of rules to drift.
+const CAPABILITY_FLAGS = [
+  'canEditAttendance',
+  'canEditRecognition',
+  'canManageRoster',
+  'canManageBlackouts',
+  'canManageRecognitionAwards',
+]
+
+function effectiveCapabilities(row) {
+  const resolved = normalizeAccessProfile(profileFromRow(row)) || {}
+  return Object.fromEntries(CAPABILITY_FLAGS.map(flag => [flag, resolved[flag] === true]))
+}
+
 export function publicProfile(row) {
   const { pin, pinReadable } = safePin(row)
   return {
@@ -47,6 +72,7 @@ export function publicProfile(row) {
     locationId: row.location_id,
     employeeId: row.employee_id,
     capabilities: row.capabilities || {},
+    effectiveCapabilities: effectiveCapabilities(row),
     source: row.source,
     disabledAt: row.disabled_at,
     lastUsedAt: row.last_used_at,
