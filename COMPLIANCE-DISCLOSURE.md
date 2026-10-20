@@ -32,9 +32,19 @@ has been in daily use since September 2026.
 | Professional Standards training | Hours, type and USDA key area, per training event |
 | Sign-in credentials | A 4-digit PIN per login, encrypted (see section 5) |
 
-**It does not store:** social security numbers, addresses, bank or payroll
-details, dates of birth including year, medical information, disciplinary
-records, or any student data of any kind.
+**It does not store:** social security numbers, addresses, bank details,
+medical information, disciplinary records, or any student data of any kind.
+Birthdays are held as day and month only, with no year.
+
+**It does hold payroll-adjacent data that the application never uses or
+displays.** The base staff roster is a file inside the source repository
+covering 146 food service employees. Alongside the fields above it carries
+**annual pay amount, contracted weekly hours, middle name, department and job
+code** for each person. None of these is ever sent to a user: the server
+filters every roster record through an explicit allowlist before it leaves,
+and pay and hours are not on it. They are nonetheless present in the
+repository and in its version history. See section 6, item 1 — this is the
+first thing being fixed.
 
 **Phone numbers** were collected briefly in October 2026 and were deleted from
 the database on 19 October 2026 at HR's request. Zero records remain; this was
@@ -131,7 +141,15 @@ Each item below is verifiable in the source code.
 These are stated plainly because an IT reviewer will find them, and finding
 them undisclosed would reasonably undermine confidence in everything above.
 
-1. **Fifteen public pages show staff names.** Each school has a public
+1. **Payroll data sits in the source repository.** As described in section 2,
+   the roster file carries annual pay and contracted hours for 146 staff. The
+   application never transmits or displays it — this was verified — but it
+   should not be there at all. The fields are being removed. Because the file
+   is under version control, removing it going forward does not erase it from
+   history; the repository is private, and whether the history also needs
+   rewriting is a question for the review.
+
+2. **Fifteen public pages show staff names.** Each school has a public
    recognition leaderboard — no sign-in — listing staff **full first and last
    names** with their recognition counts. Each is at an unguessable address
    protected by a random 16-character token, and the tokens are not published
@@ -139,24 +157,24 @@ them undisclosed would reasonably undermine confidence in everything above.
    retains access. *Decision needed: keep, reduce to first name and last
    initial, or withdraw pending review.*
 
-2. **Test copies of the site are publicly reachable and accept live PINs.**
+3. **Test copies of the site are publicly reachable and accept live PINs.**
    Netlify publishes a preview copy for each change. These are currently open
    to the internet and a real district PIN will sign in to them. *This should
    be closed before any review concludes.*
 
-3. **PIN strength versus guessing.** A 4-digit PIN allows 10,000
+4. **PIN strength versus guessing.** A 4-digit PIN allows 10,000
    combinations, of which about nineteen are valid. The current rate limit
    permits 100 attempts per 15 minutes from one address, which means a
    determined attacker could expect to find a working PIN within a few hours.
    *The rate limit should be tightened; see the technical review.*
 
-4. **Data persists in the browser.** For speed, the application keeps a copy of
+5. **Data persists in the browser.** For speed, the application keeps a copy of
    the data it has loaded in the browser's local storage. It is erased when the
    app is next opened without a valid session, and sessions expire after 8
    hours — but on a shared kitchen device, data can sit on that device until
    then.
 
-5. **One known moderate-severity advisory** in a third-party package used by
+6. **One known moderate-severity advisory** in a third-party package used by
    the hosting provider's storage client. Not known to be exploitable here;
    listed for completeness.
 
