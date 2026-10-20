@@ -1,10 +1,12 @@
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import ManagerHome from './pages/ManagerHome.jsx'
 import Training from './pages/Training.jsx'
 import ProgramSettings from './pages/ProgramSettings.jsx'
 import ChangeRequests from './pages/ChangeRequests.jsx'
+import { pendingRequests } from './data/approvalRequests.js'
+import { getApprovalRequests } from './data/approvalStore.js'
 import AccessAdmin from './pages/AccessAdmin.jsx'
 import DailyReport from './pages/DailyReport.jsx'
 import CalendarView from './pages/CalendarView.jsx'
@@ -87,6 +89,12 @@ function AppShell() {
   const homePath = recognitionOnly ? '/recognition' : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
+  // Shown beside the nav label, so something waiting on Liz is visible from
+  // any page rather than only if she thinks to look.
+  const pendingCount = useMemo(
+    () => (lizAdminAccess ? pendingRequests(getApprovalRequests()).length : 0),
+    [lizAdminAccess, location.pathname]
+  )
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
   const standardNavItems = [
     // Every signed-in role gets the Dashboard entry, pointing at its own
@@ -105,7 +113,9 @@ function AppShell() {
     ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
     ...(lizAdminAccess ? [{ path: '/settings', label: t('nav.settings') }] : []),
-    ...(lizAdminAccess ? [{ path: '/requests', label: t('nav.changeRequests') }] : []),
+    ...(lizAdminAccess
+      ? [{ path: '/requests', label: pendingCount ? `${t('nav.changeRequests')} (${pendingCount})` : t('nav.changeRequests') }]
+      : []),
     ...(lizAdminAccess ? [{ path: '/access', label: t('nav.access') }] : []),
     ...(lizAdminAccess ? [{ path: '/backup-recovery', label: t('nav.backupRecovery') }] : []),
   ]
