@@ -85,9 +85,12 @@ test('authenticated roster omits unused payroll fields and stale merge actions a
     assert.equal(Object.hasOwn(body.roster[0], 'weekly_hours'), false)
     assert.equal(Object.hasOwn(body.roster[0], 'department'), false)
     assert.equal(body.roster[0].birthdate, employees[0].birthdate || '')
-    assert.equal(body.roster[0].hire_date, employees[0].hire_date || '')
     assert.equal(body.roster[0].service_date, employees[0].service_date || '')
     assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
+    // Removed from the employee card at HR's request on 2026-10-19 and
+    // moved to the administrator-only group with it: a hire date drives
+    // nothing a building sees, so a building is not sent one.
+    assert.equal(Object.hasOwn(body.roster[0], 'hire_date'), false)
 
     const mergeRequest = await authenticatedRequest(
       { role: 'admin', canEditAttendance: true, canManageRoster: true, canManageBlackouts: true },
@@ -196,7 +199,7 @@ test('school state filters roster and location overrides to that school', async 
     const rosterRow = body.roster.find(row => schoolId(row) === schoolId(schoolEmployee))
     assert.ok(rosterRow, 'the school employee is in their own roster')
     assert.equal(rosterRow.birthdate, schoolEmployee.birthdate || '')
-    assert.equal(rosterRow.hire_date, schoolEmployee.hire_date || '')
+    assert.equal(Object.hasOwn(rosterRow, 'hire_date'), false, 'a school session is not sent hire dates')
     assert.equal(rosterRow.service_date, schoolEmployee.service_date || '')
     // The allowlist still holds for every row, including the managers that
     // are new to this payload.
@@ -657,4 +660,37 @@ test('Liz can download and restore a full backup while restricted administrators
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
+})
+
+// HR asked for the phone number and the hire date off the employee card on
+// 2026-10-19. Taking them off the screen is not the same as not sending
+// them, so this asserts the payload.
+test('a building is sent neither a phone number nor a hire date', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  const schoolId = employee => String(employee.kronos_id || employee.id)
+  const sessions = createMemoryBlobStore()
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'employee-record-overrides': {
+      [schoolId(employees[0])]: { phone: '3175550134', notes: 'kept' },
+    },
+  })
+  const request = await authenticatedRequest({
+    role: 'school',
+    locationId: employees[0].location,
+    canEditAttendance: true,
+  }, sessions)
+  const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+  const body = await response.json()
+
+  assert.ok(body.roster.every(row => !Object.hasOwn(row, 'hire_date')))
+  const overrides = body.entries['employee-record-overrides'] || {}
+  for (const record of Object.values(overrides)) {
+    assert.equal(Object.hasOwn(record, 'phone'), false, 'a stored phone number is not sent on')
+  }
+  assert.equal(overrides[schoolId(employees[0])]?.notes, 'kept', 'the rest of the record survives')
+
+  if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+  else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
 })

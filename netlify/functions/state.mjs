@@ -39,7 +39,11 @@ function employeeKey(employee) {
 
 function withoutLizOnlyEmployeeFields(employee) {
   if (!employee || typeof employee !== 'object' || Array.isArray(employee)) return employee
-  const { t_shirt_size: _tShirtSize, ...publicEmployeeFields } = employee
+  // phone was collected for eight days in October 2026 and removed at HR's
+  // request. Stripped here as well as from the screens, so a number entered
+  // in that window stops being sent to a building at all. Stored values are
+  // untouched and can be purged separately.
+  const { t_shirt_size: _tShirtSize, phone: _phone, ...publicEmployeeFields } = employee
   return publicEmployeeFields
 }
 
@@ -77,8 +81,11 @@ function publicEmployee(employee, session) {
     location: employee.location || '',
   }
 
+  // service_date drives years of service and the anniversary card;
+  // birthdate drives the birthday card. Both earn their place on a
+  // building's screen. hire_date drives nothing a manager sees, so it moved
+  // down to the administrator-only group when HR asked for it off the card.
   const milestones = {
-    hire_date: employee.hire_date || '',
     service_date: employee.service_date || '',
     birthdate: employee.birthdate || '',
   }
@@ -88,6 +95,7 @@ function publicEmployee(employee, session) {
   return {
     ...shared,
     ...milestones,
+    hire_date: employee.hire_date || '',
     t_shirt_size: employee.t_shirt_size || '',
   }
 }

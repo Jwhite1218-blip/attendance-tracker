@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useProgramTerms } from '../components/useProgramTerms.js'
-import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
+import { SHOW_EMPLOYEE_CARD_IDS, employeeCardName } from '../data/employeeCardDisplay.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getEmployeeYearAttendance, replaceAttendanceYearSnapshot, setAttendanceCode } from '../data/attendanceStore.js'
 import { ATTENDANCE_SEVERITY_CHIP, ATTENDANCE_SEVERITY_CLASS, attendanceSeverity, getAttendanceStageLabel, getEmployeeAttendanceStatus, isFlagged } from '../data/hrFlags.js'
@@ -12,7 +12,7 @@ import { openStarCardWindow, starCardFromRecognition } from '../lib/starCardPrin
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
-import { formatBirthday, formatPhone } from '../data/employeeFields.js'
+import { formatBirthday } from '../data/employeeFields.js'
 import TransferModal from '../components/TransferModal.jsx'
 import { assignmentTimeline } from '../data/assignmentHistory.js'
 import { validateInactiveDetails } from '../data/employmentStatus.js'
@@ -236,10 +236,8 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const today = new Date()
 
   const serviceDate = employee?.service_date
-  const hireDate = employee?.hire_date
   const birthdate = employee?.birthdate
   const tShirtSize = employee?.t_shirt_size
-  const phone = employee?.phone
   const yearsOfService = serviceDate
     ? Math.floor((new Date() - new Date(serviceDate)) / (1000 * 60 * 60 * 24 * 365))
     : null
@@ -285,7 +283,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             </div>
             <div className="min-w-0">
               <h2 className={`text-lg sm:text-xl font-bold ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(empKey)]}`}>
-                {employee?.first_name} {employee?.last_name}
+                {employeeCardName(employee)}
               </h2>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500">
                 {SHOW_EMPLOYEE_CARD_IDS && <span>ID: {employee?.kronos_id}</span>}
@@ -415,12 +413,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-100">
-          {hireDate && (
-            <div>
-              <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Hire Date</p>
-              <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{hireDate}</p>
-            </div>
-          )}
           {serviceDate && (
             <div>
               <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Service Date</p>
@@ -430,16 +422,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           <div>
             <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Birthdate</p>
             <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">{formatBirthday(birthdate)}</p>
-          </div>
-          <div>
-            <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-wide">Phone</p>
-            {/* A manager chasing a no-show is usually holding a phone, so the
-                number is the link rather than text to copy out by hand. */}
-            <p className="text-xs sm:text-sm font-medium text-gray-700 mt-0.5">
-              {phone
-                ? <a href={`tel:${String(phone).replace(/\D/g, '')}`} className="text-brand-700 hover:underline">{formatPhone(phone)}</a>
-                : '—'}
-            </p>
           </div>
           {lizAdminAccess && (
             <div>
@@ -1108,7 +1090,7 @@ function PrintableAttendanceLedger({ employee, attendance, yearLabel }) {
     <div className="hidden print:block text-black">
       <h1 className="text-xl font-bold">Attendance Ledger — {yearLabel}</h1>
       <div className="mt-2 text-sm">
-        <p className="font-semibold">{employee?.first_name} {employee?.last_name}{SHOW_EMPLOYEE_CARD_IDS && <> · ID: {employee?.kronos_id}</>}</p>
+        <p className="font-semibold">{employeeCardName(employee)}{SHOW_EMPLOYEE_CARD_IDS && <> · ID: {employee?.kronos_id}</>}</p>
         <p>{employee?.position} · {LOCATION_MAP[employee?.location]?.name || employee?.location || 'Unassigned'}</p>
         <p className="text-gray-600">Printed {new Date().toLocaleDateString('en-US', { dateStyle: 'medium' })}</p>
       </div>

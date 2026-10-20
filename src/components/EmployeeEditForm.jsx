@@ -3,7 +3,7 @@ import { useAuth } from './PinGate.jsx'
 import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { transferEmployee, updateEmployeeRecord } from '../data/employeeLocations.js'
-import { normalizeBirthday, normalizePhone, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
+import { normalizeBirthday, T_SHIRT_SIZE_SUGGESTIONS } from '../data/employeeFields.js'
 
 export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
   const { displayName } = useAuth()
@@ -13,7 +13,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
     position: employee.position || '',
     location: employee.location || '',
     birthdate: employee.birthdate || '',
-    phone: employee.phone || '',
     hire_date: employee.hire_date || '',
     service_date: employee.service_date || '',
     t_shirt_size: employee.t_shirt_size || '',
@@ -39,7 +38,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
         position: form.position.trim(),
         job: form.position.trim(),
         birthdate: normalizeBirthday(form.birthdate),
-        phone: normalizePhone(form.phone),
         hire_date: form.hire_date,
         service_date: form.service_date,
         t_shirt_size: form.t_shirt_size.trim(),
@@ -78,7 +76,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
           </select>
         </label>
         <Field label="Birthday (MM-DD)" value={form.birthdate} onChange={value => update('birthdate', value)} placeholder="11-06" />
-        <Field label="Phone number" type="tel" value={form.phone} onChange={value => update('phone', value)} placeholder="317-555-0134" />
         <Field label="Hire date" type="date" value={form.hire_date} onChange={value => update('hire_date', value)} />
         <Field label="Service date" type="date" value={form.service_date} onChange={value => update('service_date', value)} />
         <Field label="T-shirt size" value={form.t_shirt_size} onChange={value => update('t_shirt_size', value)} placeholder="Example: XL" list="edit-t-shirt-sizes" />

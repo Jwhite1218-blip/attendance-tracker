@@ -1,7 +1,7 @@
 // The source roster is delivered only after server authentication and kept in
 // sessionStorage. It is intentionally not imported into the public JS bundle.
 
-import { normalizeBirthday, normalizePhone } from './employeeFields.js'
+import { normalizeBirthday } from './employeeFields.js'
 import { validateInactiveDetails } from './employmentStatus.js'
 import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
 import { recordAssignmentChange } from './assignmentHistory.js'
@@ -203,7 +203,6 @@ export function addEmployee(input) {
     hire_date: String(input.hire_date || '').trim(),
     service_date: String(input.service_date || '').trim(),
     birthdate: normalizeBirthday(input.birthdate),
-    phone: normalizePhone(input.phone),
     t_shirt_size: String(input.t_shirt_size || '').trim(),
     source: 'custom',
   }

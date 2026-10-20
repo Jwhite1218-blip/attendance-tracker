@@ -12,7 +12,6 @@ const EMPTY_FORM = {
   hire_date: '',
   service_date: '',
   birthdate: '',
-  phone: '',
   t_shirt_size: '',
 }
 
@@ -81,7 +80,6 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
             </select>
           </label>
           <Field label="Birthday (MM-DD)" value={form.birthdate} onChange={value => update('birthdate', value)} placeholder="11-06" />
-          <Field label="Phone number" type="tel" value={form.phone} onChange={value => update('phone', value)} placeholder="317-555-0134" />
           <Field label="Hire date" type="date" value={form.hire_date} onChange={value => update('hire_date', value)} />
           <Field label="Service date" type="date" value={form.service_date} onChange={value => update('service_date', value)} />
           <Field label="T-shirt size" value={form.t_shirt_size} onChange={value => update('t_shirt_size', value)} placeholder="Example: XL" list="t-shirt-sizes" />
