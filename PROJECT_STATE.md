@@ -293,39 +293,42 @@ day, termination date and reason; schools worked; the attendance year with
 comments; manager notes with author and date; recognition earned. Carries
 the same "not a disciplinary file" warning, which matters more on paper.
 
+## Decided by Liz, 2026-10-19
+
+Answered by Liz directly, so these are settled unless she reopens them.
+
+- **No monthly ACE drawing** for now; she may revisit. `drawManagerAllStar`
+  and `getManagerDrawingEntries` stay built, tested and wired to nothing.
+- **No cap** or monthly allowance on awarding Coach Bucks.
+- **Printing a Coach Buck is undetermined** — she is consulting her team.
+- **ACE Coach milestones must read differently from the All-Star ones.**
+  They already did in the data; what was missing was the screen. Shipped
+  the same day in `c0f6efe`.
+- **Training backfill is manual.** Her documentation is not in a shape worth
+  importing, so no importer will be built. Every member of staff reads as
+  "short" until she enters it, which is correct.
+- **"Other" belongs on the printed Star of the Day card, and the card should
+  be bilingual.** Not yet built.
+
 ## Open, waiting on Liz
-1. **ACE Coach Bucks — the remaining questions.** The programme is built and
-   awarding works. Still unanswered, none of them blocking:
-   - Is there a monthly ACE drawing? `drawManagerAllStar` and
-     `getManagerDrawingEntries` exist and are tested but are wired to no
-     screen, waiting on this.
-   - Does a Coach Buck print a card, and is it the Star of the Day card or
-     its own?
-   - Any cap or monthly allowance per awarder.
-   - Do employee milestone names change from Bronze/Silver/Gold to Rookie
-     All-Star/Rising Star/MVP/Hall of Fame/All-Star Legend? **Liz can now
-     make this change herself** in Settings; it stopped being a code change
-     on 2026-10-18.
-2. **All-Stars page reorganisation.** Jon flagged further layout changes on
-   2026-10-19 and will come back with them.
-3. **Approval workflow.** "Other admin logins can request to edit/transfer with
-   my approval?" — still a question in her own notes, so unspecified.
-   `pending-approvals-v1` is already admitted by the SQL allowlist, so building
-   it needs no further migration.
-4. **Spanish sign-off** on the sixty drafted terms.
-5. Whether "other" belongs on the printed card, and whether the card should be
-   bilingual.
-6. Whether a manager's stars should still count in their building's "Stars by
+
+1. **Approval workflow.** Liz asked on 2026-10-19 whether another admin can
+   request an employee card edit or transfer that she approves. Not built —
+   today every administrator edits directly and nothing queues. Her question
+   is the first time anyone has asked for it rather than mused about it, so
+   it needs a decision from her on scope, not more design.
+   `pending-approvals-v1` is already admitted by the SQL allowlist, so
+   building it needs no migration.
+2. **Spanish sign-off** on the sixty drafted terms. Liz asked what this is on
+   2026-10-19 and has been told; nothing is blocked on it except the notice
+   itself. Until somebody is recorded as having approved the wording, every
+   Spanish screen carries "still a draft under review". She clears it in
+   Settings, which records who approved it and when.
+3. **All-Stars page reorganisation.** Jon flagged layout changes on
+   2026-10-19 and will come back with them. Liz: "re-circle back to that".
+4. Whether a manager's stars should still count in their building's "Stars by
    month" total while being off that building's leaderboard and out of its
-   drawing.
-7. **Training backfill.** Liz is emailing what she already holds. Until it is
-   loaded every member of staff reads as "short", which is correct — the
-   2026-27 counter started in July and nothing has been entered. If her
-   history is mostly district-wide events it is five or six manual entries
-   with "All employees" ticked; if it is per-person and uneven it needs an
-   importer. SheetJS is already bundled for the exports, so reading .xlsx
-   costs no new dependency. Matching her names to personnel IDs is the part
-   that needs care.
+   drawing. Liz is holding this until she discusses it with her team.
 
 ## Open, waiting on Jon
 1. **Deploy previews are publicly reachable and accept real district PINs**
