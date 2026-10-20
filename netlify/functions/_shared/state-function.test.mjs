@@ -87,9 +87,9 @@ test('authenticated roster omits unused payroll fields and stale merge actions a
     assert.equal(body.roster[0].birthdate, employees[0].birthdate || '')
     assert.equal(body.roster[0].service_date, employees[0].service_date || '')
     assert.equal(Object.hasOwn(body.roster[0], 't_shirt_size'), false)
-    // Removed from the employee card at HR's request on 2026-10-19 and
-    // moved to the administrator-only group with it: a hire date drives
-    // nothing a building sees, so a building is not sent one.
+    // Gone entirely on 2026-10-20, not merely withheld from buildings. The
+    // only thing it fed was work anniversaries, the district's own hire
+    // dates were not up to date, and the field went with the feature.
     assert.equal(Object.hasOwn(body.roster[0], 'hire_date'), false)
 
     const mergeRequest = await authenticatedRequest(
@@ -693,4 +693,37 @@ test('a building is sent neither a phone number nor a hire date', async () => {
 
   if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
   else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+})
+
+// Liz, 2026-10-20: hire dates in the district's own files turned out to be
+// out of date, so the work-anniversary feature was congratulating people on
+// the wrong day. The feature went, and the field with it.
+//
+// This asserts the strong version — that NOBODY is sent a hire date, rather
+// than that buildings are withheld one. It used to be sent to Liz's tier, so
+// a test checking only a school session would still have passed.
+test('no session of any tier is sent a hire date', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    for (const access of [
+      { role: 'admin', canEditAttendance: true, canManageRoster: true, canManageBlackouts: true },
+      { role: 'admin', canEditAttendance: true, canManageRoster: false, canManageBlackouts: false },
+      { role: 'school', locationId: 'CrestonMS', canEditAttendance: true },
+    ]) {
+      const sessions = createMemoryBlobStore()
+      const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+      const request = await authenticatedRequest(access, sessions)
+      const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+      const body = await response.json()
+      assert.ok(body.roster.length > 0, 'the roster should not be empty')
+      assert.ok(
+        body.roster.every(row => !Object.hasOwn(row, 'hire_date')),
+        `a ${access.role} session was sent a hire date`
+      )
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
 })

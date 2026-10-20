@@ -161,7 +161,6 @@ function RequestCard({ request, note, onNote, onApprove, onDecline }) {
             ['Personnel ID', request.payload.kronos_id],
             ['Job title', request.payload.position],
             ['School', locationName(request.payload.location)],
-            ['Hire date', request.payload.hire_date],
             ['Service date', request.payload.service_date],
           ].filter(([, value]) => value).map(([label, value]) => (
             <div key={label}>

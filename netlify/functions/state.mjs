@@ -81,10 +81,13 @@ function publicEmployee(employee, session) {
     location: employee.location || '',
   }
 
-  // service_date drives years of service and the anniversary card;
-  // birthdate drives the birthday card. Both earn their place on a
-  // building's screen. hire_date drives nothing a manager sees, so it moved
-  // down to the administrator-only group when HR asked for it off the card.
+  // service_date drives years of service; birthdate drives the birthday
+  // card. Both earn their place on a building's screen.
+  //
+  // hire_date used to be sent to Liz's tier alone. It is gone entirely as of
+  // 2026-10-20: the only thing it fed was work anniversaries, the district's
+  // own hire dates turned out to be unreliable, and an HR field kept for a
+  // feature nobody trusts is a field kept for nothing.
   const milestones = {
     service_date: employee.service_date || '',
     birthdate: employee.birthdate || '',
@@ -95,7 +98,6 @@ function publicEmployee(employee, session) {
   return {
     ...shared,
     ...milestones,
-    hire_date: employee.hire_date || '',
     t_shirt_size: employee.t_shirt_size || '',
   }
 }

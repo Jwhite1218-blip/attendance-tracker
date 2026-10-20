@@ -6,7 +6,7 @@ import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/e
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-import { getCurrentMonthAnniversaries, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
+import { getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
@@ -68,7 +68,6 @@ export default function Dashboard() {
   employeeExceptions.sort((a, b) => b.count - a.count)
 
   const birthdays = getCurrentMonthBirthdays(employees, today)
-  const anniversaries = getCurrentMonthAnniversaries(employees, today)
   const requestedTimeOff = getUpcomingRequestedTimeOff(employees, employee => {
     const empKey = employee.kronos_id || employee.id
     const attendanceYears = new Set([
@@ -84,12 +83,6 @@ export default function Dashboard() {
       label: `${monthName} Birthdays`,
       count: birthdays.length,
       description: 'All active staff celebrating this month',
-    },
-    {
-      id: 'anniversaries',
-      label: `${monthName} Anniversaries`,
-      count: anniversaries.length,
-      description: 'Completed work anniversaries this month',
     },
     {
       id: 'time-off',
@@ -213,7 +206,6 @@ export default function Dashboard() {
           type={activeDrilldown}
           monthName={monthName}
           birthdays={birthdays}
-          anniversaries={anniversaries}
           requestedTimeOff={requestedTimeOff}
           employeeExceptions={employeeExceptions}
         />
@@ -366,18 +358,15 @@ function FutureToolButton({ symbol, title, url }) {
   return <button type="button" disabled className={className} title="Awaiting Liz's approved parameters">{content}</button>
 }
 
-function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, requestedTimeOff, employeeExceptions }) {
+function DashboardDrilldown({ id, type, monthName, birthdays, requestedTimeOff, employeeExceptions }) {
   const term = useProgramTerms()
   const title = type === 'birthdays'
     ? `${monthName} Birthdays`
-    : type === 'anniversaries'
-      ? `${monthName} Work Anniversaries`
-      : type === 'exceptions'
-        ? 'Employees With Exceptions'
-        : 'Upcoming Requested Time Off'
+    : type === 'exceptions'
+      ? 'Employees With Exceptions'
+      : 'Upcoming Requested Time Off'
 
   const items = type === 'birthdays' ? birthdays
-    : type === 'anniversaries' ? anniversaries
     : type === 'exceptions' ? employeeExceptions
     : requestedTimeOff
 
@@ -417,12 +406,6 @@ function DashboardDrilldown({ id, type, monthName, birthdays, anniversaries, req
                 </div>
                 <div className="sm:text-right flex-shrink-0">
                   {type === 'birthdays' && <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>}
-                  {type === 'anniversaries' && (
-                    <>
-                      <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>
-                      <p className="text-xs text-gray-400">{item.years} year{item.years === 1 ? '' : 's'}</p>
-                    </>
-                  )}
                   {type === 'time-off' && (
                     <>
                       <p className="text-sm font-semibold text-brand-700">{formatDateKey(item.dateKey)}</p>

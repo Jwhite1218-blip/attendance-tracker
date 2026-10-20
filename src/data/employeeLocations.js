@@ -200,7 +200,6 @@ export function addEmployee(input) {
     last_name: String(input.last_name || '').trim(),
     position: String(input.position || '').trim(),
     location: String(input.location || '').trim(),
-    hire_date: String(input.hire_date || '').trim(),
     service_date: String(input.service_date || '').trim(),
     birthdate: normalizeBirthday(input.birthdate),
     t_shirt_size: String(input.t_shirt_size || '').trim(),

@@ -22,7 +22,7 @@ has been in daily use since September 2026.
 |---|---|
 | Staff names | First and last name, personnel ID |
 | Job title and school | Current assignment, and a history of transfers from 11 Oct 2026 |
-| Service date | Used for years-of-service and anniversary recognition |
+| Service date | Used for years-of-service on the employee card |
 | Birthday (day/month) | Optional, for birthday recognition |
 | T-shirt size | Optional, for staff apparel |
 | Attendance exceptions | Date and code — approved time off, no-call/no-show, late in, early out, unexcused, bereavement, FMLA/LOA, other — with an optional comment |
@@ -35,6 +35,12 @@ has been in daily use since September 2026.
 **It does not store:** social security numbers, addresses, bank details,
 medical information, disciplinary records, or any student data of any kind.
 Birthdays are held as day and month only, with no year.
+
+**Hire date was removed entirely on 20 October 2026**, along with the
+work-anniversary feature that was the only thing using it. The district's own
+hire dates proved to be out of date, so the feature was marking the wrong
+day. The field is gone from the roster file, from every form and report, and
+is no longer sent to any user; stored copies were purged.
 
 **It does hold payroll-adjacent data that the application never uses or
 displays.** The base staff roster is a file inside the source repository

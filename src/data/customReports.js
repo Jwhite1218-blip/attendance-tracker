@@ -7,7 +7,6 @@ export const EMPLOYEE_REPORT_FIELDS = [
   { id: 'last_name', label: 'Last Name', value: employee => employee.last_name || '' },
   { id: 'position', label: 'Position', value: employee => employee.position || '' },
   { id: 'school', label: 'School', value: employee => LOCATION_MAP[employee.location]?.name || employee.location || '' },
-  { id: 'hire_date', label: 'Hire Date', value: employee => employee.hire_date || '' },
   { id: 'service_date', label: 'Service Date', value: employee => employee.service_date || '' },
   { id: 'birthday', label: 'Birthday', value: employee => employee.birthdate ? formatBirthday(employee.birthdate) : '' },
   { id: 't_shirt_size', label: 'T-shirt Size', value: employee => employee.t_shirt_size || '' },

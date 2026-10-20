@@ -28,23 +28,11 @@ export function getCurrentMonthBirthdays(employees, referenceDate = new Date()) 
     .sort((a, b) => a.day - b.day || compareEmployees(a, b))
 }
 
-export function getCurrentMonthAnniversaries(employees, referenceDate = new Date()) {
-  const month = referenceDate.getMonth() + 1
-  const currentYear = referenceDate.getFullYear()
-
-  return employees
-    .flatMap(employee => {
-      const match = String(employee.hire_date || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
-      if (!match) return []
-
-      const hireYear = Number(match[1])
-      const hireMonth = Number(match[2])
-      const day = Number(match[3])
-      const years = currentYear - hireYear
-      return hireMonth === month && years > 0 ? [{ employee, day, years }] : []
-    })
-    .sort((a, b) => a.day - b.day || compareEmployees(a, b))
-}
+// Work anniversaries were removed on 2026-10-20. They were the only thing
+// hire_date fed, and Liz found the hire dates in the district's own files
+// were not up to date — so the feature was congratulating people on the
+// wrong date. Recognition built on data nobody trusts is worse than no
+// recognition. The field went with it.
 
 export function getUpcomingRequestedTimeOff(employees, getAttendanceRecords, referenceDate = new Date()) {
   const todayKey = localDateKey(referenceDate)
@@ -70,7 +58,6 @@ export function buildSchoolInsights(roster, readAttendanceForEmployee, reference
   return {
     monthName: referenceDate.toLocaleDateString('en-US', { month: 'long' }),
     birthdays: getCurrentMonthBirthdays(roster, referenceDate),
-    anniversaries: getCurrentMonthAnniversaries(roster, referenceDate),
     requestedTimeOff: getUpcomingRequestedTimeOff(roster, readAttendanceForEmployee, referenceDate),
   }
 }

@@ -19,7 +19,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
     position: employee.position || '',
     location: employee.location || '',
     birthdate: employee.birthdate || '',
-    hire_date: employee.hire_date || '',
     service_date: employee.service_date || '',
     t_shirt_size: employee.t_shirt_size || '',
   })
@@ -43,7 +42,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
         position: form.position.trim(),
         job: form.position.trim(),
         birthdate: normalizeBirthday(form.birthdate),
-        hire_date: form.hire_date,
         service_date: form.service_date,
         t_shirt_size: form.t_shirt_size.trim(),
       }
@@ -130,7 +128,6 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
           </select>
         </label>
         <Field label="Birthday (MM-DD)" value={form.birthdate} onChange={value => update('birthdate', value)} placeholder="11-06" />
-        <Field label="Hire date" type="date" value={form.hire_date} onChange={value => update('hire_date', value)} />
         <Field label="Service date" type="date" value={form.service_date} onChange={value => update('service_date', value)} />
         <Field label="T-shirt size" value={form.t_shirt_size} onChange={value => update('t_shirt_size', value)} placeholder="Example: XL" list="edit-t-shirt-sizes" />
         <datalist id="edit-t-shirt-sizes">
@@ -174,7 +171,6 @@ function describeChanges(payload, employee) {
     position: 'job title',
     location: 'school',
     birthdate: 'birthdate',
-    hire_date: 'hire date',
     service_date: 'service date',
     t_shirt_size: 'T-shirt size',
   }

@@ -1,5 +1,5 @@
 // The four cards at the top of a school's screens: birthdays, service
-// anniversaries, upcoming requested time off, and this week's exceptions.
+// birthdays, upcoming requested time off, and this week's exceptions.
 //
 // Lifted out of LocationView on 2026-10-11 so the manager's Dashboard can
 // show the same four. Liz: they "need to show up on the dashboard of the
@@ -18,7 +18,6 @@ function formatDate(dateStr) {
 
 export default function SchoolDashboardInsights({
   activeInsight,
-  anniversaries,
   birthdays,
   monthName,
   onEmployeeSelect,
@@ -36,12 +35,6 @@ export default function SchoolDashboardInsights({
       description: 'Current-month birthdays for this school',
     },
     {
-      id: 'anniversaries',
-      label: `${monthName} Anniversaries`,
-      count: anniversaries.length,
-      description: 'Completed service anniversaries this month',
-    },
-    {
       id: 'time-off',
       label: 'Upcoming RTOs',
       count: requestedTimeOff.length,
@@ -57,19 +50,15 @@ export default function SchoolDashboardInsights({
 
   const activeItems = activeInsight === 'birthdays'
     ? birthdays
-    : activeInsight === 'anniversaries'
-      ? anniversaries
-      : activeInsight === 'exceptions'
-        ? weekExceptions
-        : requestedTimeOff
+    : activeInsight === 'exceptions'
+      ? weekExceptions
+      : requestedTimeOff
 
   const activeTitle = activeInsight === 'birthdays'
     ? `${monthName} Birthdays`
-    : activeInsight === 'anniversaries'
-      ? `${monthName} Work Anniversaries`
-      : activeInsight === 'exceptions'
-        ? 'This Week’s Exceptions'
-        : 'Upcoming Requested Time Off'
+    : activeInsight === 'exceptions'
+      ? 'This Week’s Exceptions'
+      : 'Upcoming Requested Time Off'
 
   return (
     <section className="mb-6" aria-labelledby="school-overview-heading">
@@ -138,12 +127,6 @@ export default function SchoolDashboardInsights({
                     </button>
                     <div className="text-right flex-shrink-0">
                       {activeInsight === 'birthdays' && <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>}
-                      {activeInsight === 'anniversaries' && (
-                        <>
-                          <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>
-                          <p className="text-xs text-gray-400">{item.years} year{item.years === 1 ? '' : 's'}</p>
-                        </>
-                      )}
                       {activeInsight === 'time-off' && (
                         <>
                           <p className="text-sm font-semibold text-brand-700">{formatDate(item.dateKey)}</p>
