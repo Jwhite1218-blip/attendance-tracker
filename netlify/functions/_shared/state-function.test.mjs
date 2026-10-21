@@ -5,39 +5,35 @@ import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
 import { handleStateRequest, handleMutate } from '../state.mjs'
-import { validateInactiveDetails } from '../../../src/data/employmentStatus.js'
 import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
-test('inactive details require both real dates and a nonblank reason', () => {
-  const complete = { termination_date: '2026-09-18', last_day_worked: '2026-09-17', inactive_reason: 'Resigned' }
-  assert.doesNotThrow(() => validateInactiveDetails(complete))
-  for (const field of Object.keys(complete)) {
-    assert.throws(() => validateInactiveDetails({ ...complete, [field]: '' }))
-  }
-  assert.throws(() => validateInactiveDetails({ ...complete, inactive_reason: '   ' }))
-  assert.throws(() => validateInactiveDetails({ ...complete, termination_date: '2026-02-30' }))
-  assert.throws(() => validateInactiveDetails({ ...complete, last_day_worked: 'not-a-date' }))
-})
-
-test('server enforces new inactive details while preserving legacy records and attendance', async () => {
+// Liz, 2026-10-20: termination date, last day worked and reason were
+// removed from the application and the database. They were the HR half of
+// this tool and the district keeps that record on its own forms.
+//
+// The tests they replace asserted that those three fields were required
+// before anybody could be marked inactive. What matters now is the opposite:
+// that marking somebody inactive needs nothing beyond the flag, and that
+// doing so still does not disturb their attendance history.
+test('marking somebody inactive needs no reason and no dates', async () => {
   const key = 'employee-record-overrides'
-  const legacy = { active: false, inactive_reason: 'Legacy departure' }
   const attendance = { '2026-09-01': { code: 'RTO' } }
-  const store = stateStore({ [key]: { legacy }, 'att-emp-example-2026': attendance })
+  const store = stateStore({ [key]: {}, 'att-emp-example-2026': attendance })
   const access = { role: 'admin', canManageRoster: true, canManageBlackouts: true }
   const write = record => handleMutate(store, access, { key, mutation: { type: 'object-patch', set: { example: record } } })
-  const missing = await write({ active: false, inactive_reason: 'Resigned' })
-  assert.equal(missing.status, 400)
-  assert.match((await missing.json()).error, /Termination date/)
-  assert.deepEqual(await store.get(key), { legacy })
-  const details = { active: false, inactive_reason: 'Resigned', termination_date: '2026-09-18', last_day_worked: '2026-09-17' }
-  assert.equal((await write(details)).status, 200)
-  assert.deepEqual((await store.get(key)).example, details)
-  assert.deepEqual(await store.get('att-emp-example-2026'), attendance)
-  assert.equal((await handleMutate(store, access, { key, mutation: { type: 'object-patch', set: { legacy: { ...legacy, position: 'Updated title' } } } })).status, 200)
-  assert.equal((await write({ ...details, last_day_worked: '' })).status, 400)
-  assert.equal((await write({ active: true, inactive_reason: '', termination_date: '', last_day_worked: '' })).status, 200)
-  assert.equal((await handleMutate(store, { role: 'school', locationId: 'BrookViewE' }, { key, mutation: { type: 'object-patch', set: { example: details } } })).status, 403)
+
+  assert.equal((await write({ active: false, inactive_at: '2026-10-20T12:00:00.000Z' })).status, 200)
+  assert.deepEqual(await store.get('att-emp-example-2026'), attendance, 'history survives the change')
+
+  // And back again.
+  assert.equal((await write({ active: true, inactive_at: null })).status, 200)
+
+  // A building login still cannot change employment status at all.
+  assert.equal(
+    (await handleMutate(store, { role: 'school', locationId: 'BrookViewE' },
+      { key, mutation: { type: 'object-patch', set: { example: { active: false } } } })).status,
+    403
+  )
 })
 
 function stateStore(entries) {

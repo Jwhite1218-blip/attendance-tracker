@@ -113,10 +113,8 @@ export default function StaffAdmin() {
                       <p className="text-sm font-semibold text-gray-800 group-hover:text-brand-700 transition-colors">{employee.first_name} {employee.last_name}</p>
                       <p className="text-xs text-gray-400">
                         {LOCATION_MAP[employee.location]?.name || employee.location}
-                        {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
                         {' · View history'}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500">Termination date: {employee.termination_date || 'Not recorded'} · Last day worked: {employee.last_day_worked || 'Not recorded'}</p>
                       {flagged && (
                         <p className="text-xs font-semibold text-amber-700 mt-1">
                           {term.stageLabel(flagged)} · kept if reactivated

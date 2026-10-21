@@ -16,7 +16,6 @@ import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
 import TransferModal from '../components/TransferModal.jsx'
 import { assignmentTimeline } from '../data/assignmentHistory.js'
-import { validateInactiveDetails } from '../data/employmentStatus.js'
 import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
 import { rosterActionMode } from '../data/approvalRequests.js'
 import {
@@ -93,9 +92,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const [isPainting, setIsPainting] = useState(false)
   const [picker, setPicker] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
-  const [inactiveReason, setInactiveReason] = useState('')
-  const [terminationDate, setTerminationDate] = useState('')
-  const [lastDayWorked, setLastDayWorked] = useState('')
   const [statusError, setStatusError] = useState('')
   const [statusSent, setStatusSent] = useState('')
   const [noteAdded, setNoteAdded] = useState(false)
@@ -177,16 +173,12 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   }, [empKey, year, mode, dataVersion])
 
   useEffect(() => {
-    const currentEmployee = getEmployeeByKey(empKey)
     setNoteDraft('')
-    setInactiveReason(currentEmployee?.inactive_reason || '')
-    setTerminationDate(currentEmployee?.termination_date || '')
-    setLastDayWorked(currentEmployee?.last_day_worked || '')
     setStatusError('')
     setNoteAdded(false)
     setConfirmInactive(false)
     setShowEditEmployee(false)
-  }, [empKey, employee?.inactive_reason])
+  }, [empKey, employee?.active])
 
   const applyYearSnapshot = (dateKey, yearData) => {
     const changedYear = Number(dateKey.slice(0, 4))
@@ -727,11 +719,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   <p className="text-[11px] text-gray-400 mt-1">
                     This employee is inactive. They are off active rosters and off the HR attendance follow-up list, but their history and notes are kept.
                   </p>
-                  {employee?.inactive_reason && (
-                    <p className="text-xs text-gray-500 mt-2">Reason: {employee.inactive_reason}</p>
-                  )}
-                  <p className="text-xs text-gray-500 mt-2">Termination date: {employee?.termination_date || 'Not recorded'}</p>
-                  <p className="text-xs text-gray-500 mt-1">Last day worked: {employee?.last_day_worked || 'Not recorded'}</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -763,25 +750,6 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               ) : (
                 <>
                   <p className="text-[11px] text-gray-400 mt-1">Inactive employees leave active rosters without losing their history.</p>
-                  <label className="block mt-3 text-xs font-semibold text-gray-600">
-                    Termination date (required)
-                    <input type="date" required value={terminationDate} onChange={event => { setTerminationDate(event.target.value); setConfirmInactive(false); setStatusError('') }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                  </label>
-                  <label className="block mt-3 text-xs font-semibold text-gray-600">
-                    Last day worked (required)
-                    <input type="date" required value={lastDayWorked} onChange={event => { setLastDayWorked(event.target.value); setConfirmInactive(false); setStatusError('') }} className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm" />
-                  </label>
-                  <label className="block mt-3 text-xs font-semibold text-gray-600">
-                    Reason (required)
-                  <input
-                    type="text"
-                    required
-                    value={inactiveReason}
-                    onChange={event => { setInactiveReason(event.target.value); setConfirmInactive(false); setStatusError('') }}
-                    placeholder="Reason for leaving"
-                    className="mt-2 w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-700 placeholder:text-gray-300 focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100"
-                  />
-                  </label>
                   {statusError && <p role="alert" className="mt-2 text-xs text-red-700">{statusError}</p>}
                   {statusSent && <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{statusSent}</p>}
                   {confirmInactive ? (
@@ -793,15 +761,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                           type="button"
                           onClick={() => {
                             try {
-                              const details = { inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked }
                               if (rosterMode === 'request') {
-                                validateInactiveDetails(details)
                                 submitRequest({
                                   type: 'deactivate',
                                   empId: empKey,
                                   employeeName: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
-                                  summary: `Mark inactive · last day ${lastDayWorked || 'not given'} · ${inactiveReason || 'no reason given'}`,
-                                  payload: { active: false, ...details },
+                                  summary: 'Move to inactive',
+                                  payload: { active: false },
                                   baseline: { active: true },
                                   requestedBy: displayName,
                                 })
@@ -809,7 +775,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                                 setStatusSent('Sent to Liz for review. This employee is still active until she approves it.')
                                 return
                               }
-                              setEmployeeActive(empKey, false, details)
+                              setEmployeeActive(empKey, false)
                               onStatusChange?.()
                             } catch (error) { setStatusError(error.message) }
                           }}
@@ -829,13 +795,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   ) : (
                     <button
                       type="button"
-                      onClick={() => {
-                        try {
-                          validateInactiveDetails({ inactive_reason: inactiveReason, termination_date: terminationDate, last_day_worked: lastDayWorked })
-                          setStatusError('')
-                          setConfirmInactive(true)
-                        } catch (error) { setStatusError(error.message) }
-                      }}
+                      onClick={() => { setStatusError(''); setConfirmInactive(true) }}
                       className="mt-2 px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs font-semibold hover:bg-red-100"
                     >
                       Move to inactive
@@ -1192,9 +1152,6 @@ function PrintableEmployeeRecord({
           )}
           {employee?.active === false && (
             <>
-              <tr><td className="py-0.5 align-top text-gray-600">Last day worked</td><td className="py-0.5">{employee?.last_day_worked || '—'}</td></tr>
-              <tr><td className="py-0.5 align-top text-gray-600">Termination date</td><td className="py-0.5">{employee?.termination_date || '—'}</td></tr>
-              <tr><td className="py-0.5 align-top text-gray-600">Reason</td><td className="py-0.5">{employee?.inactive_reason || '—'}</td></tr>
             </>
           )}
         </tbody>

@@ -1534,6 +1534,11 @@ function AceBucksSection({
   employees,
   peerManagers,
   managerIds,
+  // Without this the award form offers nobody: the eligibility test falls
+  // back to `undefined?.has(...) === true`, which is false for everyone, so
+  // the "Which leader" list renders empty. Reported by Liz, 2026-10-20 —
+  // the page had always passed it and this component had always dropped it.
+  aceEligibleIds,
   canEdit,
   isSubmitting,
   confirmation,
@@ -1578,6 +1583,7 @@ function AceBucksSection({
               employees={employees}
               peerManagers={peerManagers}
               managerIds={managerIds}
+              aceEligibleIds={aceEligibleIds}
               canEdit={canEdit}
               isSubmitting={isSubmitting}
               confirmation={confirmation}

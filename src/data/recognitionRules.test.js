@@ -157,3 +157,42 @@ test('without an eligibility test the picker still refuses a cook', () => {
     ['lead']
   )
 })
+
+// Reported by Liz, 2026-10-20: the "Which leader" list on the ACE Coach Buck
+// form was empty. The cause was a dropped prop — the page supplied the
+// eligibility set, the section component never declared it, so the form
+// received undefined and `undefined?.has(x) === true` is false for everyone.
+//
+// A build, a page render and the whole suite all passed while the only
+// control that matters offered nobody. This pins the failure mode itself:
+// when eligibility cannot be determined, the list must not silently empty.
+test('a missing eligibility set does not quietly empty the leader list', () => {
+  const managers = [
+    { kronos_id: '1', first_name: 'Denise', position: 'Food Service Manager', location: 'CrestonMS' },
+    { kronos_id: '2', first_name: 'Rosa', position: 'Food Service Worker Lead', location: 'StonyBrkMS' },
+  ]
+  const cook = { kronos_id: '3', first_name: 'Sam', position: 'Food Service Worker', location: 'CrestonMS' }
+  const isManager = employee => ['1', '2'].includes(String(employee.kronos_id))
+
+  // The broken shape: no isAceEligible supplied at all.
+  const fallback = recognitionRecipients('ace-buck', {
+    scoped: [...managers, cook],
+    peerManagers: [],
+    isManager,
+  })
+  assert.deepEqual(fallback.map(e => e.first_name), ['Denise', 'Rosa'],
+    'with no eligibility test it falls back to manager-grade rather than returning nobody')
+
+  // The working shape, with the kitchen-manager set supplied.
+  const eligible = new Set(['1', '2'])
+  const withTest = recognitionRecipients('ace-buck', {
+    scoped: [...managers, cook],
+    peerManagers: [],
+    isManager,
+    isAceEligible: employee => eligible.has(String(employee.kronos_id)),
+  })
+  assert.deepEqual(withTest.map(e => e.first_name), ['Denise', 'Rosa'])
+
+  // And a cook is never offered either way.
+  assert.ok(!fallback.includes(cook) && !withTest.includes(cook))
+})

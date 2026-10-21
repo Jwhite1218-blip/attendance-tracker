@@ -75,7 +75,7 @@ export function applyApprovedRequest(request, actor = '') {
       transferEmployee(request.empId, request.payload?.to, actor)
       return
     case 'deactivate':
-      setEmployeeActive(request.empId, request.payload?.active === true, request.payload || {})
+      setEmployeeActive(request.empId, request.payload?.active === true)
       return
     case 'add':
       addEmployee(request.payload || {})

@@ -2,7 +2,6 @@
 // sessionStorage. It is intentionally not imported into the public JS bundle.
 
 import { normalizeBirthday } from './employeeFields.js'
-import { validateInactiveDetails } from './employmentStatus.js'
 import { ROSTER_SESSION_KEY, writeSharedStorage } from './sharedStore.js'
 import { recordAssignmentChange } from './assignmentHistory.js'
 
@@ -88,7 +87,6 @@ function buildEmployee(employee, locationOverrides, recordOverrides, managerNote
     location: locationOverrides[key] || override.location || employee.location,
     active: override.active !== false,
     notes: normalizeNoteEntries(hasManagerNote ? managerNotes[key] : override.notes),
-    inactive_reason: override.inactive_reason || '',
     inactive_at: override.inactive_at || null,
   }
 }
@@ -169,13 +167,12 @@ export function addEmployeeNote(empId, text, author) {
   return getEmployeeByKey(key)
 }
 
-export function setEmployeeActive(empId, active, details = {}) {
-  if (!active) validateInactiveDetails(details)
+// No reason, no dates — see employmentStatus.js. inactive_at is kept
+// because it is the application's own record of when the flag was set, not
+// an HR date about the person; it drives nothing a user sees.
+export function setEmployeeActive(empId, active) {
   return updateEmployeeRecord(empId, {
     active: Boolean(active),
-    inactive_reason: active ? '' : details.inactive_reason.trim(),
-    termination_date: active ? '' : details.termination_date,
-    last_day_worked: active ? '' : details.last_day_worked,
     inactive_at: active ? null : new Date().toISOString(),
   })
 }

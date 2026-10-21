@@ -27,7 +27,7 @@ has been in daily use since September 2026.
 | T-shirt size | Optional, for staff apparel |
 | Attendance exceptions | Date and code — approved time off, no-call/no-show, late in, early out, unexcused, bereavement, FMLA/LOA, other — with an optional comment |
 | Manager notes | Free text, dated and attributed to the manager who wrote it |
-| Employment status | Active or inactive, with last day worked, termination date and reason |
+| Employment status | Active or inactive. Nothing more — no dates, no reason |
 | Recognition records | Who was recognised, when, why, and who recognised them |
 | Professional Standards training | Hours, type and USDA key area, per training event |
 | Sign-in credentials | A 4-digit PIN per login, encrypted (see section 5) |
@@ -35,6 +35,11 @@ has been in daily use since September 2026.
 **It does not store:** social security numbers, addresses, bank details,
 medical information, disciplinary records, or any student data of any kind.
 Birthdays are held as day and month only, with no year.
+
+**Termination date, last day worked and reason for leaving were removed on
+20 October 2026.** They were the clearest HR records in the application and
+the district keeps that information on its own forms. Marking somebody
+inactive is now a status change and nothing else.
 
 **Hire date was removed entirely on 20 October 2026**, along with the
 work-anniversary feature that was the only thing using it. The district's own
