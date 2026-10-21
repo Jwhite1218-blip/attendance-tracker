@@ -158,7 +158,6 @@ function RequestCard({ request, note, onNote, onApprove, onDecline }) {
       {request.type === 'add' && (
         <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 sm:grid-cols-3">
           {[
-            ['Personnel ID', request.payload.kronos_id],
             ['Job title', request.payload.position],
             ['School', locationName(request.payload.location)],
             ['Service date', request.payload.service_date],

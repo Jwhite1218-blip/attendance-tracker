@@ -20,7 +20,7 @@ has been in daily use since September 2026.
 
 | Data | Detail |
 |---|---|
-| Staff names | First and last name, personnel ID |
+| Staff names | First and last name |
 | Job title and school | Current assignment, and a history of transfers from 11 Oct 2026 |
 | Service date | Used for years-of-service on the employee card |
 | Birthday (day/month) | Optional, for birthday recognition |
@@ -42,15 +42,24 @@ hire dates proved to be out of date, so the feature was marking the wrong
 day. The field is gone from the roster file, from every form and report, and
 is no longer sent to any user; stored copies were purged.
 
-**It does hold payroll-adjacent data that the application never uses or
-displays.** The base staff roster is a file inside the source repository
-covering 146 food service employees. Alongside the fields above it carries
-**annual pay amount, contracted weekly hours, middle name, department and job
-code** for each person. None of these is ever sent to a user: the server
-filters every roster record through an explicit allowlist before it leaves,
-and pay and hours are not on it. They are nonetheless present in the
-repository and in its version history. See section 6, item 1 — this is the
-first thing being fixed.
+**Annual pay, contracted weekly hours, middle name and department were
+removed on 20 October 2026.** The base staff roster is a file inside the
+source repository covering 146 food service employees, and it carried those
+four fields. Nothing in the application read them and none was ever sent to
+a user — the server filters every roster record through an explicit
+allowlist and they were not on it — but they should not have been held at
+all. They are now deleted from the file. They remain in the repository's
+version history, which is private; see section 6.
+
+**The district's payroll number is no longer shown or exported anywhere.** It
+remains on each record as the internal key that attendance history, stars and
+notes hang from — removing it outright would orphan every record ever
+entered. It is not displayed on any screen, not in any report column, and not
+in any spreadsheet export; the switch that could restore it to the screen was
+deleted rather than left off. Employees added from 20 October onward receive
+an opaque identifier that means nothing outside this application. Re-keying
+the historic records onto opaque identifiers is planned as a separate,
+backed-up migration.
 
 **Phone numbers** were collected briefly in October 2026 and were deleted from
 the database on 19 October 2026 at HR's request. Zero records remain; this was
@@ -147,13 +156,12 @@ Each item below is verifiable in the source code.
 These are stated plainly because an IT reviewer will find them, and finding
 them undisclosed would reasonably undermine confidence in everything above.
 
-1. **Payroll data sits in the source repository.** As described in section 2,
-   the roster file carries annual pay and contracted hours for 146 staff. The
-   application never transmits or displays it — this was verified — but it
-   should not be there at all. The fields are being removed. Because the file
-   is under version control, removing it going forward does not erase it from
-   history; the repository is private, and whether the history also needs
-   rewriting is a question for the review.
+1. **Version history retains what has been removed.** Pay, hours, hire dates
+   and middle names have been deleted from the roster file, but the
+   repository's history still contains them, as it does for any file ever
+   committed. The repository is private. Whether the history also needs
+   rewriting is a question for the review rather than something to decide
+   unilaterally.
 
 2. **Fifteen public pages show staff names.** Each school has a public
    recognition leaderboard — no sign-in — listing staff **full first and last

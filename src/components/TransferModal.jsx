@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useAuth } from './PinGate.jsx'
-import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { LOCATIONS } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations, transferEmployee } from '../data/employeeLocations.js'
 import { rosterActionMode } from '../data/approvalRequests.js'
@@ -60,7 +59,7 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
             <div>
               <h3 className="text-lg font-bold text-gray-900">Transfer Employee</h3>
               <p className="text-sm text-gray-500 mt-0.5">
-                {employee.first_name} {employee.last_name}{SHOW_EMPLOYEE_CARD_IDS && <> · ID: {employee.kronos_id}</>}
+                {employee.first_name} {employee.last_name}
               </p>
               <p className="text-xs text-amber-600 font-medium mt-1">This permanently changes their home school.</p>
             </div>

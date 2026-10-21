@@ -39,7 +39,11 @@ test('buildEmployeeHistoryHeaderRows identifies the employee and range', () => {
   const headerRows = buildEmployeeHistoryHeaderRows(employee, '2025-26', now)
 
   assert.equal(headerRows[0][0], 'Attendance Ledger — 2025-26')
-  assert.equal(headerRows[1][0], 'Amanda Allen · ID: 100')
+  // Liz, 2026-10-20: the payroll number is out of everything a person can
+  // see or export. This header was the one place it left the application
+  // entirely — into a spreadsheet that gets emailed and saved.
+  assert.equal(headerRows[1][0], 'Amanda Allen')
+  assert.ok(!JSON.stringify(headerRows).includes('100'), 'no payroll number anywhere in the header')
   assert.match(headerRows[2][0], /Cook/)
   assert.match(headerRows[3][0], /Exported/)
 })

@@ -1,6 +1,9 @@
-// Presentation only: set to true to restore IDs on employee cards and dialogs.
-// Stored identifiers, attendance links, and report exports remain unchanged.
-export const SHOW_EMPLOYEE_CARD_IDS = false
+// The payroll number is shown nowhere, and there is no switch to bring it
+// back. It sat behind a flag defaulting to false until 2026-10-20; Liz asked
+// for it gone, and a flag somebody can flip is not gone. The field still
+// exists on a record because attendance history hangs from it — new
+// employees get an opaque id instead, see newEmployeeIdentifier in
+// employeeLocations.js.
 
 // How a name reads on an employee card: full first name, last initial.
 //

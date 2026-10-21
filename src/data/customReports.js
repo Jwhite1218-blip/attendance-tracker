@@ -2,7 +2,6 @@ import { formatBirthday, T_SHIRT_SIZE_SUGGESTIONS } from './employeeFields.js'
 import { LOCATION_MAP } from './locations.js'
 
 export const EMPLOYEE_REPORT_FIELDS = [
-  { id: 'employee_id', label: 'Employee ID', value: employee => employee.kronos_id || employee.id || '' },
   { id: 'first_name', label: 'First Name', value: employee => employee.first_name || '' },
   { id: 'last_name', label: 'Last Name', value: employee => employee.last_name || '' },
   { id: 'position', label: 'Position', value: employee => employee.position || '' },

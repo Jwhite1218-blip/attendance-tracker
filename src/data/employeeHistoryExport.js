@@ -25,7 +25,7 @@ export function buildEmployeeHistorySheetRows(rows) {
 export function buildEmployeeHistoryHeaderRows(employee, yearLabel, now = new Date()) {
   return [
     [`Attendance Ledger — ${yearLabel}`],
-    [`${`${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()} · ID: ${employee?.kronos_id || ''}`],
+    [`${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()],
     [`${employee?.position || ''} · ${LOCATION_MAP[employee?.location]?.name || employee?.location || 'Unassigned'}`],
     [`Exported ${now.toLocaleDateString('en-US', { dateStyle: 'medium' })}`],
     [],

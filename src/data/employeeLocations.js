@@ -180,13 +180,26 @@ export function setEmployeeActive(empId, active, details = {}) {
   })
 }
 
+// The identifier every attendance row, star and note hangs from.
+//
+// Historic records are keyed on the district's payroll number because that
+// is what the original roster carried. Nobody types one any more: an
+// employee added from 2026-10-20 gets an opaque identifier that means
+// nothing outside this application and cannot be matched against a payroll
+// system. Existing records keep their key until the re-key migration, which
+// is a separate, backed-up job.
+function newEmployeeIdentifier(existing) {
+  const taken = new Set(existing.map(employee => String(employee.kronos_id || employee.id)))
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = `emp-${Math.random().toString(36).slice(2, 10)}`
+    if (!taken.has(candidate)) return candidate
+  }
+  throw new Error('Could not allocate an employee identifier. Try again.')
+}
+
 export function addEmployee(input) {
   const sourceEmployees = getSourceEmployees()
-  const personnelId = String(input.kronos_id || '').trim()
-  if (!personnelId) throw new Error('Personnel ID is required.')
-  if (sourceEmployees.some(employee => String(employee.kronos_id || '').toLowerCase() === personnelId.toLowerCase())) {
-    throw new Error('That Personnel ID already exists.')
-  }
+  const personnelId = newEmployeeIdentifier(sourceEmployees)
 
   const maxId = sourceEmployees.reduce((max, employee) => {
     const id = Number(employee.id)

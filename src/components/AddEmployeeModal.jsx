@@ -9,7 +9,6 @@ import { submitRequest } from '../data/approvalStore.js'
 const EMPTY_FORM = {
   first_name: '',
   last_name: '',
-  kronos_id: '',
   position: '',
   location: '',
   service_date: '',
@@ -60,7 +59,6 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
         if (!String(form.first_name || '').trim() || !String(form.last_name || '').trim()) {
           throw new Error('First and last name are required.')
         }
-        if (!String(form.kronos_id || '').trim()) throw new Error('Personnel ID is required.')
         submitRequest({
           type: 'add',
           employeeName: `${form.first_name.trim()} ${form.last_name.trim()}`,
@@ -110,7 +108,6 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
         <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label="First name" value={form.first_name} onChange={value => update('first_name', value)} required />
           <Field label="Last name" value={form.last_name} onChange={value => update('last_name', value)} required />
-          <Field label="Personnel ID" value={form.kronos_id} onChange={value => update('kronos_id', value)} required />
           <Field label="Position" value={form.position} onChange={value => update('position', value)} />
           <label className="block">
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Location</span>

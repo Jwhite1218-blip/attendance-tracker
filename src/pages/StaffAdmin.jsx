@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useProgramTerms } from '../components/useProgramTerms.js'
-import { SHOW_EMPLOYEE_CARD_IDS } from '../data/employeeCardDisplay.js'
 import { Link, useNavigate } from 'react-router-dom'
 import { LOCATION_MAP } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations, setEmployeeActive } from '../data/employeeLocations.js'
@@ -113,7 +112,7 @@ export default function StaffAdmin() {
                     <button type="button" onClick={() => openEmployeeRecord(employee)} className="text-left group">
                       <p className="text-sm font-semibold text-gray-800 group-hover:text-brand-700 transition-colors">{employee.first_name} {employee.last_name}</p>
                       <p className="text-xs text-gray-400">
-                        {SHOW_EMPLOYEE_CARD_IDS && <>ID: {employee.kronos_id} · </>}{LOCATION_MAP[employee.location]?.name || employee.location}
+                        {LOCATION_MAP[employee.location]?.name || employee.location}
                         {employee.inactive_reason ? ` · ${employee.inactive_reason}` : ''}
                         {' · View history'}
                       </p>
