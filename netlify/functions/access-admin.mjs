@@ -16,6 +16,7 @@ import { ConflictError, getAccessStore, profileFromRow, tableAuthEnabled } from 
 import {
   GuardError,
   assertNoPrivilegeEscalation,
+  normalizeEmployeeLink,
   assertNotLastAdministrator,
   assertNotSelfLockout,
   assertValidPin,
@@ -149,7 +150,7 @@ async function handleCreate(request, stores) {
     assertNoPrivilegeEscalation(session, capabilities)
 
     const created = await store.createProfile(
-      { pin, displayName, role, locationId, employeeId: body.employeeId, capabilities },
+      { pin, displayName, role, locationId, employeeId: normalizeEmployeeLink(body.employeeId), capabilities },
       { actor: session.displayName }
     )
     return jsonResponse({ profile: publicProfile(created) }, 201)
@@ -179,6 +180,9 @@ async function handleUpdate(request, stores) {
     if (body.pin !== undefined) {
       patch.pin = assertValidPin(body.pin)
       event = 'pin-changed'
+    }
+    if (body.employeeId !== undefined) {
+      patch.employeeId = normalizeEmployeeLink(body.employeeId)
     }
     if (body.displayName !== undefined || body.role !== undefined || body.locationId !== undefined) {
       const next = assertValidProfileInput({

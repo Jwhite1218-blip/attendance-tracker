@@ -42,6 +42,20 @@ export function assertValidPin(pin) {
   return value
 }
 
+// Which person this login belongs to.
+//
+// Liz, 2026-10-26: linking a manager's PIN to their employee card, so that
+// signing in shows them their own recognition. Empty means not linked,
+// which is the normal state for a shared building login that is not one
+// person.
+export function normalizeEmployeeLink(value) {
+  if (value === null || value === undefined || value === '') return null
+  const id = String(value).trim()
+  if (!id) return null
+  if (id.length > 80) refuse('That employee identifier is too long.')
+  return id
+}
+
 export function assertValidProfileInput({ displayName, role, locationId }) {
   const name = String(displayName || '').trim()
   if (!name) refuse('Give this login a name.')

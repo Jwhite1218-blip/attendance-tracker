@@ -260,6 +260,10 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
       if (patch.displayName !== undefined) body.display_name = patch.displayName
       if (patch.role !== undefined) body.role = patch.role
       if (patch.locationId !== undefined) body.location_id = patch.locationId
+      // Null clears the link; a value sets it. Until 2026-10-26 this was
+      // only settable when a profile was created, so a login linked to the
+      // wrong person could not be corrected.
+      if (patch.employeeId !== undefined) body.employee_id = patch.employeeId
       if (patch.capabilities !== undefined) body.capabilities = patch.capabilities
       if (patch.disabledAt !== undefined) body.disabled_at = patch.disabledAt
 

@@ -21,7 +21,17 @@ import { buildSchoolInsights, collectWeekExceptions } from '../data/dashboardIns
 import { getWeekDates } from '../data/weekDates.js'
 import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
 import { attendanceSeverityOf, getAllFlaggedEmployees } from '../data/hrFlags.js'
-import { earnsDailyStar, getAllRecognitions } from '../data/recognitionStore.js'
+import {
+  RECOGNITION_TYPE_MAP,
+  earnsDailyStar,
+  getAceBuckCount,
+  getAllRecognitions,
+  getDailyStarCount,
+  getNextStarLevel,
+  getStarLevel,
+  isRecognitionInSchoolYear,
+  schoolYearStartFor,
+} from '../data/recognitionStore.js'
 import { translateCount } from '../data/i18n.js'
 
 function todayKey() {
@@ -32,7 +42,7 @@ function todayKey() {
 export default function ManagerHome() {
   const navigate = useNavigate()
   const [activeInsight, setActiveInsight] = useState(null)
-  const { locationId, canEditRecognition, dataVersion } = useAuth()
+  const { locationId, canEditRecognition, dataVersion, employeeId } = useAuth()
   const { locale, t, formatDate } = useLanguage()
   const school = LOCATION_MAP[locationId]
   const today = todayKey()
@@ -130,6 +140,8 @@ export default function ManagerHome() {
         </dl>
       </header>
 
+      <YourRecognition employeeId={employeeId} />
+
       <SchoolDashboardInsights
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
@@ -191,5 +203,75 @@ function TrackerButton({ to, glyph, title, description }) {
         <span className="mt-0.5 block text-xs text-gray-500">{description}</span>
       </span>
     </Link>
+  )
+}
+
+// What this person has been given, on the page they land on.
+//
+// Liz, 2026-10-26: a manager's PIN can now be linked to their employee
+// card, so the person signing in is known. Managers hand out recognition
+// all day and had nowhere to see their own — it was on their employee
+// card, which they had no particular reason to open.
+//
+// Shown only when the login is linked to somebody. A shared building login
+// is not one person and gets nothing, rather than a panel about nobody.
+function YourRecognition({ employeeId }) {
+  if (!employeeId) return null
+
+  const schoolYear = schoolYearStartFor(new Date())
+  const records = getAllRecognitions().filter(record =>
+    String(record.employeeId) === String(employeeId)
+    && isRecognitionInSchoolYear(record, schoolYear))
+
+  const stars = getDailyStarCount(records, employeeId, schoolYear)
+  const bucks = getAceBuckCount(records, employeeId, schoolYear)
+  const level = getStarLevel(stars)
+  const next = getNextStarLevel(stars)
+  const recent = records.slice(0, 3)
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-[#3d3322] bg-[#15120e] text-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full border border-[#e8c65c]/50 bg-[#e8c65c]/10 text-xl text-[#ffd75c]" aria-hidden="true">★</span>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8c65c]">Your recognition</p>
+            <p className="mt-0.5 text-xl font-black">
+              {stars} earned star{stars === 1 ? '' : 's'}
+              {bucks > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 align-middle text-xs font-semibold text-emerald-200">
+                  <span aria-hidden="true">◆</span>{bucks} Coach Buck{bucks === 1 ? '' : 's'}
+                </span>
+              )}
+            </p>
+            <p className="mt-0.5 text-xs text-amber-100/75">
+              {level ? `${level.symbol} ${level.name}` : 'Building toward Bronze Star'}
+              {next ? ` · ${next.minimum - stars} more to ${next.name}` : ' · highest level'}
+            </p>
+          </div>
+        </div>
+        <Link
+          to={`/employee/${encodeURIComponent(employeeId)}`}
+          className="rounded-lg border border-[#e8c65c]/40 bg-[#e8c65c]/10 px-3 py-2 text-xs font-bold text-[#f4d87d] hover:bg-[#e8c65c]/20"
+        >
+          Open my record
+        </Link>
+      </div>
+
+      {recent.length > 0 && (
+        <div className="grid gap-px bg-white/10 sm:grid-cols-3">
+          {recent.map(record => (
+            <div key={record.id} className="bg-[#15120e] px-5 py-3">
+              <p className="text-xs font-bold text-[#f4d87d]">
+                {RECOGNITION_TYPE_MAP[record.type]?.label || record.type}
+              </p>
+              <p className="mt-0.5 text-[11px] text-white/60">
+                {record.date}{record.criteria?.[0] ? ` · ${record.criteria[0]}` : ''}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

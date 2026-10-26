@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
 import { LOCATION_MAP, LOCATIONS } from '../data/locations.js'
+import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 
 const CAPABILITY_LABELS = [
   ['canManageRoster', 'Roster'],
@@ -321,6 +322,7 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
     displayName: profile?.displayName || '',
     role: profile?.role || 'school',
     locationId: profile?.locationId || '',
+    employeeId: profile?.employeeId || '',
     pin: '',
     // Seeded from what the login actually has, not from what is written
     // down against it. Seeding from the stored half turned every implicit
@@ -340,6 +342,21 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
   }))
   const [newPin, setNewPin] = useState('')
 
+  // Narrowed to the building when there is one, because that is almost
+  // always who a school login belongs to; the whole roster otherwise.
+  const linkableEmployees = useMemo(() => {
+    const scope = form.role === 'school' && form.locationId
+      ? employee => employee.location === form.locationId
+      : () => true
+    return getEmployeesWithEffectiveLocations()
+      .filter(scope)
+      .map(employee => ({
+        key: String(employee.kronos_id || employee.id),
+        label: `${employee.first_name} ${employee.last_name}${employee.position ? ` — ${employee.position}` : ''}`,
+      }))
+      .sort((left, right) => left.label.localeCompare(right.label))
+  }, [form.role, form.locationId])
+
   const update = (field, value) => setForm(current => ({ ...current, [field]: value }))
   const toggle = flag => setForm(current => {
     const next = { ...current.capabilities, [flag]: !current.capabilities[flag] }
@@ -356,6 +373,7 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
       displayName: form.displayName.trim(),
       role: form.role,
       locationId: form.role === 'school' ? form.locationId : null,
+      employeeId: form.employeeId || null,
       capabilities: form.capabilities,
     }
     if (!editing) values.pin = form.pin.trim()
@@ -406,6 +424,28 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
             </select>
           </label>
         )}
+
+        {/* Liz, 2026-10-26: linking a login to the person who uses it, so
+            that signing in shows them their own recognition. Optional — a
+            shared building login is not one person and stays unlinked. */}
+        <label className="block text-xs font-semibold text-gray-700">
+          Belongs to <span className="font-normal text-gray-400">(optional)</span>
+          <select
+            value={form.employeeId}
+            onChange={event => update('employeeId', event.target.value)}
+            className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-normal"
+          >
+            <option value="">Not linked to one person</option>
+            {linkableEmployees.map(employee => (
+              <option key={employee.key} value={employee.key}>
+                {employee.label}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-[11px] font-normal text-gray-500">
+            Their own stars and Coach Bucks appear on their home page when they sign in.
+          </span>
+        </label>
 
         {!editing && (
           <label className="block text-xs font-semibold text-gray-700">
