@@ -299,7 +299,6 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
       .map(id => ({
         id,
         name: LOCATION_MAP[id]?.name || id,
-        type: LOCATION_MAP[id]?.type || '',
         staff: getRosterForLocation(id).length,
       }))
       .sort((left, right) => left.name.localeCompare(right.name)),
@@ -308,18 +307,25 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
 
   if (!onChoose || kitchens.length < 2) return null
 
-  return (
-    <section className="rounded-xl border border-gray-200 bg-white p-5">
-      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Your schools</p>
-      <h2 className="mt-1 text-lg font-bold text-gray-900">
-        You cover {kitchens.length} kitchens
-      </h2>
-      <p className="mt-1 text-xs text-gray-500">
-        Choose the one you are working in. Everything on this page, the attendance tracker and the All-Star
-        board follow your choice.
-      </p>
+  const current = kitchens.find(kitchen => kitchen.id === activeId)
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Your schools</p>
+        <p className="text-xs text-gray-500">
+          You cover {kitchens.length} kitchens · tap one to switch
+        </p>
+      </div>
+      <h2 className="mt-1 text-lg font-bold text-gray-900">
+        {current ? `Working in ${current.name}` : 'Choose a school'}
+      </h2>
+
+      {/* One row of pills rather than a card each. Liz, 2026-10-26: a card
+          grid read well for the manager covering two or three, and became
+          five rows of boxes for the one covering all fifteen. The same
+          control, a quarter of the height, and it still scales down. */}
+      <div className="mt-3 flex flex-wrap gap-1.5">
         {kitchens.map(kitchen => {
           const active = kitchen.id === activeId
           return (
@@ -328,28 +334,26 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
               type="button"
               onClick={() => onChoose(kitchen.id)}
               aria-current={active ? 'true' : undefined}
-              className={`rounded-xl border p-4 text-left transition-colors ${
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                 active
-                  ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
-                  : 'border-gray-200 bg-white hover:border-brand-300 hover:bg-brand-50/40'
+                  ? 'border-brand-600 bg-brand-600 text-white'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:bg-brand-50'
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
-                <p className={`font-semibold ${active ? 'text-brand-800' : 'text-gray-900'}`}>{kitchen.name}</p>
-                {active && (
-                  <span className="flex-none rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                    Here now
-                  </span>
-                )}
-              </div>
-              {kitchen.type && <p className="mt-0.5 text-xs text-gray-500">{kitchen.type}</p>}
-              <p className="mt-2 text-xs text-gray-500">
-                <span className="font-bold text-gray-900">{kitchen.staff}</span> on roster
-              </p>
+              {kitchen.name}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {kitchen.staff}
+              </span>
             </button>
           )
         })}
       </div>
+      <p className="mt-2 text-[11px] text-gray-400">
+        The number is how many people are on that roster. Everything on this page, the attendance tracker and
+        the All-Star board follow your choice.
+      </p>
     </section>
   )
 }
