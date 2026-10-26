@@ -48,6 +48,9 @@ function safePin(row) {
 // Resolved here, through the same function the sign-in path uses, so there
 // is no second set of rules to drift.
 const CAPABILITY_FLAGS = [
+  'canViewAttendance',
+  'canViewTraining',
+  'canViewBlackouts',
   'canEditAttendance',
   'canEditRecognition',
   'canManageRoster',

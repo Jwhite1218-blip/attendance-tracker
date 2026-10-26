@@ -14,6 +14,10 @@ function refuse(message) {
 }
 
 const CAPABILITY_FLAGS = [
+  // Seeing, as distinct from doing. Liz, 2026-10-26.
+  'canViewAttendance',
+  'canViewTraining',
+  'canViewBlackouts',
   'canEditAttendance',
   'canEditRecognition',
   'canManageRecognitionAwards',
@@ -81,6 +85,23 @@ export function assertNotSelfLockout(actorSession, profile, change) {
     const losing = ['canManageRoster', 'canManageBlackouts']
       .filter(flag => profile.capabilities?.[flag] === true && change.capabilities[flag] !== true)
     if (losing.length) refuse('You cannot remove your own administrator access.')
+
+    // Hiding an area from yourself is a one-way door, and the door it shuts
+    // is the one you would need to open it again: nobody may grant a
+    // capability they do not hold, so a district administrator who hides
+    // attendance from their own login cannot give it back. That is exactly
+    // how the award-draws capability was lost on 2026-10-19, and it needed
+    // SQL to undo.
+    //
+    // Note the comparison is against "not explicitly false" rather than
+    // "=== true". These flags are normally absent, meaning held, so reading
+    // the stored value the way the line above does would miss every real
+    // case.
+    const hidingFromSelf = ['canViewAttendance', 'canViewTraining', 'canViewBlackouts']
+      .filter(flag => profile.capabilities?.[flag] !== false && change.capabilities[flag] === false)
+    if (hidingFromSelf.length) {
+      refuse('You cannot hide a section from your own login — you would not be able to switch it back on. Make a second login to see what the restricted view looks like.')
+    }
   }
 }
 

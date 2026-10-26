@@ -27,7 +27,7 @@ import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
 import ReleaseBadge from './components/ReleaseBadge.jsx'
 import { useProgramTerms } from './components/useProgramTerms.js'
-import { canAccessRecognitionProgram, canViewBlackoutCalendar, hasLizAdminAccess } from './data/futureTools.js'
+import { canAccessRecognitionProgram, canViewAttendance as canSeeAttendance, canViewBlackoutCalendar, canViewTraining as canSeeTraining, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import localisLogo from './assets/localis-logo.png'
@@ -58,6 +58,7 @@ export default function App() {
 
 function AppShell() {
   const location = useLocation()
+  const access = useAuth()
   const {
     role,
     locationId,
@@ -69,7 +70,7 @@ function AppShell() {
     canManageBlackouts,
     watermark,
     syncStatus,
-  } = useAuth()
+  } = access
   const { t } = useLanguage()
   const term = useProgramTerms()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -87,9 +88,18 @@ function AppShell() {
         ? t('role.administrator')
         : t('role.administratorLimited')
 
-  const homePath = recognitionOnly ? '/recognition' : '/'
+  const homePath = recognitionOnly || attendanceHidden ? '/recognition' : '/'
   const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
   const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
+  // Liz, 2026-10-26: a login can be given the whole district's recognition
+  // and none of its attendance. The server already withholds the records;
+  // these keep the pages and the nav from offering what is not there.
+  const seesAttendance = canSeeAttendance(access)
+  const seesTraining = canSeeTraining(access)
+  // With attendance hidden the Dashboard is a shell — it is the HR follow-up
+  // list, the week's exceptions and upcoming time off. Send them where the
+  // work actually is.
+  const attendanceHidden = role === 'admin' && !seesAttendance
   // Shown beside the nav label, so something waiting on Liz is visible from
   // any page rather than only if she thinks to look.
   const pendingCount = useMemo(
@@ -108,11 +118,12 @@ function AppShell() {
     // would be two clicks away.
     ...(role === 'school' ? [{ path: `/location/${locationId}`, label: t('managerHome.attendanceTracker') }] : []),
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
-    { path: '/ledger', label: t('nav.employeeRecords') },
+    ...(seesAttendance ? [{ path: '/ledger', label: t('nav.employeeRecords') }] : []),
     ...(showBlackoutCalendar ? [{ path: '/calendar', label: t('nav.blackoutCalendar') }] : []),
-    ...(role === 'admin' ? [{ path: '/training', label: t('nav.training') }] : []),
+    ...(seesTraining ? [{ path: '/training', label: t('nav.training') }] : []),
     ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
-    ...(role === 'admin' ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
+    // The master report is an attendance report end to end.
+    ...(role === 'admin' && seesAttendance ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
     ...(lizAdminAccess ? [{ path: '/settings', label: t('nav.settings') }] : []),
     ...(lizAdminAccess
       ? [{ path: '/requests', label: pendingCount ? `${t('nav.changeRequests')} (${pendingCount})` : t('nav.changeRequests') }]
@@ -308,26 +319,26 @@ function AppShell() {
         <RouteErrorBoundary routeKey={location.pathname}>
         <Routes>
           <Route path={FOOD_DAY_PATH} element={<FoodDayCelebration homePath={homePath} canRecognize={recognitionAdminAccess} />} />
-          <Route path="/" element={recognitionOnly ? <Navigate to={homePath} replace /> : role === 'school' ? <ManagerHome /> : <Dashboard />} />
-          <Route path="/location/:id" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LocationView />} />
+          <Route path="/" element={recognitionOnly || attendanceHidden ? <Navigate to={homePath} replace /> : role === 'school' ? <ManagerHome /> : <Dashboard />} />
+          <Route path="/location/:id" element={recognitionOnly || !seesAttendance ? <Navigate to={homePath} replace /> : <LocationView />} />
           <Route path="/recognition" element={recognitionAdminAccess ? <RecognitionProgram /> : <Navigate to={homePath} replace />} />
           <Route path="/employee/:employeeId" element={recognitionOnly ? <Navigate to={homePath} replace /> : <EmployeeRecordPage />} />
           <Route path="/quickmark" element={<Navigate to={homePath} replace />} />
           <Route path="/calendar" element={showBlackoutCalendar ? <CalendarView /> : <Navigate to={homePath} replace />} />
-          <Route path="/ledger" element={recognitionOnly ? <Navigate to={homePath} replace /> : <LedgerView />} />
+          <Route path="/ledger" element={recognitionOnly || !seesAttendance ? <Navigate to={homePath} replace /> : <LedgerView />} />
           {/* Reached from the Dashboard button rather than the nav: roster
               housekeeping is occasional and does not belong on the front page. */}
           <Route path="/staff" element={role === 'admin' ? <StaffAdmin /> : <Navigate to={homePath} replace />} />
-          <Route path="/training" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <Training />} />
+          <Route path="/training" element={!seesTraining ? <Navigate to={homePath} replace /> : <Training />} />
           <Route path="/settings" element={lizAdminAccess ? <ProgramSettings /> : <Navigate to={homePath} replace />} />
           <Route path="/requests" element={lizAdminAccess ? <ChangeRequests /> : <Navigate to={homePath} replace />} />
           {/* Reached from the Spanish section of Settings, not the nav: it
               is a sheet you print once, not a page you visit. */}
           <Route path="/settings/spanish-review" element={lizAdminAccess ? <SpanishReview /> : <Navigate to={homePath} replace />} />
           <Route path="/access" element={lizAdminAccess ? <AccessAdmin /> : <Navigate to={homePath} replace />} />
-          <Route path="/reports/daily" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <DailyReport />} />
+          <Route path="/reports/daily" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
-          <Route path="/reports/master" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <MasterReport />} />
+          <Route path="/reports/master" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <MasterReport />} />
           <Route path="/backup-recovery" element={lizAdminAccess ? <BackupRecovery /> : <Navigate to={homePath} replace />} />
         </Routes>
         </RouteErrorBoundary>

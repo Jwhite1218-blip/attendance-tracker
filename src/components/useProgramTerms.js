@@ -21,7 +21,16 @@ export function useProgramTerms() {
   const { locale, t } = useLanguage()
 
   return useMemo(() => {
-    const read = (key, fallback) => (key ? t(key) : '') || fallback || ''
+    // translate() echoes the key back when it has no string for it. The key
+    // is a truthy string, so the fallback never fired and the raw key went
+    // on screen — "reason.People & Culture" on any ACE Coach Buck, because
+    // the Coach categories are not in the translated vocabulary. Found on
+    // 2026-10-26 while checking an employee card.
+    const read = (key, fallback) => {
+      if (!key) return fallback || ''
+      const text = t(key)
+      return text === key ? (fallback || '') : text
+    }
 
     return {
       // True while the Spanish is still a draft, so screens can say so.

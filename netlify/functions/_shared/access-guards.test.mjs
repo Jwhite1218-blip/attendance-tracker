@@ -156,3 +156,48 @@ test('changing a non-administrator is never blocked by the last-admin rule', () 
   const school = profile({ id: 'school-id', role: 'school', location_id: 'CrestonMS', capabilities: { canEditAttendance: true } })
   assert.doesNotThrow(() => assertNotLastAdministrator([school], school, { disabling: true }))
 })
+
+// Liz, 2026-10-26, adding per-area visibility. The trap this closes is the
+// one that cost her the award-draws capability a week earlier: a guard that
+// reads the stored capability misses every flag whose absence means "held".
+test('an administrator cannot hide a section from their own login', () => {
+  const session = { profileId: 'p1', displayName: 'Liz Schmitt', canManageRoster: true, canManageBlackouts: true }
+  const profile = {
+    id: 'p1',
+    display_name: 'Liz Schmitt',
+    role: 'admin',
+    // Exactly the real shape: the view flags are not written down at all.
+    capabilities: { canManageRoster: true, canManageBlackouts: true },
+  }
+
+  for (const flag of ['canViewAttendance', 'canViewTraining', 'canViewBlackouts']) {
+    assert.throws(
+      () => assertNotSelfLockout(session, profile, {
+        capabilities: { ...profile.capabilities, [flag]: false },
+      }),
+      /hide a section from your own login/,
+      `${flag} should be refused`
+    )
+  }
+})
+
+test('hiding a section from somebody else is allowed', () => {
+  const session = { profileId: 'p1', displayName: 'Liz Schmitt', canManageRoster: true, canManageBlackouts: true }
+  const other = { id: 'p2', display_name: 'District Assistant', role: 'admin', capabilities: {} }
+  assert.doesNotThrow(() => assertNotSelfLockout(session, other, {
+    capabilities: { canViewAttendance: false },
+  }))
+})
+
+test('turning a section back on for yourself is never blocked', () => {
+  const session = { profileId: 'p1', displayName: 'Liz Schmitt', canManageRoster: true, canManageBlackouts: true }
+  const profile = {
+    id: 'p1',
+    display_name: 'Liz Schmitt',
+    role: 'admin',
+    capabilities: { canManageRoster: true, canManageBlackouts: true, canViewAttendance: false },
+  }
+  assert.doesNotThrow(() => assertNotSelfLockout(session, profile, {
+    capabilities: { ...profile.capabilities, canViewAttendance: true },
+  }))
+})

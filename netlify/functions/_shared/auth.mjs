@@ -83,7 +83,30 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
   if (rawAccess.role === 'school' && rawAccess.recognitionOnly === true) return null
 
   const recognitionOnly = rawAccess.role === 'admin' && rawAccess.recognitionOnly === true
-  const canEditAttendance = !recognitionOnly && rawAccess.canEditAttendance !== false
+
+  // Seeing is decided before editing, and gates it.
+  //
+  // Liz, 2026-10-26: a district-wide login that runs the All-Stars programme
+  // everywhere and sees none of the district's attendance. Until now the only
+  // way to withhold attendance was recognitionOnly, which withholds the rest
+  // of the application with it.
+  //
+  // View wins over edit, not the other way round. Unticking "can see" while
+  // "can edit" is still ticked is a contradiction somebody will create by
+  // accident, and the safe reading of it is the restrictive one — otherwise
+  // unticking "see" would leave the records on screen.
+  //
+  // Absent means visible: no stored profile carries this field, so a default
+  // of false would have blanked the application for nineteen people the
+  // moment it deployed. A building login always sees its own attendance.
+  const canViewAttendance = rawAccess.role === 'school' || (
+    rawAccess.role === 'admin'
+    && !recognitionOnly
+    && rawAccess.canViewAttendance !== false
+  )
+  const canEditAttendance = !recognitionOnly
+    && canViewAttendance
+    && rawAccess.canEditAttendance !== false
   // Building managers record recognition for their own team: catching someone
   // shining is a building-level act, and a district office cannot do it daily
   // for fifteen kitchens. Their writes are still scoped to their own roster in
@@ -107,7 +130,7 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
       rawAccess.canManageRoster === true
       || (defaultAdminManagement && rawAccess.canManageRoster !== false)
     )
-  const canManageBlackouts = rawAccess.role === 'admin'
+  const blackoutsManageable = rawAccess.role === 'admin'
     && !recognitionOnly
     && canEditAttendance
     && (
@@ -122,9 +145,33 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
       || (
         rawAccess.canManageRecognitionAwards !== false
         && canManageRoster
-        && canManageBlackouts
+        && blackoutsManageable
       )
     )
+
+  // The training page, same rule: absent means visible, and not seeing it
+  // means not recording against it (enforced in canWriteStateKey).
+  const canViewTraining = rawAccess.role === 'admin'
+    && !recognitionOnly
+    && rawAccess.canViewTraining !== false
+
+  // The default here reproduces the pre-2026-10-26 canViewBlackoutCalendar
+  // rule rather than simply defaulting to true: before today an
+  // administrator holding neither blackout management nor read-only
+  // attendance did not see the calendar, and switching that on for them
+  // would be a widening nobody asked for.
+  const canViewBlackouts = rawAccess.role === 'admin'
+    && !recognitionOnly
+    && (
+      rawAccess.canViewBlackouts === true
+      || (
+        rawAccess.canViewBlackouts !== false
+        && (blackoutsManageable || rawAccess.canEditAttendance === false)
+      )
+    )
+
+  // Not seeing the calendar means not managing it.
+  const canManageBlackouts = blackoutsManageable && canViewBlackouts
 
   return {
     role: rawAccess.role,
@@ -132,10 +179,15 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     displayName: String(rawAccess.displayName || '').trim().slice(0, 80) || null,
     employeeId: String(rawAccess.employeeId || '').trim().slice(0, 80) || null,
     canEditAttendance,
+    canViewAttendance,
+    canViewTraining,
+    canViewBlackouts,
     canEditRecognition,
     canManageRecognitionAwards,
     recognitionOnly,
-    canWriteEmployeeNotes: rawAccess.role === 'admin' && canEditAttendance && !recognitionOnly,
+    // Manager notes sit beside the attendance record and are about conduct,
+    // not recognition. Somebody who cannot see attendance does not get them.
+    canWriteEmployeeNotes: rawAccess.role === 'admin' && canEditAttendance && canViewAttendance && !recognitionOnly,
     canManageRoster,
     canManageBlackouts,
     watermark: rawAccess.watermark === 'localis' ? 'localis' : null,

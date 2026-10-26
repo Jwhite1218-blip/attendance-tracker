@@ -21,6 +21,23 @@ const CAPABILITY_LABELS = [
   ['canEditRecognition', 'Recognition'],
 ]
 
+// Seeing is separate from doing. Liz, 2026-10-26: a login can be given the
+// whole district's recognition and none of its attendance, training or
+// blackout dates. Unticking one of these hides the pages AND stops the
+// records being sent — the server enforces it, this is only the switch.
+const VISIBILITY_FLAGS = [
+  ['canViewAttendance', 'Attendance', 'The tracker, employee records, the ledger and the attendance reports'],
+  ['canViewTraining', 'Training', 'Professional Standards hours'],
+  ['canViewBlackouts', 'Blackout dates', 'The blackout calendar'],
+]
+
+// Unticking "can see" takes the matching "can do" with it, so the form can
+// never hold a contradiction the resolver then has to settle quietly.
+const EDIT_REQUIRES_VIEW = {
+  canViewAttendance: ['canEditAttendance', 'canManageRoster', 'canManageBlackouts'],
+  canViewBlackouts: ['canManageBlackouts'],
+}
+
 function reachLabel(profile) {
   if (profile.role === 'admin') return 'Every school'
   return LOCATION_MAP[profile.locationId]?.name || profile.locationId || '—'
@@ -315,15 +332,23 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
       canManageRoster: capabilitiesOf(profile).canManageRoster ?? false,
       canManageBlackouts: capabilitiesOf(profile).canManageBlackouts ?? false,
       canManageRecognitionAwards: capabilitiesOf(profile).canManageRecognitionAwards ?? false,
+      // Absent means visible, matching the server's resolver.
+      canViewAttendance: capabilitiesOf(profile).canViewAttendance ?? true,
+      canViewTraining: capabilitiesOf(profile).canViewTraining ?? true,
+      canViewBlackouts: capabilitiesOf(profile).canViewBlackouts ?? true,
     },
   }))
   const [newPin, setNewPin] = useState('')
 
   const update = (field, value) => setForm(current => ({ ...current, [field]: value }))
-  const toggle = flag => setForm(current => ({
-    ...current,
-    capabilities: { ...current.capabilities, [flag]: !current.capabilities[flag] },
-  }))
+  const toggle = flag => setForm(current => {
+    const next = { ...current.capabilities, [flag]: !current.capabilities[flag] }
+    // Turning sight off turns the matching abilities off with it.
+    if (next[flag] === false) {
+      for (const dependent of EDIT_REQUIRES_VIEW[flag] || []) next[dependent] = false
+    }
+    return { ...current, capabilities: next }
+  })
 
   const submit = event => {
     event.preventDefault()
@@ -395,6 +420,33 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
           </label>
         )}
       </div>
+
+      <fieldset className="mt-3">
+        <legend className="text-xs font-semibold text-gray-700">Can see</legend>
+        <p className="mt-0.5 text-[11px] text-gray-500">
+          Unticking one hides those pages and stops the records reaching this login at all.
+        </p>
+        <div className="mt-1.5 space-y-1.5">
+          {VISIBILITY_FLAGS.map(([flag, label, detail]) => (
+            <label key={flag} className={`flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2 text-xs ${
+              form.capabilities[flag]
+                ? 'border-brand-300 bg-brand-50 text-brand-900'
+                : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+            }`}>
+              <input
+                type="checkbox"
+                className="mt-0.5 h-3.5 w-3.5"
+                checked={form.capabilities[flag]}
+                onChange={() => toggle(flag)}
+              />
+              <span>
+                <span className="block font-semibold">{label}</span>
+                <span className="block text-[11px] font-normal opacity-80">{detail}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <fieldset className="mt-3">
         <legend className="text-xs font-semibold text-gray-700">Can do</legend>

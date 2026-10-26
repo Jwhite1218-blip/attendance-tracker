@@ -18,6 +18,7 @@ import {
   LOCATION_OVERRIDES_KEY,
   RECOGNITION_KEY,
   RECORD_OVERRIDES_KEY,
+  TRAINING_KEY,
   attendanceEmployeeId,
   canWriteStateKey,
   filterStatusesForEmployees,
@@ -57,6 +58,34 @@ function redactRecordOverrides(records) {
 
 function redactCustomEmployees(records) {
   return (Array.isArray(records) ? records : []).map(withoutLizOnlyEmployeeFields)
+}
+
+// Withholds whole areas from a session that may not see them.
+//
+// Liz, 2026-10-26. This is the half that matters: hiding a page in the
+// browser hides nothing, because the state endpoint had already sent the
+// records to it. Anybody with the login could read them straight out of the
+// network tab. A capability that is not applied here is decoration.
+function withholdHiddenAreas(entries, session) {
+  const kept = {}
+  const seesAttendance = session.canViewAttendance !== false
+  const seesTraining = session.canViewTraining !== false
+  const seesBlackouts = session.canViewBlackouts !== false
+
+  for (const [key, value] of Object.entries(entries)) {
+    // Every per-employee attendance year, plus the occurrence counts and the
+    // manager notes that sit beside them.
+    if (!seesAttendance && (
+      attendanceEmployeeId(key)
+      || key === HR_STATUS_KEY
+      || key === LEGACY_HR_STATUS_KEY
+      || key === EMPLOYEE_NOTES_KEY
+    )) continue
+    if (!seesTraining && key === TRAINING_KEY) continue
+    if (!seesBlackouts && key === BLACKOUTS_KEY) continue
+    kept[key] = value
+  }
+  return kept
 }
 
 function redactLizOnlyEmployeeEntries(entries) {
@@ -205,8 +234,10 @@ function filterEntriesForSession(entries, session) {
       ...(entries[RECOGNITION_KEY] ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] } : {}),
     }
   }
-  if (hasLizAdminAccess(session)) return entries
-  if (session.role === 'admin') return redactLizOnlyEmployeeEntries(entries)
+  if (hasLizAdminAccess(session)) return withholdHiddenAreas(entries, session)
+  if (session.role === 'admin') {
+    return withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries), session)
+  }
 
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
   const filtered = { ...programSettings }

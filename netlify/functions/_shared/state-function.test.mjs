@@ -723,3 +723,76 @@ test('no session of any tier is sent a hire date', async () => {
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Liz, 2026-10-26: a district-wide login that runs the All-Stars programme
+// across every school and sees none of the district's attendance.
+//
+// These assert the half that cannot be done in the browser. Hiding a page
+// hides nothing if the endpoint has already handed the records over.
+test('a login that cannot see attendance is not sent any', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const store = stateStore({
+      'att-emp-123-2026': { '2026-09-01': { code: 'NCNS' } },
+      'hr-attendance-progress-v2': { '123': { empId: '123', stage: 'documented' } },
+      'employee-manager-notes-v1': { '123': [{ text: 'A note', at: '2026-09-02' }] },
+      'training-records-v1': [{ id: 't1', hours: 2 }],
+      'attendance-blackout-dates': ['2026-12-25'],
+      'all-star-recognition-v1': { r1: { id: 'r1', employeeId: '123', type: 'star-of-day', date: '2026-09-03' } },
+    })
+
+    const access = {
+      role: 'admin',
+      canManageRoster: true,
+      canManageBlackouts: true,
+      canEditRecognition: true,
+      canViewAttendance: false,
+    }
+    const request = await authenticatedRequest(access, sessions)
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const keys = Object.keys(body.entries)
+
+    assert.ok(!keys.some(key => key.startsWith('att-emp-')), 'no attendance years')
+    assert.ok(!keys.includes('hr-attendance-progress-v2'), 'no occurrence counts')
+    assert.ok(!keys.includes('employee-manager-notes-v1'), 'no manager notes')
+    // What they came for is untouched, for the whole district.
+    assert.ok(keys.includes('all-star-recognition-v1'), 'recognition still arrives')
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('training and blackout dates are withheld independently', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const entries = {
+      'training-records-v1': [{ id: 't1', hours: 2 }],
+      'attendance-blackout-dates': ['2026-12-25'],
+      'att-emp-123-2026': { '2026-09-01': { code: 'NCNS' } },
+    }
+    const base = { role: 'admin', canEditAttendance: true, canManageRoster: true, canManageBlackouts: true }
+
+    const read = async access => {
+      const sessions = createMemoryBlobStore()
+      const request = await authenticatedRequest(access, sessions)
+      const response = await handleStateRequest(request, { stateStore: stateStore({ ...entries }), sessionStore: sessions })
+      return Object.keys((await response.json()).entries)
+    }
+
+    const noTraining = await read({ ...base, canViewTraining: false })
+    assert.ok(!noTraining.includes('training-records-v1'))
+    assert.ok(noTraining.includes('attendance-blackout-dates'), 'blackouts are a separate switch')
+    assert.ok(noTraining.some(key => key.startsWith('att-emp-')), 'attendance is a separate switch')
+
+    const noBlackouts = await read({ ...base, canViewBlackouts: false })
+    assert.ok(!noBlackouts.includes('attendance-blackout-dates'))
+    assert.ok(noBlackouts.includes('training-records-v1'))
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})

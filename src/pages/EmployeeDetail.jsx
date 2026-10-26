@@ -16,7 +16,7 @@ import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { formatBirthday } from '../data/employeeFields.js'
 import TransferModal from '../components/TransferModal.jsx'
 import { assignmentTimeline } from '../data/assignmentHistory.js'
-import { canAccessRecognitionProgram, hasLizAdminAccess } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, canViewAttendance, hasLizAdminAccess } from '../data/futureTools.js'
 import { rosterActionMode } from '../data/approvalRequests.js'
 import {
   buildEmployeeHistoryRows,
@@ -79,6 +79,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   const access = useAuth()
   const { role, displayName, canEditAttendance, canManageRoster, canWriteEmployeeNotes, dataVersion } = access
   const lizAdminAccess = hasLizAdminAccess(access)
+  // Liz, 2026-10-26: a district-wide recognition login opens employee cards
+  // to see who has earned what, and sees nothing of their attendance — no
+  // grid, no occurrence count, no manager notes, and none of the printouts
+  // that would carry those off the screen. The server withholds the records
+  // regardless; this is the card agreeing with it rather than rendering
+  // empty months and a zero count.
+  const seesAttendance = canViewAttendance(access)
   // 'direct' for Liz, 'request' for an administrator who now proposes
   // roster changes rather than making them, 'none' for everybody else.
   const rosterMode = rosterActionMode(access)
@@ -271,7 +278,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {printMode === 'ledger'
+      {seesAttendance && (printMode === 'ledger'
         ? <PrintableAttendanceLedger employee={employee} attendance={attendance} yearLabel={formatYearLabel(year, mode)} />
         : (
           <PrintableEmployeeRecord
@@ -283,7 +290,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
             assignmentStops={assignmentStops}
             starCount={starCount}
           />
-        )}
+        ))}
 
       <div className="print:hidden space-y-4 sm:space-y-6">
       {/* Employee Header */}
@@ -296,7 +303,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               </span>
             </div>
             <div className="min-w-0">
-              <h2 className={`text-lg sm:text-xl font-bold ${ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(empKey)]}`}>
+              <h2 className={`text-lg sm:text-xl font-bold ${seesAttendance ? ATTENDANCE_SEVERITY_CLASS[attendanceSeverity(empKey)] : 'text-gray-900'}`}>
                 {employeeCardName(employee)}
               </h2>
               <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-xs sm:text-sm text-gray-500">
@@ -308,7 +315,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                 <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${employee?.active === false ? 'bg-gray-100 text-gray-500' : 'bg-emerald-50 text-emerald-700'}`}>
                   {employee?.active === false ? 'Inactive' : 'Active'} employee
                 </span>
-                {attendanceStatus && (
+                {seesAttendance && attendanceStatus && (
                   <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${ATTENDANCE_SEVERITY_CHIP[attendanceSeverity(empKey)]}`}>
                     {term.stageLabel(attendanceStatus)}
                   </span>
@@ -319,7 +326,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
 
           <div className="flex flex-col items-start sm:items-end gap-2 self-start sm:self-auto print:hidden">
             <div className="flex items-center gap-2">
-              {role === 'admin' && (
+              {role === 'admin' && seesAttendance && (
                 <>
                   <button
                     type="button"
@@ -647,10 +654,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         />
       )}
 
-      {role === 'admin' && (
+      {role === 'admin' && (seesAttendance || canTouchRoster) && (
         <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row gap-5">
-            <div className="flex-1">
+            {seesAttendance && <div className="flex-1">
               <label htmlFor="employee-admin-notes" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                 Employee notes
               </label>
@@ -710,7 +717,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
               ) : (
                 <p className="mt-3 text-xs font-medium text-gray-400">Read-only HR notes</p>
               )}
-            </div>
+            </div>}
 
             {canTouchRoster && <div className="lg:w-80 lg:border-l lg:border-gray-100 lg:pl-5">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Employee status</p>
@@ -808,6 +815,11 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
         </div>
       )}
 
+      {/* Everything from here to the picker is the attendance record. A
+          login without sight of attendance gets none of it — not an empty
+          grid and a zero count, which would read as "this person has a
+          clean year" rather than "you cannot see this". */}
+      {seesAttendance && (<>
       {/* Toolbar: Paint mode + Code legend */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
         <div className="flex flex-col gap-3">
@@ -1094,6 +1106,7 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
           setPicker(null)
         }}
       />
+      </>)}
       </div>
     </div>
   )

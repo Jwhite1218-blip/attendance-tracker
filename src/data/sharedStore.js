@@ -37,6 +37,16 @@ export function configureClientAccess(access) {
 
 export function canWriteManagedKeyForAccess(access, key) {
   if (!access) return false
+  // Mirrors canWriteStateKey on the server: an area this login cannot see is
+  // an area it cannot write. Kept first so every rule below inherits it.
+  if (access.canViewAttendance === false && (
+    ATTENDANCE_KEY_PATTERN.test(key)
+    || key === 'hr-attendance-progress-v2'
+    || key === 'hr-flags'
+    || key === 'employee-manager-notes-v1'
+  )) return false
+  if (access.canViewTraining === false && key === 'training-records-v1') return false
+  if (access.canViewBlackouts === false && key === 'attendance-blackout-dates') return false
   if (ATTENDANCE_KEY_PATTERN.test(key) || key === 'hr-attendance-progress-v2' || key === 'hr-flags') {
     return access.canEditAttendance !== false
   }

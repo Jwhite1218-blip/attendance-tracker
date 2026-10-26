@@ -71,6 +71,16 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   }
 
   if (session.role !== 'admin') return false
+
+  // Seeing gates writing. An area that is hidden from this login cannot be
+  // written to it either — otherwise "cannot see attendance" would still
+  // allow marking somebody absent, which is a stranger permission than
+  // either of the two it is made of. Liz, 2026-10-26.
+  if (isAttendanceState && session.canViewAttendance === false) return false
+  if (key === EMPLOYEE_NOTES_KEY && session.canViewAttendance === false) return false
+  if (key === TRAINING_KEY && session.canViewTraining === false) return false
+  if (key === BLACKOUTS_KEY && session.canViewBlackouts === false) return false
+
   if (isAttendanceState) return true
   if (isRecognitionState) return true
   if (key === EMPLOYEE_NOTES_KEY) return session.canEditAttendance !== false
