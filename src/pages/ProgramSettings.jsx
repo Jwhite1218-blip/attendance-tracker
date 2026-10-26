@@ -9,6 +9,8 @@
 // the server enforces the same bar.
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { pendingRequests } from '../data/approvalRequests.js'
+import { getApprovalRequests } from '../data/approvalStore.js'
 import { useAuth } from '../components/PinGate.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
@@ -90,6 +92,8 @@ export default function ProgramSettings() {
         )}
       </header>
 
+      <AdministrationLinks />
+
       <MilestonesSection
         key={`levels-${savedCount}`}
         title="Star milestones"
@@ -143,6 +147,64 @@ export default function ProgramSettings() {
         onReset={() => revert('spanishApproval', 'Spanish sign-off')}
       />
     </div>
+  )
+}
+
+// Liz, 2026-10-26: the nav bar had grown to eleven entries, so everything
+// only she can reach moved in here behind Settings. The waiting count comes
+// with it — a queue nobody notices is the same as no review, and burying
+// Change requests without the number would have undone the reason it was
+// put on the nav in the first place.
+function AdministrationLinks() {
+  const waiting = pendingRequests(getApprovalRequests()).length
+  const links = [
+    {
+      to: '/requests',
+      title: 'Change requests',
+      description: 'Roster changes other administrators have proposed, waiting on your approval.',
+      badge: waiting || null,
+    },
+    {
+      to: '/access',
+      title: 'Access and sign-in codes',
+      description: 'Who can sign in, what each login reaches, and what it may see.',
+    },
+    {
+      to: '/calendar',
+      title: 'Blackout calendar',
+      description: 'Days the district is closed, so they are not counted against anybody.',
+    },
+    {
+      to: '/backup-recovery',
+      title: 'Backup and recovery',
+      description: 'Download a copy of everything, or restore from one.',
+    },
+  ]
+
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-5">
+      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#9a651b]">Administration</p>
+      <h2 className="mt-1 text-lg font-bold text-gray-900">Only you can reach these</h2>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {links.map(link => (
+          <Link
+            key={link.to}
+            to={link.to}
+            className="flex items-start justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3 transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            <span>
+              <span className="block text-sm font-bold text-gray-900">{link.title}</span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-gray-500">{link.description}</span>
+            </span>
+            {link.badge && (
+              <span className="flex-none rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                {link.badge}
+              </span>
+            )}
+          </Link>
+        ))}
+      </div>
+    </section>
   )
 }
 

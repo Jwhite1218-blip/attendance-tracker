@@ -5,6 +5,7 @@ import ManagerHome from './pages/ManagerHome.jsx'
 import Training from './pages/Training.jsx'
 import ProgramSettings from './pages/ProgramSettings.jsx'
 import ChangeRequests from './pages/ChangeRequests.jsx'
+import Reports from './pages/Reports.jsx'
 import SpanishReview from './pages/SpanishReview.jsx'
 import { pendingRequests } from './data/approvalRequests.js'
 import { getApprovalRequests } from './data/approvalStore.js'
@@ -120,29 +121,32 @@ export function AppShell() {
     [lizAdminAccess, location.pathname]
   )
   const recognitionAdminAccess = canAccessRecognitionProgram({ role })
+  // Six entries, no more. Liz, 2026-10-26: the bar had grown to eleven and
+  // the later ones — Change requests among them — were running off the end
+  // of a 1280px screen with nothing to wrap or scroll them.
+  //
+  // Everything she alone can reach moved behind Settings, which carries the
+  // waiting-request count so burying the queue does not hide it. The three
+  // reports moved behind a Reports hub, which also gave the daily report a
+  // link for the first time — it had a route and no way to reach it.
   const standardNavItems = [
     // Every signed-in role gets the Dashboard entry, pointing at its own
     // homePath — a school manager still only ever reaches their own location's
     // dashboard. Hiding it (d7997ee) removed a duplicate nav path but read to
     // managers as the button disappearing, so Liz asked for it back (2026-09-01).
     { path: homePath, label: t('nav.dashboard') },
-    // A manager's roster used to BE their dashboard. Now that the dashboard is
-    // a hub, the roster needs its own entry or the busiest screen in the app
-    // would be two clicks away.
-    ...(role === 'school' ? [{ path: `/location/${locationId}`, label: t('managerHome.attendanceTracker') }] : []),
+    // A building's attendance is its own tracker; the district's is the
+    // employee record ledger. One entry, pointing at whichever this login
+    // actually has.
+    ...(role === 'school'
+      ? [{ path: `/location/${locationId}`, label: t('nav.attendance') }]
+      : seesAttendance ? [{ path: '/ledger', label: t('nav.attendance') }] : []),
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
-    ...(seesAttendance ? [{ path: '/ledger', label: t('nav.employeeRecords') }] : []),
-    ...(showBlackoutCalendar ? [{ path: '/calendar', label: t('nav.blackoutCalendar') }] : []),
     ...(seesTraining ? [{ path: '/training', label: t('nav.training') }] : []),
-    ...(role === 'admin' ? [{ path: '/reports/custom', label: t('nav.customReport') }] : []),
-    // The master report is an attendance report end to end.
-    ...(role === 'admin' && seesAttendance ? [{ path: '/reports/master', label: t('nav.masterReport') }] : []),
-    ...(lizAdminAccess ? [{ path: '/settings', label: t('nav.settings') }] : []),
+    ...(role === 'admin' ? [{ path: '/reports', label: t('nav.reports') }] : []),
     ...(lizAdminAccess
-      ? [{ path: '/requests', label: pendingCount ? `${t('nav.changeRequests')} (${pendingCount})` : t('nav.changeRequests') }]
+      ? [{ path: '/settings', label: pendingCount ? `${t('nav.settings')} (${pendingCount})` : t('nav.settings') }]
       : []),
-    ...(lizAdminAccess ? [{ path: '/access', label: t('nav.access') }] : []),
-    ...(lizAdminAccess ? [{ path: '/backup-recovery', label: t('nav.backupRecovery') }] : []),
   ]
   const navItems = recognitionOnly
     ? [{ path: '/recognition', label: t('nav.allStars') }]
@@ -349,6 +353,7 @@ export function AppShell() {
               is a sheet you print once, not a page you visit. */}
           <Route path="/settings/spanish-review" element={lizAdminAccess ? <SpanishReview /> : <Navigate to={homePath} replace />} />
           <Route path="/access" element={lizAdminAccess ? <AccessAdmin /> : <Navigate to={homePath} replace />} />
+          <Route path="/reports" element={role === 'admin' ? <Reports /> : <Navigate to={homePath} replace />} />
           <Route path="/reports/daily" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <DailyReport />} />
           <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
           <Route path="/reports/master" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <MasterReport />} />

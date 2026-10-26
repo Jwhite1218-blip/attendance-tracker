@@ -18,6 +18,7 @@ import { AuthContext } from '../src/components/PinGate.jsx'
 import LanguageProvider from '../src/components/LanguageProvider.jsx'
 
 import { AppShell } from '../src/App.jsx'
+import Reports from '../src/pages/Reports.jsx'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import ManagerHome from '../src/pages/ManagerHome.jsx'
 import LocationView from '../src/pages/LocationView.jsx'
@@ -95,10 +96,25 @@ const MANAGER = {
 }
 
 const PAGES = [
+  // Six nav entries and no more, per Liz on 2026-10-26. The expectations
+  // name what each tier must be offered; the count assertion is what stops
+  // the bar quietly growing back past the width it fits in.
   ['AppShell', AppShell, '/', [LIZ, LIMITED_ADMIN, RECOGNITION_WIDE, MANAGER], {
-    admin: ['Change requests', 'Settings', 'Access'],
-    // What this tier is for, and what it must not be offered.
+    admin: ['Dashboard', 'Attendance', 'All-Stars', 'Training', 'Reports', 'Settings'],
     recognition: ['All-Stars'],
+  }, {
+    // Moved behind Settings or the Reports hub on 2026-10-26. If one of
+    // these reappears in the bar, it has grown back.
+    admin: ['Blackout Calendar', 'Change requests', 'Backup & Recovery',
+            'Custom Report', 'Master Report', 'Employee Records', '>Access<'],
+    // Delimited, because "Attendance" also appears in the masthead —
+    // "Food Service Attendance" — which is branding, not a way in.
+    recognition: ['>Attendance<', '>Training<', 'Blackout Calendar'],
+  }],
+  ['Reports', Reports, '/reports', [LIZ, RECOGNITION_WIDE], {
+    admin: ['Daily report', 'Custom report', 'Master report'],
+    // No attendance, so only the one report that is not about attendance.
+    recognition: ['Custom report'],
   }],
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
@@ -133,7 +149,7 @@ const PAGES = [
 
 export function render() {
   const results = []
-  for (const [name, Page, path, roles, expect = {}] of PAGES) {
+  for (const [name, Page, path, roles, expect = {}, forbid = {}] of PAGES) {
     for (const access of roles) {
       const who = access === LIMITED_ADMIN ? 'limited'
     : access === RECOGNITION_WIDE ? 'recognition'
@@ -147,8 +163,14 @@ export function render() {
           </MemoryRouter>
         )
         const missing = (expect[who] || []).filter(text => !html.includes(text))
-        if (missing.length) {
-          results.push({ name, who, ok: false, error: `rendered without: ${missing.join(', ')}` })
+        // Some requirements are about what is NOT offered — a nav condensed
+        // to six entries is only condensed if the other five are gone.
+        const leaked = (forbid[who] || []).filter(text => html.includes(text))
+        if (missing.length || leaked.length) {
+          const parts = []
+          if (missing.length) parts.push(`rendered without: ${missing.join(', ')}`)
+          if (leaked.length) parts.push(`should not offer: ${leaked.join(', ')}`)
+          results.push({ name, who, ok: false, error: parts.join('; ') })
         } else {
           results.push({ name, who, ok: true, length: html.length })
         }

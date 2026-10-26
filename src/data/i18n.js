@@ -57,6 +57,8 @@ const UI_STRINGS = {
     'nav.dashboard': 'Dashboard',
     'nav.allStars': 'All-Stars',
     'nav.employeeRecords': 'Employee Records',
+    'nav.attendance': 'Attendance',
+    'nav.reports': 'Reports',
     'nav.blackoutCalendar': 'Blackout Calendar',
     'nav.training': 'Training',
     'nav.customReport': 'Custom Report',
@@ -123,6 +125,8 @@ const UI_STRINGS = {
     // All-Stars is the program's name and stays in English on purpose.
     'nav.allStars': 'All-Stars',
     'nav.employeeRecords': 'Expedientes de empleados',
+    'nav.attendance': 'Asistencia',
+    'nav.reports': 'Informes',
     'nav.blackoutCalendar': 'Calendario de días bloqueados',
     'nav.training': 'Capacitación',
     'nav.customReport': 'Reporte personalizado',
