@@ -426,3 +426,45 @@ test('a district login covers no named building', () => {
   })
   assert.deepEqual(profile.locationIds, [])
 })
+
+// Liz, 2026-10-26, twice: "it will still only show the one school."
+//
+// Driven through the endpoint rather than the helpers, because the helpers
+// all pass on their own and the fault is somewhere in the joins between
+// them.
+test('saving extra schools through the endpoint stores and returns them', async () => {
+  await withEnv(BASE_ENV, async () => {
+    const sessions = createMemoryBlobStore()
+    const token = await signedIn(LIZ, sessions)
+    const school = adminRow({
+      id: 'school-id', display_name: 'Chris Martin', role: 'school',
+      location_id: 'WarrenCnHS', capabilities: { canEditAttendance: true },
+    })
+    const access = fakeAccessStore([adminRow(), school])
+
+    const response = await handler(send(token, 'PATCH', {
+      id: 'school-id',
+      displayName: 'Chris Martin',
+      role: 'school',
+      locationId: 'WarrenCnHS',
+      capabilities: { canEditAttendance: true, locationIds: ['CrestonMS', 'LowellES'] },
+    }), {}, { sessions, access })
+
+    assert.equal(response.status, 200, await response.text())
+    const stored = access.profiles.find(row => row.id === 'school-id')
+    assert.deepEqual(stored.capabilities.locationIds, ['CrestonMS', 'LowellES'], 'stored against the profile')
+
+    const listed = await handler(
+      new Request('https://allstartracker.netlify.app/api/access-admin', {
+        headers: { cookie: `${SESSION_COOKIE}=${encodeURIComponent(token)}` },
+      }),
+      {}, { sessions, access }
+    )
+    const profile = (await listed.json()).profiles.find(row => row.id === 'school-id')
+    assert.deepEqual(
+      profile.locationIds,
+      ['WarrenCnHS', 'CrestonMS', 'LowellES'],
+      'and reported back so the form can load them'
+    )
+  })
+})
