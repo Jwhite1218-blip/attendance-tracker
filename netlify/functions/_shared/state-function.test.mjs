@@ -796,3 +796,42 @@ test('training and blackout dates are withheld independently', async () => {
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Liz, 2026-10-26: "a change request I had submitted from another login
+// wasn't showing up on my login." This walks the whole path — a limited
+// administrator writes one, Liz reads it back — because every link in it
+// checked out on its own.
+test('a request written by one administrator reaches another', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const KEY = 'pending-approvals-v1'
+    const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+
+    const limitedAdmin = { role: 'admin', canManageRoster: false, canManageBlackouts: false, canEditAttendance: true }
+    const request = {
+      id: 'req-1', type: 'transfer', empId: '123', employeeName: 'Dana Example',
+      status: 'pending', requestedBy: 'District Assistant', requestedAt: '2026-10-26T12:00:00.000Z',
+      payload: { to: 'CrestonMS' }, baseline: { location: 'StonyBrkMS' },
+    }
+
+    const written = await handleMutate(store, limitedAdmin, {
+      key: KEY,
+      mutation: { type: 'keyed-array-patch', upsert: [{ identity: 'req-1', value: request }], remove: [] },
+    })
+    assert.equal(written.status, 200, 'a limited administrator may submit one')
+    assert.deepEqual(await store.get(KEY), [request], 'and it is stored')
+
+    const sessions = createMemoryBlobStore()
+    const liz = { role: 'admin', canManageRoster: true, canManageBlackouts: true, canEditAttendance: true }
+    const read = await handleStateRequest(
+      await authenticatedRequest(liz, sessions),
+      { stateStore: store, sessionStore: sessions }
+    )
+    const body = await read.json()
+    assert.deepEqual(body.entries[KEY], [request], 'and Liz is sent it')
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})

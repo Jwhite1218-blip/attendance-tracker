@@ -8,9 +8,10 @@
 // same functions the direct path calls, so an approval is Liz pressing the
 // button the requester could not.
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { LOCATION_MAP } from '../data/locations.js'
+import { loadSharedState } from '../data/sharedStore.js'
 import { getEmployeeByKey } from '../data/employeeLocations.js'
 import {
   REQUEST_TYPES,
@@ -37,6 +38,32 @@ export default function ChangeRequests() {
   const [version, setVersion] = useState(0)
   const [error, setError] = useState('')
   const [notes, setNotes] = useState({})
+  const [refreshing, setRefreshing] = useState(true)
+
+  // Fetch on arrival rather than trusting the copy taken at sign-in.
+  //
+  // Liz, 2026-10-26: "a change request I had submitted from another login
+  // wasn't showing up on my login." Everything in the chain worked — the
+  // write, the server, the read — but loadSharedState only ran when a
+  // session was created, so a browser left open since the morning had a
+  // cache from the morning.
+  //
+  // That is tolerable on most screens, where people edit their own
+  // building. It is useless here: this queue exists to show what somebody
+  // else did, so a cache from before they did it answers the wrong
+  // question. A failure leaves whatever was cached on screen and says so,
+  // rather than blanking a list she may be mid-way through.
+  useEffect(() => {
+    let cancelled = false
+    setRefreshing(true)
+    loadSharedState()
+      .then(() => { if (!cancelled) setVersion(value => value + 1) })
+      .catch(() => {
+        if (!cancelled) setError('Could not check for new requests just now. Showing the last copy this device loaded.')
+      })
+      .finally(() => { if (!cancelled) setRefreshing(false) })
+    return () => { cancelled = true }
+  }, [])
 
   const requests = useMemo(() => getApprovalRequests(), [version])
   const pending = pendingRequests(requests)
@@ -84,6 +111,7 @@ export default function ChangeRequests() {
       <section className="mt-6">
         <h2 className="text-sm font-bold uppercase tracking-wide text-gray-500">
           Waiting for you{pending.length > 0 && <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-amber-800">{pending.length}</span>}
+          {refreshing && <span className="ml-2 font-medium normal-case text-gray-400">checking…</span>}
         </h2>
 
         {pending.length === 0 ? (
