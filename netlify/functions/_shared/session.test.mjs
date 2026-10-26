@@ -149,3 +149,39 @@ test('active sessions immediately inherit safer capability changes for the same 
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Liz, 2026-10-26: a manager given fifteen schools saw one, and the "can
+// see" tick boxes shipped that morning never changed anything on screen.
+//
+// Both had the same cause. The session endpoint hands the browser a fixed
+// list of fields, and four capabilities the resolver produces were not on
+// it — so they were decided correctly on the server and never arrived.
+// That is the third time this list has drifted from the resolver.
+//
+// This fails the moment the resolver gains a capability the browser is not
+// told about, which is the only way to stop it happening a fourth time.
+test('every capability the server resolves is sent to the browser', async () => {
+  const { CLIENT_ACCESS_FIELDS } = await import('../session.mjs')
+  const { normalizeAccessProfile } = await import('./auth.mjs')
+
+  const shapes = [
+    { role: 'admin' },
+    { role: 'admin', recognitionOnly: true },
+    { role: 'school', locationId: 'CrestonMS' },
+    { role: 'school', locationId: 'CrestonMS', locationIds: ['StonyBrkMS'] },
+  ]
+
+  for (const shape of shapes) {
+    const resolved = normalizeAccessProfile(shape, { defaultAdminManagement: false })
+    const missing = Object.keys(resolved)
+      // Not a capability: it identifies which stored credential a session
+      // came from and has no business in a browser.
+      .filter(field => field !== 'credentialFingerprint')
+      .filter(field => !CLIENT_ACCESS_FIELDS.includes(field))
+    assert.deepEqual(
+      missing,
+      [],
+      `${JSON.stringify(shape)} resolves ${missing.join(', ')}, which the browser is never sent`
+    )
+  }
+})

@@ -6,6 +6,7 @@ import {
   createSessionToken,
   expiredSessionCookie,
   jsonResponse,
+  normalizeAccessProfile,
   sessionCookie,
   sessionFromRequest,
 } from './_shared/auth.mjs'
@@ -21,36 +22,44 @@ const MAX_PIN_FAILURES = 5
 const MAX_IP_ATTEMPTS = 100
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000
 
+// What the browser is told about this session.
+//
+// Everything here has already been decided by normalizeAccessProfile, which
+// runs on the way in for a sign-in and on every request for an existing
+// session. This used to recompute several of the flags "in step with" that
+// function, and the two drifted three times: canManageRecognitionAwards in
+// October, then on 2026-10-26 the three canView* flags and locationIds — so
+// a manager given fifteen schools was sent one, and the "can see" tick
+// boxes never reached the page at all.
+//
+// So it projects rather than recomputes. Add a capability to the resolver
+// and the test below fails until it is named here.
+export const CLIENT_ACCESS_FIELDS = [
+  'role',
+  'locationId',
+  'locationIds',
+  'displayName',
+  'employeeId',
+  'canEditAttendance',
+  'canViewAttendance',
+  'canViewTraining',
+  'canViewBlackouts',
+  'canEditRecognition',
+  'canManageRecognitionAwards',
+  'recognitionOnly',
+  'canWriteEmployeeNotes',
+  'canManageRoster',
+  'canManageBlackouts',
+  'watermark',
+]
+
 function publicAccess(session) {
-  // Must stay in step with normalizeAccess in _shared/auth.mjs, which decides
-  // the same thing for the state endpoint. A school session that can record
-  // here but is refused there fails silently at the moment a manager submits.
-  const canEditRecognition = session.role === 'school' || (
-    session.role === 'admin'
-    && (
-      session.canEditRecognition === true
-      || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
-    )
-  )
-  return {
-    role: session.role,
-    locationId: session.locationId || null,
-    displayName: session.displayName || null,
-    employeeId: session.employeeId || null,
-    canEditAttendance: (session.role === 'admin' || session.role === 'school') && session.canEditAttendance !== false,
-    canEditRecognition,
-    canManageRecognitionAwards: session.role === 'admin'
-      && canEditRecognition
-      && session.recognitionOnly !== true
-      && session.canManageRecognitionAwards !== false,
-    recognitionOnly: session.recognitionOnly === true,
-    canWriteEmployeeNotes: session.role === 'admin'
-      && session.canEditAttendance !== false
-      && session.recognitionOnly !== true,
-    canManageRoster: session.role === 'admin' && session.canManageRoster === true,
-    canManageBlackouts: session.role === 'admin' && session.canManageBlackouts === true,
-    watermark: session.watermark === 'localis' ? 'localis' : null,
+  const resolved = normalizeAccessProfile(session, { defaultAdminManagement: false }) || session
+  const access = {}
+  for (const field of CLIENT_ACCESS_FIELDS) {
+    access[field] = resolved[field] ?? null
   }
+  return access
 }
 
 function hashKey(value) {
