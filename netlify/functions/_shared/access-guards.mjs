@@ -28,10 +28,16 @@ const CAPABILITY_FLAGS = [
 
 const LOCATION_IDS = new Set(LOCATIONS.map(location => location.id))
 
-export function normalizeCapabilities(input) {
+export function normalizeCapabilities(input, { primaryLocationId = null } = {}) {
   const capabilities = {}
   for (const flag of CAPABILITY_FLAGS) {
     if (typeof input?.[flag] === 'boolean') capabilities[flag] = input[flag]
+  }
+  // The extra kitchens a manager covers travel with the other flags rather
+  // than in a column of their own, so this needed no migration.
+  if (input?.locationIds !== undefined) {
+    const extras = normalizeExtraLocations(input.locationIds, primaryLocationId)
+    if (extras.length) capabilities.locationIds = extras
   }
   return capabilities
 }
@@ -54,6 +60,24 @@ export function normalizeEmployeeLink(value) {
   if (!id) return null
   if (id.length > 80) refuse('That employee identifier is too long.')
   return id
+}
+
+// The extra kitchens a school login covers, beyond its primary.
+//
+// Liz, 2026-10-26. Unknown names are refused rather than dropped: a
+// silently ignored school is a manager who cannot see a roster and no
+// explanation anywhere.
+export function normalizeExtraLocations(value, primary) {
+  if (value === null || value === undefined) return []
+  if (!Array.isArray(value)) refuse('Extra schools must be a list.')
+  const extras = []
+  for (const entry of value) {
+    const id = String(entry || '').trim()
+    if (!id || id === primary) continue
+    if (!LOCATION_IDS.has(id)) refuse(`${id} is not one of the district's schools.`)
+    if (!extras.includes(id)) extras.push(id)
+  }
+  return extras
 }
 
 export function assertValidProfileInput({ displayName, role, locationId }) {

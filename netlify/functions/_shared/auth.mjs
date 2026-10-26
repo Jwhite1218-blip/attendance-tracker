@@ -76,9 +76,21 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
   if (!rawAccess || typeof rawAccess !== 'object' || Array.isArray(rawAccess)) return null
   if (rawAccess.role !== 'admin' && rawAccess.role !== 'school') return null
 
-  const locationId = rawAccess.role === 'school'
-    ? normalizeSchoolLocationId(rawAccess.locationId)
-    : null
+  // Liz, 2026-10-26: a few managers cover several kitchens. A school login
+  // therefore holds a list of buildings rather than one.
+  //
+  // locationId remains the primary — the first in the list — so everything
+  // that asks "which building is this" keeps working unchanged, and a login
+  // with one building is exactly what it was before. Duplicates and unknown
+  // names fall out here rather than reaching the scoping code.
+  const locationIds = rawAccess.role === 'school'
+    ? [...new Set(
+      [rawAccess.locationId, ...(Array.isArray(rawAccess.locationIds) ? rawAccess.locationIds : [])]
+        .map(normalizeSchoolLocationId)
+        .filter(Boolean)
+    )]
+    : []
+  const locationId = locationIds[0] || null
   if (rawAccess.role === 'school' && !locationId) return null
   if (rawAccess.role === 'school' && rawAccess.recognitionOnly === true) return null
 
@@ -176,6 +188,7 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
   return {
     role: rawAccess.role,
     locationId,
+    locationIds,
     displayName: String(rawAccess.displayName || '').trim().slice(0, 80) || null,
     employeeId: String(rawAccess.employeeId || '').trim().slice(0, 80) || null,
     canEditAttendance,

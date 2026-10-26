@@ -193,7 +193,23 @@ async function loadSchoolRosterEntries(store) {
   return Object.fromEntries(rows.filter(([, value]) => value !== null))
 }
 
-function allowedEmployeeIdsForSchool(entries, locationId) {
+// Accepts one building or several. A multi-site manager's roster is the
+// union of the kitchens they cover.
+// Every building a school session covers. One for almost all of them.
+function schoolLocationsOf(session) {
+  return Array.isArray(session?.locationIds) && session.locationIds.length
+    ? session.locationIds
+    : [session?.locationId].filter(Boolean)
+}
+
+function allowedEmployeeIdsForSchool(entries, locations) {
+  const allowed = new Set(
+    (Array.isArray(locations) ? locations : [locations]).filter(Boolean).map(String)
+  )
+  return allowedEmployeeIdsForLocations(entries, allowed)
+}
+
+function allowedEmployeeIdsForLocations(entries, allowed) {
   const locationOverrides = entries[LOCATION_OVERRIDES_KEY] || {}
   const recordOverrides = entries[RECORD_OVERRIDES_KEY] || {}
   const customEmployees = Array.isArray(entries[CUSTOM_EMPLOYEES_KEY])
@@ -206,7 +222,7 @@ function allowedEmployeeIdsForSchool(entries, locationId) {
         const key = employeeKey(employee)
         const recordOverride = recordOverrides[key] || {}
         const effectiveLocation = locationOverrides[key] || recordOverride.location || employee.location
-        return effectiveLocation === locationId
+        return allowed.has(String(effectiveLocation))
       })
       .map(employeeKey)
   )
@@ -239,7 +255,7 @@ function filterEntriesForSession(entries, session) {
     return withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries), session)
   }
 
-  const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
+  const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, schoolLocationsOf(session))
   const filtered = { ...programSettings }
 
   if (entries[BLACKOUTS_KEY]) filtered[BLACKOUTS_KEY] = entries[BLACKOUTS_KEY]
@@ -296,7 +312,7 @@ function rosterForSession(entries, session) {
   // through the same publicEmployee allowlist as everyone else, and only
   // because a Shout-Out is the one recognition that earns no star, feeds no
   // drawing and touches no discipline record.
-  const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, session.locationId)
+  const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, schoolLocationsOf(session))
   const managerIds = managerGradeIds(entries)
   return employees
     .filter(employee => {
@@ -399,7 +415,16 @@ function recognitionMutationForSession(mutation, session, allowedEmployeeIds, ma
             recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
             // Stamped from the session, never from the client: this is what lets
             // the district see which building handed out each star.
-            recognizedByLocationId: String(session.locationId || 'district').slice(0, 100),
+            //
+            // A manager covering several kitchens is credited to the kitchen
+            // the recognised person works in, which is where they were
+            // standing when they gave it. For everyone else that is their one
+            // building, so nothing changes.
+            recognizedByLocationId: String(
+              (schoolLocationsOf(session).length > 1 && recognition?.locationId)
+              || session.locationId
+              || 'district'
+            ).slice(0, 100),
           },
         ])
     ),
@@ -585,7 +610,7 @@ export async function handleMutate(store, session, body) {
   const key = String(body.key || '')
   const rosterEntries = session.role === 'school' ? await loadSchoolRosterEntries(store) : {}
   const allowedEmployeeIds = session.role === 'school'
-    ? allowedEmployeeIdsForSchool(rosterEntries, session.locationId)
+    ? allowedEmployeeIdsForSchool(rosterEntries, schoolLocationsOf(session))
     : new Set()
 
   if (!isManagedStateKey(key) || !canWriteStateKey(session, key, allowedEmployeeIds)) {

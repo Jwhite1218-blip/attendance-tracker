@@ -322,6 +322,7 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
     displayName: profile?.displayName || '',
     role: profile?.role || 'school',
     locationId: profile?.locationId || '',
+    extraLocationIds: capabilitiesOf(profile).locationIds || [],
     employeeId: profile?.employeeId || '',
     pin: '',
     // Seeded from what the login actually has, not from what is written
@@ -374,7 +375,10 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
       role: form.role,
       locationId: form.role === 'school' ? form.locationId : null,
       employeeId: form.employeeId || null,
-      capabilities: form.capabilities,
+      capabilities: {
+        ...form.capabilities,
+        locationIds: form.role === 'school' ? form.extraLocationIds : [],
+      },
     }
     if (!editing) values.pin = form.pin.trim()
     onSubmit(values)
@@ -423,6 +427,43 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
               ))}
             </select>
           </label>
+        )}
+
+        {form.role === 'school' && (
+          <fieldset className="block">
+            <legend className="text-xs font-semibold text-gray-700">
+              Also covers <span className="font-normal text-gray-400">(optional)</span>
+            </legend>
+            <p className="mt-0.5 text-[11px] text-gray-500">
+              For a manager who runs more than one kitchen. They pick which school they are in from the top of the page.
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {[...LOCATIONS]
+                .filter(location => location.id !== form.locationId && location.id !== 'Admin')
+                .sort((a, b) => a.sort - b.sort)
+                .map(location => {
+                  const on = form.extraLocationIds.includes(location.id)
+                  return (
+                    <label
+                      key={location.id}
+                      className={`cursor-pointer rounded-lg border px-2 py-1 text-[11px] font-medium ${
+                        on ? 'border-brand-300 bg-brand-100 text-brand-800' : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={on}
+                        onChange={() => update('extraLocationIds', on
+                          ? form.extraLocationIds.filter(id => id !== location.id)
+                          : [...form.extraLocationIds, location.id])}
+                      />
+                      {location.name}
+                    </label>
+                  )
+                })}
+            </div>
+          </fieldset>
         )}
 
         {/* Liz, 2026-10-26: linking a login to the person who uses it, so

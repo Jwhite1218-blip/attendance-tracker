@@ -260,6 +260,9 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
       if (patch.displayName !== undefined) body.display_name = patch.displayName
       if (patch.role !== undefined) body.role = patch.role
       if (patch.locationId !== undefined) body.location_id = patch.locationId
+      // The extra kitchens a manager covers live in capabilities rather
+      // than a new column, so this needs no migration: location_id stays
+      // the primary and the rest ride alongside the other flags.
       // Null clears the link; a value sets it. Until 2026-10-26 this was
       // only settable when a profile was created, so a login linked to the
       // wrong person could not be corrected.

@@ -17,6 +17,7 @@ import {
   GuardError,
   assertNoPrivilegeEscalation,
   normalizeEmployeeLink,
+  normalizeExtraLocations,
   assertNotLastAdministrator,
   assertNotSelfLockout,
   assertValidPin,
@@ -146,7 +147,7 @@ async function handleCreate(request, stores) {
     const body = await request.json().catch(() => ({}))
     const pin = assertValidPin(body.pin)
     const { displayName, role, locationId } = assertValidProfileInput(body)
-    const capabilities = normalizeCapabilities(body.capabilities)
+    const capabilities = normalizeCapabilities(body.capabilities, { primaryLocationId: locationId })
     assertNoPrivilegeEscalation(session, capabilities)
 
     const created = await store.createProfile(
@@ -195,7 +196,9 @@ async function handleUpdate(request, stores) {
       patch.locationId = next.locationId
     }
     if (body.capabilities !== undefined) {
-      patch.capabilities = normalizeCapabilities(body.capabilities)
+      patch.capabilities = normalizeCapabilities(body.capabilities, {
+        primaryLocationId: patch.locationId ?? profile.location_id,
+      })
       assertNoPrivilegeEscalation(session, patch.capabilities)
     }
     if (body.disabled !== undefined) {

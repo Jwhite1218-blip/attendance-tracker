@@ -68,6 +68,8 @@ export function AppShell() {
   const {
     role,
     locationId,
+    locationIds,
+    onLocationChange,
     displayName,
     canEditAttendance,
     canEditRecognition,
@@ -183,6 +185,25 @@ export function AppShell() {
                 </span>
               </div>
             </Link>
+
+            {/* Liz, 2026-10-26: a manager covering several kitchens picks
+                which one they are working in. Everything else on the page
+                already reads the chosen building, so this is the whole
+                control. Absent for the fifteen logins that cover one. */}
+            {onLocationChange && (
+              <label className="hidden items-center gap-2 lg:flex">
+                <span className="sr-only">Which school are you working in?</span>
+                <select
+                  value={locationId || ''}
+                  onChange={event => onLocationChange(event.target.value)}
+                  className="rounded-lg border border-charcoal-600 bg-charcoal-800 px-2 py-1.5 text-xs font-semibold text-brand-100"
+                >
+                  {(locationIds || []).map(id => (
+                    <option key={id} value={id}>{LOCATION_MAP[id]?.name || id}</option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             {/* Desktop nav */}
             <div className="hidden xl:flex items-center gap-1">

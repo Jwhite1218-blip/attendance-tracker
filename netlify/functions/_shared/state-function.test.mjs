@@ -835,3 +835,51 @@ test('a request written by one administrator reaches another', async () => {
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Liz, 2026-10-26: "I have a few managers that oversee multiple locations —
+// could they have manager access but to all locations?"
+test('a manager covering two kitchens is sent both rosters and neither more', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+    const covers = { role: 'school', locationId: 'CrestonMS', locationIds: ['CrestonMS', 'StonyBrkMS'], canEditAttendance: true }
+
+    const request = await authenticatedRequest(covers, sessions)
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const places = new Set(body.roster.map(row => row.location))
+
+    assert.ok(places.has('CrestonMS'), 'their first kitchen')
+    assert.ok(places.has('StonyBrkMS'), 'and their second')
+
+    // A school session has always also received manager-grade staff from
+    // every building, for peer Shout-Outs. What must NOT appear is ordinary
+    // staff from a kitchen this login does not cover.
+    const outsiders = body.roster.filter(row =>
+      !['CrestonMS', 'StonyBrkMS'].includes(row.location)
+      && !MANAGER_GRADE_POSITIONS.includes(row.position))
+    assert.deepEqual(outsiders, [], 'no ordinary staff from a kitchen they do not cover')
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('a single-building login is unchanged by the list', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const store = stateStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
+    const request = await authenticatedRequest({ role: 'school', locationId: 'CrestonMS', canEditAttendance: true }, sessions)
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const outsiders = body.roster.filter(row =>
+      row.location !== 'CrestonMS' && !MANAGER_GRADE_POSITIONS.includes(row.position))
+    assert.deepEqual(outsiders, [], 'exactly as before the list existed')
+    assert.ok(body.roster.some(row => row.location === 'CrestonMS'))
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})

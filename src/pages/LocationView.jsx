@@ -36,14 +36,20 @@ export default function LocationView() {
   const { id: urlId } = useParams()
   const navigate = useNavigate()
   const access = useAuth()
-  const { role, locationId: myLocationId, canManageRoster, canEditAttendance, dataVersion } = access
+  const { role, locationId: myLocationId, locationIds, canManageRoster, canEditAttendance, dataVersion } = access
+  // Every kitchen this login covers. One for almost all of them.
+  const myLocations = Array.isArray(locationIds) && locationIds.length ? locationIds : [myLocationId]
   const lizAdminAccess = hasLizAdminAccess(access)
   const rosterMode = rosterActionMode(access)
   const canTouchRoster = rosterMode !== 'none'
   const [showAddEmployee, setShowAddEmployee] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   // School-role sessions are always locked to their own school, regardless of URL
-  const id = role === 'school' ? myLocationId : urlId
+  // A manager covering several opens whichever is in the address, so long
+  // as it is one of theirs; otherwise their current one.
+  const id = role === 'school'
+    ? (myLocations.includes(urlId) ? urlId : myLocationId)
+    : urlId
   const location = LOCATION_MAP[id]
   const [weekOffset, setWeekOffset] = useState(0)
   const [attendance, setAttendance] = useState({})
@@ -108,7 +114,7 @@ export default function LocationView() {
   )
 
   // Normalize the URL if a school-role session typed/followed a link to another school
-  if (role === 'school' && urlId !== myLocationId) {
+  if (role === 'school' && !myLocations.includes(urlId)) {
     return <Navigate to={`/location/${myLocationId}`} replace />
   }
 

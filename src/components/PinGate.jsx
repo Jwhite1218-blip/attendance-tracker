@@ -51,6 +51,23 @@ export default function PinGate({ children }) {
   const [submitting, setSubmitting] = useState(false)
   const [dataVersion, setDataVersion] = useState(0)
   const [syncStatus, setSyncStatus] = useState('saved')
+  // Which of this login's kitchens is being worked in right now.
+  //
+  // Liz, 2026-10-26: a few managers cover several. Rather than teach every
+  // screen about a list, the context hands them locationId as usual and
+  // this decides which one that is — so a single-building login is byte for
+  // byte what it was, and a multi-building one simply changes what the rest
+  // of the app already reads.
+  //
+  // Held per tab, so switching kitchen in one does not move the other, and
+  // forgotten when the tab closes rather than persisting past the shift.
+  const [selectedLocation, setSelectedLocation] = useState(
+    () => { try { return sessionStorage.getItem('attendance-selected-location') || '' } catch { return '' } }
+  )
+  const chooseLocation = value => {
+    setSelectedLocation(value)
+    try { sessionStorage.setItem('attendance-selected-location', value) } catch { /* private window */ }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -177,10 +194,22 @@ export default function PinGate({ children }) {
   }
   // Authenticated — render the app, scoped to this session's role
   if (authed) {
+    const coveredLocations = Array.isArray(authed.locationIds) && authed.locationIds.length
+      ? authed.locationIds
+      : [authed.locationId].filter(Boolean)
+    // A remembered choice only counts while it is still one of theirs: a
+    // login can be moved between buildings, and a stale selection would
+    // otherwise scope them to a kitchen they no longer cover.
+    const activeLocationId = coveredLocations.includes(selectedLocation)
+      ? selectedLocation
+      : coveredLocations[0] || null
+
     return (
       <AuthContext.Provider value={{
         role: authed.role,
-        locationId: authed.locationId,
+        locationId: activeLocationId,
+        locationIds: coveredLocations,
+        onLocationChange: coveredLocations.length > 1 ? chooseLocation : null,
         displayName: authed.displayName || null,
         employeeId: authed.employeeId || null,
         canEditAttendance: (authed.role === 'admin' || authed.role === 'school') && authed.canEditAttendance !== false,
