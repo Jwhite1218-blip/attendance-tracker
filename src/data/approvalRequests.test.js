@@ -188,3 +188,26 @@ test('a corrupt stored blob reads as an empty list rather than throwing', () => 
   assert.deepEqual(normalizeRequests([null, {}, { id: 'x', type: 'bogus' }]), [])
   assert.equal(normalizeRequests([{ id: 'x', type: 'edit' }]).length, 1)
 })
+
+// Liz, 2026-10-26: a district-wide recognition login could still propose
+// transfers, card edits and status changes on every card it opened, even
+// though it cannot see the attendance those records sit beside.
+test('a login that cannot see attendance gets no roster route at all', () => {
+  const recognitionWide = {
+    role: 'admin',
+    canViewAttendance: false,
+    canEditRecognition: true,
+    canManageRecognitionAwards: true,
+    canManageRoster: false,
+    canManageBlackouts: false,
+  }
+  assert.equal(canRequestChanges(recognitionWide), false)
+  assert.equal(canDecideRequests(recognitionWide), false)
+  assert.equal(rosterActionMode(recognitionWide), 'none')
+})
+
+test('an administrator who can see attendance still proposes as before', () => {
+  assert.equal(rosterActionMode({ ...LIMITED_ADMIN, canViewAttendance: true }), 'request')
+  // Absent means visible, so an untouched profile is unaffected.
+  assert.equal(rosterActionMode(LIMITED_ADMIN), 'request')
+})

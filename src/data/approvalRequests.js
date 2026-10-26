@@ -52,6 +52,12 @@ export function canDecideRequests(access = {}) {
 export function canRequestChanges(access = {}) {
   return access.role === 'admin'
     && access.recognitionOnly !== true
+    // A login that cannot see attendance has no business proposing roster
+    // changes. Liz, 2026-10-26: the roster — who works where, who is active,
+    // what their card says — belongs to the attendance side of the
+    // application, and a district recognition login was being offered
+    // Transfer, Edit and Move to inactive on every card it opened.
+    && access.canViewAttendance !== false
     && !canDecideRequests(access)
 }
 

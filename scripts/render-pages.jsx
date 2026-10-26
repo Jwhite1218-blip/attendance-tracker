@@ -17,6 +17,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { AuthContext } from '../src/components/PinGate.jsx'
 import LanguageProvider from '../src/components/LanguageProvider.jsx'
 
+import { AppShell } from '../src/App.jsx'
 import Dashboard from '../src/pages/Dashboard.jsx'
 import ManagerHome from '../src/pages/ManagerHome.jsx'
 import LocationView from '../src/pages/LocationView.jsx'
@@ -65,6 +66,23 @@ const LIMITED_ADMIN = {
   dataVersion: 1,
 }
 
+// Liz, 2026-10-26: the whole district's recognition, none of its
+// attendance, training or blackout dates.
+const RECOGNITION_WIDE = {
+  role: 'admin',
+  displayName: 'District Recognition',
+  canViewAttendance: false,
+  canViewTraining: false,
+  canViewBlackouts: false,
+  canEditAttendance: false,
+  canEditRecognition: true,
+  canManageRecognitionAwards: true,
+  canManageRoster: false,
+  canManageBlackouts: false,
+  canWriteEmployeeNotes: false,
+  dataVersion: 1,
+}
+
 const MANAGER = {
   role: 'school',
   locationId: 'CrestonMS',
@@ -77,6 +95,11 @@ const MANAGER = {
 }
 
 const PAGES = [
+  ['AppShell', AppShell, '/', [LIZ, LIMITED_ADMIN, RECOGNITION_WIDE, MANAGER], {
+    admin: ['Change requests', 'Settings', 'Access'],
+    // What this tier is for, and what it must not be offered.
+    recognition: ['All-Stars'],
+  }],
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
   // No expectation here: without a roster under Node this page renders
@@ -112,7 +135,9 @@ export function render() {
   const results = []
   for (const [name, Page, path, roles, expect = {}] of PAGES) {
     for (const access of roles) {
-      const who = access === LIMITED_ADMIN ? 'limited' : access.role === 'admin' ? 'admin' : 'manager'
+      const who = access === LIMITED_ADMIN ? 'limited'
+    : access === RECOGNITION_WIDE ? 'recognition'
+    : access.role === 'admin' ? 'admin' : 'manager'
       try {
         const html = renderToStaticMarkup(
           <MemoryRouter initialEntries={[path]}>

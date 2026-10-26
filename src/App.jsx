@@ -56,7 +56,12 @@ export default function App() {
   )
 }
 
-function AppShell() {
+// Exported for the render harness. The shell holds the nav, the route
+// table and the capability logic that decides both — and it was the one
+// part of the application the harness never rendered, which is how a
+// reference to a const declared later in the same function reached the
+// point of being deployed on 2026-10-26.
+export function AppShell() {
   const location = useLocation()
   const access = useAuth()
   const {
@@ -88,18 +93,26 @@ function AppShell() {
         ? t('role.administrator')
         : t('role.administratorLimited')
 
-  const homePath = recognitionOnly || attendanceHidden ? '/recognition' : '/'
-  const showBlackoutCalendar = canViewBlackoutCalendar({ role, canEditAttendance, canManageBlackouts })
-  const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   // Liz, 2026-10-26: a login can be given the whole district's recognition
   // and none of its attendance. The server already withholds the records;
   // these keep the pages and the nav from offering what is not there.
+  //
+  // Declared before homePath, which reads attendanceHidden. The first
+  // version of this sat below it and threw a ReferenceError on every render
+  // for every user — see the AppShell entry in scripts/render-pages.jsx,
+  // which exists because of it.
   const seesAttendance = canSeeAttendance(access)
   const seesTraining = canSeeTraining(access)
   // With attendance hidden the Dashboard is a shell — it is the HR follow-up
   // list, the week's exceptions and upcoming time off. Send them where the
   // work actually is.
   const attendanceHidden = role === 'admin' && !seesAttendance
+
+  const homePath = recognitionOnly || attendanceHidden ? '/recognition' : '/'
+  // The whole access object, so the resolved canViewBlackouts is honoured
+  // rather than the pre-2026-10-26 fallback being recomputed from two flags.
+  const showBlackoutCalendar = canViewBlackoutCalendar(access)
+  const lizAdminAccess = hasLizAdminAccess({ role, canManageRoster, canManageBlackouts })
   // Shown beside the nav label, so something waiting on Liz is visible from
   // any page rather than only if she thinks to look.
   const pendingCount = useMemo(
