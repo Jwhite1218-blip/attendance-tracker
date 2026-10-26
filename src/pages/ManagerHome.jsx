@@ -42,7 +42,7 @@ function todayKey() {
 export default function ManagerHome() {
   const navigate = useNavigate()
   const [activeInsight, setActiveInsight] = useState(null)
-  const { locationId, canEditRecognition, dataVersion, employeeId } = useAuth()
+  const { locationId, locationIds, onLocationChange, canEditRecognition, dataVersion, employeeId } = useAuth()
   const { locale, t, formatDate } = useLanguage()
   const school = LOCATION_MAP[locationId]
   const today = todayKey()
@@ -139,6 +139,13 @@ export default function ManagerHome() {
           ))}
         </dl>
       </header>
+
+      <YourKitchens
+        locationIds={locationIds}
+        activeId={locationId}
+        onChoose={onLocationChange}
+        dataVersion={dataVersion}
+      />
 
       <YourRecognition employeeId={employeeId} />
 
@@ -272,6 +279,77 @@ function YourRecognition({ employeeId }) {
           ))}
         </div>
       )}
+    </section>
+  )
+}
+
+// The kitchens this login covers, when it covers more than one.
+//
+// Liz, 2026-10-26: the picker in the top bar was not enough — "on the
+// dashboard, can you make this clear and list the schools like we do on the
+// admin login page?" So the same shape as the district's Locations grid: a
+// card per school with its headcount, and the one being worked in marked.
+//
+// Choosing a card re-scopes the whole dashboard rather than navigating
+// away, so the numbers above change under them and it is obvious which
+// kitchen they are now in. The Attendance tracker tile below then opens it.
+function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
+  const kitchens = useMemo(
+    () => (Array.isArray(locationIds) ? locationIds : [])
+      .map(id => ({
+        id,
+        name: LOCATION_MAP[id]?.name || id,
+        type: LOCATION_MAP[id]?.type || '',
+        staff: getRosterForLocation(id).length,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name)),
+    [locationIds, dataVersion]
+  )
+
+  if (!onChoose || kitchens.length < 2) return null
+
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-5">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Your schools</p>
+      <h2 className="mt-1 text-lg font-bold text-gray-900">
+        You cover {kitchens.length} kitchens
+      </h2>
+      <p className="mt-1 text-xs text-gray-500">
+        Choose the one you are working in. Everything on this page, the attendance tracker and the All-Star
+        board follow your choice.
+      </p>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {kitchens.map(kitchen => {
+          const active = kitchen.id === activeId
+          return (
+            <button
+              key={kitchen.id}
+              type="button"
+              onClick={() => onChoose(kitchen.id)}
+              aria-current={active ? 'true' : undefined}
+              className={`rounded-xl border p-4 text-left transition-colors ${
+                active
+                  ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-200'
+                  : 'border-gray-200 bg-white hover:border-brand-300 hover:bg-brand-50/40'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className={`font-semibold ${active ? 'text-brand-800' : 'text-gray-900'}`}>{kitchen.name}</p>
+                {active && (
+                  <span className="flex-none rounded-full bg-brand-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    Here now
+                  </span>
+                )}
+              </div>
+              {kitchen.type && <p className="mt-0.5 text-xs text-gray-500">{kitchen.type}</p>}
+              <p className="mt-2 text-xs text-gray-500">
+                <span className="font-bold text-gray-900">{kitchen.staff}</span> on roster
+              </p>
+            </button>
+          )
+        })}
+      </div>
     </section>
   )
 }

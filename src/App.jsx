@@ -190,8 +190,11 @@ export function AppShell() {
                 which one they are working in. Everything else on the page
                 already reads the chosen building, so this is the whole
                 control. Absent for the fifteen logins that cover one. */}
+            {/* Visible at every width. The first version was hidden below
+                1024px, which is most of the tablets this is used on, so the
+                managers it exists for could not see it. */}
             {onLocationChange && (
-              <label className="hidden items-center gap-2 lg:flex">
+              <label className="flex items-center gap-2">
                 <span className="sr-only">Which school are you working in?</span>
                 <select
                   value={locationId || ''}
