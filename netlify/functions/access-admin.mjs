@@ -65,6 +65,19 @@ function effectiveCapabilities(row) {
   return Object.fromEntries(CAPABILITY_FLAGS.map(flag => [flag, resolved[flag] === true]))
 }
 
+// Every building this login covers, primary first.
+//
+// Reported separately from the capability flags because it is a list, not
+// a true/false — and because the screen seeded its "also covers" tick boxes
+// from the flag set, which never carried it. The extras therefore never
+// loaded back into the form, and the next save wrote an empty list over
+// them. Liz, 2026-10-26: "I tested updating some of the manager access to
+// include other buildings but they aren't showing up."
+function coveredLocations(row) {
+  const resolved = normalizeAccessProfile(profileFromRow(row)) || {}
+  return Array.isArray(resolved.locationIds) ? resolved.locationIds : []
+}
+
 export function publicProfile(row) {
   const { pin, pinReadable } = safePin(row)
   return {
@@ -78,6 +91,7 @@ export function publicProfile(row) {
     employeeId: row.employee_id,
     capabilities: row.capabilities || {},
     effectiveCapabilities: effectiveCapabilities(row),
+    locationIds: coveredLocations(row),
     source: row.source,
     disabledAt: row.disabled_at,
     lastUsedAt: row.last_used_at,

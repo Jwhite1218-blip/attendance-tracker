@@ -388,3 +388,41 @@ test('editing a profile cannot switch off a capability nobody touched', () => {
   const saved = publicProfile({ ...row, capabilities: seeded })
   assert.equal(saved.effectiveCapabilities.canManageRecognitionAwards, true)
 })
+
+// Liz, 2026-10-26: "I tested updating some of the manager access to include
+// other buildings but they aren't showing up."
+//
+// The extras were stored correctly. The screen seeded its tick boxes from
+// the capability flags, which carry only true/false and never the list, so
+// the boxes came up empty and the next save wrote [] over the real value.
+test('a login reports every building it covers, so the form can load them back', () => {
+  const profile = publicProfile({
+    id: 'p1',
+    role: 'school',
+    display_name: 'Creston and Stony Brook',
+    location_id: 'CrestonMS',
+    capabilities: { locationIds: ['StonyBrkMS', 'LowellES'] },
+    pin_length: 4,
+  })
+
+  assert.deepEqual(profile.locationIds, ['CrestonMS', 'StonyBrkMS', 'LowellES'], 'primary first, then the extras')
+
+  // Re-seeding the form from what came back and saving must not lose them.
+  const reseeded = profile.locationIds.filter(id => id !== profile.locationId)
+  assert.deepEqual(reseeded, ['StonyBrkMS', 'LowellES'])
+})
+
+test('a single-building login reports just its own', () => {
+  const profile = publicProfile({
+    id: 'p2', role: 'school', display_name: 'Creston MS',
+    location_id: 'CrestonMS', capabilities: {}, pin_length: 4,
+  })
+  assert.deepEqual(profile.locationIds, ['CrestonMS'])
+})
+
+test('a district login covers no named building', () => {
+  const profile = publicProfile({
+    id: 'p3', role: 'admin', display_name: 'District', capabilities: {}, pin_length: 4,
+  })
+  assert.deepEqual(profile.locationIds, [])
+})

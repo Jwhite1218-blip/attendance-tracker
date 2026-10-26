@@ -41,7 +41,12 @@ const EDIT_REQUIRES_VIEW = {
 
 function reachLabel(profile) {
   if (profile.role === 'admin') return 'Every school'
-  return LOCATION_MAP[profile.locationId]?.name || profile.locationId || '—'
+  const covered = profile.locationIds?.length ? profile.locationIds : [profile.locationId]
+  const names = covered.filter(Boolean).map(id => LOCATION_MAP[id]?.name || id)
+  if (!names.length) return '—'
+  // Named in full rather than "3 schools": the point of the list is to see
+  // at a glance who reaches where.
+  return names.join(' · ')
 }
 
 // What a login actually signs in with. A profile stores only the flags
@@ -322,7 +327,10 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
     displayName: profile?.displayName || '',
     role: profile?.role || 'school',
     locationId: profile?.locationId || '',
-    extraLocationIds: capabilitiesOf(profile).locationIds || [],
+    // From the resolved list the server reports, minus the primary. Seeding
+    // this from the capability flags meant it was always empty, so saving
+    // cleared whatever had been set.
+    extraLocationIds: (profile?.locationIds || []).filter(id => id !== profile?.locationId),
     employeeId: profile?.employeeId || '',
     pin: '',
     // Seeded from what the login actually has, not from what is written
