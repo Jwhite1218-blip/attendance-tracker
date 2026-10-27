@@ -18,11 +18,16 @@ const DEFAULT_DISTRICT_SLUG = 'warren-township'
 // A clash with an existing code, as opposed to anything actually broken.
 export class ConflictError extends Error {}
 
-const PROFILE_COLUMNS = [
-  'id', 'pin_encrypted', 'pin_lookup', 'pin_length', 'username', 'display_name', 'role',
+// Everything that existed before usernames. Kept as its own list because
+// it is what this store falls back to when the username column is not
+// there yet — see selectProfiles.
+const PROFILE_COLUMNS_BEFORE_USERNAMES = [
+  'id', 'pin_encrypted', 'pin_lookup', 'pin_length', 'display_name', 'role',
   'location_id', 'employee_id', 'capabilities', 'source', 'disabled_at',
   'last_used_at', 'created_at', 'created_by', 'updated_at', 'updated_by',
 ].join(',')
+
+const PROFILE_COLUMNS = `${PROFILE_COLUMNS_BEFORE_USERNAMES},username`
 
 function environmentValue(name) {
   return globalThis.Netlify?.env?.get(name) || process.env[name] || ''
@@ -79,11 +84,50 @@ export function capabilitiesFromProfile(access) {
 }
 
 export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl = fetch }) {
+  // Set if PostgREST tells us the username column does not exist, which
+  // happens on a site whose database has not had the 2026-10-26 migration:
+  // a restored backup, a fresh test project, or production in the window
+  // between a deploy and the migration being run.
+  //
+  // Asking for a column that is not there fails the WHOLE select, so
+  // without this one missing column stops every sign-in — the worst
+  // outcome this application has. Degrading instead means the username
+  // feature is quietly off and the nineteen logins carry on as they did
+  // before it existed. There is no security hole in that state: a profile
+  // cannot require a username that cannot be stored.
+  let usernameColumnMissing = false
   const apiBaseUrl = String(baseUrl || '').replace(/\/+$/, '')
   const tenantSlug = String(districtSlug || DEFAULT_DISTRICT_SLUG)
   if (!apiBaseUrl || !secretKey) throw new Error('Supabase is not configured for access profiles.')
 
   let districtIdPromise
+
+  async function selectProfiles(params) {
+    const run = columns => fetchImpl(
+      `${apiBaseUrl}/rest/v1/access_profiles?${new URLSearchParams({ ...params, select: columns })}`,
+      { headers: headers() }
+    )
+
+    const response = await run(usernameColumnMissing ? PROFILE_COLUMNS_BEFORE_USERNAMES : PROFILE_COLUMNS)
+    if (response.ok || usernameColumnMissing) return response
+
+    // Only retried when the refusal actually names the column. A 500, a
+    // timeout or a bad key must keep failing rather than be retried into
+    // looking like a schema problem.
+    let detail = ''
+    try {
+      detail = await response.clone().text()
+    } catch {
+      detail = ''
+    }
+    if (!detail.includes('username')) return response
+
+    usernameColumnMissing = true
+    logEvent('access-profile-username-column-missing', {
+      note: 'run the 2026-10-26 migration; usernames are inactive until then',
+    })
+    return run(PROFILE_COLUMNS_BEFORE_USERNAMES)
+  }
 
   function headers(extra = {}) {
     return { apikey: secretKey, Accept: 'application/json', ...extra }
@@ -110,13 +154,11 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
     async findByPin(pin) {
       try {
         const id = await districtId()
-        const query = new URLSearchParams({
+        const response = await selectProfiles({
           district_id: `eq.${id}`,
           pin_lookup: `eq.${pinLookup(pin)}`,
-          select: PROFILE_COLUMNS,
           limit: '1',
         })
-        const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
         if (!response.ok) throw new Error(`status ${response.status}`)
         const rows = await response.json()
         const row = Array.isArray(rows) ? rows[0] : null
@@ -145,15 +187,17 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
     async findByUsername(username) {
       const wanted = String(username || '').trim().toLowerCase()
       if (!wanted) return null
+      // No column, no usernames. Refused rather than queried, so this
+      // cannot turn into a confusing error on a database that simply has
+      // not been migrated.
+      if (usernameColumnMissing) return null
       try {
         const id = await districtId()
-        const query = new URLSearchParams({
+        const response = await selectProfiles({
           district_id: `eq.${id}`,
           username: `eq.${wanted}`,
-          select: PROFILE_COLUMNS,
           limit: '1',
         })
-        const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
         if (!response.ok) throw new Error(`status ${response.status}`)
         const rows = await response.json()
         const row = Array.isArray(rows) ? rows[0] : null
@@ -171,12 +215,10 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
 
     async listProfiles() {
       const id = await districtId()
-      const query = new URLSearchParams({
+      const response = await selectProfiles({
         district_id: `eq.${id}`,
-        select: PROFILE_COLUMNS,
         order: 'display_name.asc',
       })
-      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
       if (!response.ok) throw new Error(`Supabase access profile list failed with status ${response.status}.`)
       const rows = await response.json()
       return Array.isArray(rows) ? rows : []
@@ -253,13 +295,11 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
 
     async findById(profileId) {
       const id = await districtId()
-      const query = new URLSearchParams({
+      const response = await selectProfiles({
         district_id: `eq.${id}`,
         id: `eq.${profileId}`,
-        select: PROFILE_COLUMNS,
         limit: '1',
       })
-      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
       if (!response.ok) throw new Error(`Supabase access profile read failed with status ${response.status}.`)
       const rows = await response.json()
       return (Array.isArray(rows) ? rows[0] : null) || null

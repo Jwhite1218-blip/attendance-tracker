@@ -73,6 +73,46 @@ function fakeSupabase({ profiles = [], failOn = null } = {}) {
   return { fetchImpl, calls, rows }
 }
 
+// PostgREST's actual refusal when a select names a column that is not
+// there: 400, and the column named in the message. The whole select
+// fails, which is why one missing column would otherwise stop every
+// sign-in.
+function fakeSupabaseWithoutUsernameColumn({ profiles = [] } = {}) {
+  const calls = []
+  const rows = [...profiles]
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url: String(url), method: options.method || 'GET' })
+    const target = String(url)
+    if (target.includes('/districts?')) {
+      return { ok: true, status: 200, json: async () => [{ id: 7 }] }
+    }
+    if (target.includes('/access_profiles?') && (options.method || 'GET') === 'GET') {
+      if (target.includes('username')) {
+        return {
+          ok: false,
+          status: 400,
+          clone: () => ({
+            async text() {
+              return JSON.stringify({
+                code: '42703',
+                message: 'column access_profiles.username does not exist',
+              })
+            },
+          }),
+          json: async () => ({}),
+        }
+      }
+      const match = target.match(/pin_lookup=eq\.([^&]+)/)
+      const found = match
+        ? rows.filter(row => row.pin_lookup === decodeURIComponent(match[1]))
+        : rows
+      return { ok: true, status: 200, json: async () => found }
+    }
+    return { ok: false, status: 404, json: async () => ({}) }
+  }
+  return { fetchImpl, calls, rows }
+}
+
 function store(fake) {
   return createAccessStore({
     baseUrl: 'https://example.supabase.co',
@@ -320,4 +360,46 @@ test('a username can be cleared', async () => {
   await store(fake).updateProfile('admin-row', { username: null }, { actor: 'Liz' })
   const patch = fake.calls.find(call => call.method === 'PATCH')
   assert.equal(JSON.parse(patch.body).username, null)
+})
+
+// --- a database that has not had the migration ---------------------------
+//
+// The deploy and the migration are two separate acts by two different
+// people, so there is a window where the code wants a column the database
+// does not have. Asking for a missing column fails the WHOLE select, so
+// without this a one-line schema gap stops all nineteen people signing in
+// — the worst outcome this application has.
+
+test('a missing username column does not stop anybody signing in', async () => {
+  const fake = fakeSupabaseWithoutUsernameColumn({ profiles: [schoolRow('1742')] })
+  const row = await store(fake).findByPin('1742')
+  assert.equal(row.id, 'row-1', 'the sign-in still resolves')
+  // First attempt asked for the column, was refused, second did not.
+  assert.ok(fake.calls.some(call => call.url.includes('username')))
+  assert.ok(fake.calls.at(-1).url.includes('username') === false)
+})
+
+test('once the column is known to be missing, it is not asked for again', async () => {
+  const fake = fakeSupabaseWithoutUsernameColumn({ profiles: [schoolRow('1742')] })
+  const made = store(fake)
+  await made.findByPin('1742')
+  const afterFirst = fake.calls.length
+  await made.findByPin('1742')
+  assert.equal(fake.calls.length - afterFirst, 1, 'one request, not a retry every time')
+})
+
+// No hole in the degraded state: a profile cannot require a username that
+// the database cannot store, so there is nothing to bypass.
+test('a username sign-in is refused outright while the column is missing', async () => {
+  const fake = fakeSupabaseWithoutUsernameColumn({ profiles: [schoolRow('1742')] })
+  const made = store(fake)
+  await made.findByPin('1742')
+  assert.equal(await made.findByUsername('eschmitt'), null)
+})
+
+// A real outage must keep looking like a real outage.
+test('an error that is not about the column is not retried away', async () => {
+  const fake = fakeSupabase({ profiles: [schoolRow('1742')], failOn: 'access_profiles' })
+  assert.equal(await store(fake).findByPin('1742'), null)
+  await assert.rejects(() => store(fake).listProfiles(), /status 500/)
 })
