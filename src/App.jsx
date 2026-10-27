@@ -14,6 +14,7 @@ import DailyReport from './pages/DailyReport.jsx'
 import CalendarView from './pages/CalendarView.jsx'
 import LocationView from './pages/LocationView.jsx'
 import CustomReport from './pages/CustomReport.jsx'
+import RecognitionReport from './pages/RecognitionReport.jsx'
 import MasterReport from './pages/MasterReport.jsx'
 import LedgerView from './pages/LedgerView.jsx'
 import StaffAdmin from './pages/StaffAdmin.jsx'
@@ -28,7 +29,7 @@ import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
 import ReleaseBadge from './components/ReleaseBadge.jsx'
 import { useProgramTerms } from './components/useProgramTerms.js'
-import { canAccessRecognitionProgram, canViewAttendance as canSeeAttendance, canViewBlackoutCalendar, canViewTraining as canSeeTraining, hasLizAdminAccess } from './data/futureTools.js'
+import { canAccessRecognitionProgram, canViewAttendance as canSeeAttendance, canViewBlackoutCalendar, canViewReports as canSeeReports, canViewTraining as canSeeTraining, hasLizAdminAccess } from './data/futureTools.js'
 import { LOCATION_MAP } from './data/locations.js'
 import warrenLogo from './assets/warren-logo.png'
 import localisLogo from './assets/localis-logo.png'
@@ -106,6 +107,7 @@ export function AppShell() {
   // which exists because of it.
   const seesAttendance = canSeeAttendance(access)
   const seesTraining = canSeeTraining(access)
+  const seesReports = canSeeReports(access)
   // With attendance hidden the Dashboard is a shell — it is the HR follow-up
   // list, the week's exceptions and upcoming time off. Send them where the
   // work actually is.
@@ -145,7 +147,7 @@ export function AppShell() {
       : seesAttendance ? [{ path: '/ledger', label: t('nav.attendance') }] : []),
     ...(recognitionAdminAccess ? [{ path: '/recognition', label: t('nav.allStars') }] : []),
     ...(seesTraining ? [{ path: '/training', label: t('nav.training') }] : []),
-    ...(role === 'admin' ? [{ path: '/reports', label: t('nav.reports') }] : []),
+    ...(seesReports ? [{ path: '/reports', label: t('nav.reports') }] : []),
     ...(lizAdminAccess
       ? [{ path: '/settings', label: pendingCount ? `${t('nav.settings')} (${pendingCount})` : t('nav.settings') }]
       : []),
@@ -377,10 +379,11 @@ export function AppShell() {
               is a sheet you print once, not a page you visit. */}
           <Route path="/settings/spanish-review" element={lizAdminAccess ? <SpanishReview /> : <Navigate to={homePath} replace />} />
           <Route path="/access" element={lizAdminAccess ? <AccessAdmin /> : <Navigate to={homePath} replace />} />
-          <Route path="/reports" element={role === 'admin' ? <Reports /> : <Navigate to={homePath} replace />} />
-          <Route path="/reports/daily" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <DailyReport />} />
-          <Route path="/reports/custom" element={recognitionOnly || role === 'school' ? <Navigate to={homePath} replace /> : <CustomReport />} />
-          <Route path="/reports/master" element={recognitionOnly || role === 'school' || !seesAttendance ? <Navigate to={homePath} replace /> : <MasterReport />} />
+          <Route path="/reports" element={seesReports ? <Reports /> : <Navigate to={homePath} replace />} />
+          <Route path="/reports/daily" element={!seesReports || !seesAttendance ? <Navigate to={homePath} replace /> : <DailyReport />} />
+          <Route path="/reports/custom" element={seesReports ? <CustomReport /> : <Navigate to={homePath} replace />} />
+          <Route path="/reports/master" element={!seesReports || !seesAttendance ? <Navigate to={homePath} replace /> : <MasterReport />} />
+          <Route path="/reports/recognition" element={!seesReports || !recognitionAdminAccess ? <Navigate to={homePath} replace /> : <RecognitionReport />} />
           <Route path="/backup-recovery" element={lizAdminAccess ? <BackupRecovery /> : <Navigate to={homePath} replace />} />
         </Routes>
         </RouteErrorBoundary>

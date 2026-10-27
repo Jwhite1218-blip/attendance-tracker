@@ -18,6 +18,7 @@ const CAPABILITY_FLAGS = [
   'canViewAttendance',
   'canViewTraining',
   'canViewBlackouts',
+  'canViewReports',
   'canEditAttendance',
   'canEditRecognition',
   'canManageRecognitionAwards',
@@ -135,7 +136,7 @@ export function assertNotSelfLockout(actorSession, profile, change) {
     // "=== true". These flags are normally absent, meaning held, so reading
     // the stored value the way the line above does would miss every real
     // case.
-    const hidingFromSelf = ['canViewAttendance', 'canViewTraining', 'canViewBlackouts']
+    const hidingFromSelf = ['canViewAttendance', 'canViewTraining', 'canViewBlackouts', 'canViewReports']
       .filter(flag => profile.capabilities?.[flag] !== false && change.capabilities[flag] === false)
     if (hidingFromSelf.length) {
       refuse('You cannot hide a section from your own login — you would not be able to switch it back on. Make a second login to see what the restricted view looks like.')

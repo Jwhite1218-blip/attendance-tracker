@@ -32,6 +32,15 @@ export function canViewAttendance(access = {}) {
   return true
 }
 
+// Liz, 2026-10-26: Reports became a per-login choice like attendance and
+// training. Absent means held, matching the server's resolver.
+export function canViewReports(access = {}) {
+  if (access.role !== 'admin') return false
+  if (access.recognitionOnly === true) return false
+  if (typeof access.canViewReports === 'boolean') return access.canViewReports
+  return true
+}
+
 export function canViewTraining(access = {}) {
   if (access.role !== 'admin') return false
   if (access.recognitionOnly === true) return false

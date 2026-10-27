@@ -29,6 +29,7 @@ const CAPABILITY_LABELS = [
 const VISIBILITY_FLAGS = [
   ['canViewAttendance', 'Attendance', 'The tracker, employee cards, the ledger and the attendance reports'],
   ['canViewTraining', 'Training', 'Professional Standards hours'],
+  ['canViewReports', 'Reports', 'The reports hub — daily, master, custom employee and recognition exports'],
   ['canViewBlackouts', 'Blackout dates', 'The blackout calendar'],
 ]
 
@@ -346,6 +347,7 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
       // Absent means visible, matching the server's resolver.
       canViewAttendance: capabilitiesOf(profile).canViewAttendance ?? true,
       canViewTraining: capabilitiesOf(profile).canViewTraining ?? true,
+      canViewReports: capabilitiesOf(profile).canViewReports ?? true,
       canViewBlackouts: capabilitiesOf(profile).canViewBlackouts ?? true,
     },
   }))

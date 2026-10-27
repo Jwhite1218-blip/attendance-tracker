@@ -53,6 +53,7 @@ const CAPABILITY_FLAGS = [
   'canViewAttendance',
   'canViewTraining',
   'canViewBlackouts',
+  'canViewReports',
   'canEditAttendance',
   'canEditRecognition',
   'canManageRoster',

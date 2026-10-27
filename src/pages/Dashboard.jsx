@@ -7,7 +7,7 @@ import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/a
 import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
-import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, canSeeLizFutureTools, canViewReports, hasLizAdminAccess } from '../data/futureTools.js'
 import {
   RECOGNITION_TYPE_MAP,
   aceBucksInSchoolYear,
@@ -28,6 +28,7 @@ export default function Dashboard() {
   const showLizFutureTools = canSeeLizFutureTools(access)
   const lizAdminAccess = hasLizAdminAccess(access)
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
+  const seesReports = canViewReports(access)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
   const [activeRecognition, setActiveRecognition] = useState(null)
 
@@ -180,13 +181,22 @@ export default function Dashboard() {
       count: requestedTimeOff.length,
       description: 'Approved full and half days from today forward',
     },
+    // Not a count — a way in. It sits here rather than in the header
+    // because Liz asked for it beside the time-off tile: the two answer
+    // "what is happening today and next week", which is the same question.
+    seesReports && {
+      id: 'daily-report',
+      to: '/reports/daily',
+      label: 'Daily Report',
+      description: "Today's exceptions across every school, printable",
+    },
     {
       id: 'exceptions',
       label: `${monthName} Exceptions`,
       count: monthMarked,
       description: 'Marked attendance exceptions so far this month',
     },
-  ]
+  ].filter(Boolean)
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -201,34 +211,6 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="self-start sm:self-auto flex flex-wrap items-stretch gap-3">
-          <Link
-            to="/reports/daily"
-            className="inline-flex items-center gap-3 rounded-xl border border-charcoal-500 bg-charcoal-700 px-4 py-3 text-white shadow-sm hover:bg-charcoal-600 transition-colors"
-          >
-            <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center" aria-hidden="true">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </span>
-            <span>
-              <span className="block text-sm font-bold">Daily Report</span>
-              <span className="block text-[11px] text-charcoal-200 mt-0.5">Today's exceptions, printable</span>
-            </span>
-          </Link>
-          <Link
-            to="/reports/custom"
-            className="inline-flex items-center gap-3 rounded-xl border border-charcoal-500 bg-charcoal-700 px-4 py-3 text-white shadow-sm hover:bg-charcoal-600 transition-colors"
-          >
-            <span className="w-9 h-9 rounded-lg bg-white/10 flex items-center justify-center" aria-hidden="true">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v10a2 2 0 01-2 2z" />
-              </svg>
-            </span>
-            <span>
-              <span className="block text-sm font-bold">Custom Employee Report</span>
-              <span className="block text-[11px] text-charcoal-200 mt-0.5">Choose schools and fields</span>
-            </span>
-          </Link>
           {recognitionAdminAccess && (
             <Link
               to="/recognition"
@@ -265,7 +247,26 @@ export default function Dashboard() {
 
       {/* Dashboard drill-downs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        {drilldowns.map(item => (
+        {drilldowns.map(item => (item.to ? (
+          <Link
+            key={item.id}
+            to={item.to}
+            className="bg-white rounded-xl border border-gray-200 p-5 transition-all hover:border-brand-300 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">{item.label}</p>
+                <p className="text-xs text-gray-400 mt-1">{item.description}</p>
+              </div>
+              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700" aria-hidden="true">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-brand-600 mt-4">Open report</p>
+          </Link>
+        ) : (
           <button
             key={item.id}
             type="button"
@@ -289,7 +290,7 @@ export default function Dashboard() {
               {activeDrilldown === item.id ? 'Hide details' : 'View details'}
             </p>
           </button>
-        ))}
+        )))}
       </div>
 
       {activeDrilldown && (

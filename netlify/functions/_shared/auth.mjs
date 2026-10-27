@@ -167,6 +167,16 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     && !recognitionOnly
     && rawAccess.canViewTraining !== false
 
+  // The reports hub and everything under it. Liz, 2026-10-26, asked for
+  // reports to be selectable per login like attendance and training.
+  //
+  // Absent means visible, so every login that could reach Reports this
+  // morning still can. A recognition-only login never could and still
+  // cannot — that tier is the All-Star pages and nothing else.
+  const canViewReports = rawAccess.role === 'admin'
+    && !recognitionOnly
+    && rawAccess.canViewReports !== false
+
   // The default here reproduces the pre-2026-10-26 canViewBlackoutCalendar
   // rule rather than simply defaulting to true: before today an
   // administrator holding neither blackout management nor read-only
@@ -195,6 +205,7 @@ export function normalizeAccessProfile(rawAccess, { defaultAdminManagement = tru
     canViewAttendance,
     canViewTraining,
     canViewBlackouts,
+    canViewReports,
     canEditRecognition,
     canManageRecognitionAwards,
     recognitionOnly,

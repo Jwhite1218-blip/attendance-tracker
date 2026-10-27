@@ -43,6 +43,7 @@ export const CLIENT_ACCESS_FIELDS = [
   'canEditAttendance',
   'canViewAttendance',
   'canViewTraining',
+  'canViewReports',
   'canViewBlackouts',
   'canEditRecognition',
   'canManageRecognitionAwards',

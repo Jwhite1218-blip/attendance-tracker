@@ -30,6 +30,7 @@ import ChangeRequests from '../src/pages/ChangeRequests.jsx'
 import SpanishReview from '../src/pages/SpanishReview.jsx'
 import LedgerView from '../src/pages/LedgerView.jsx'
 import CustomReport from '../src/pages/CustomReport.jsx'
+import RecognitionReport from '../src/pages/RecognitionReport.jsx'
 import MasterReport from '../src/pages/MasterReport.jsx'
 import DailyReport from '../src/pages/DailyReport.jsx'
 import CalendarView from '../src/pages/CalendarView.jsx'
@@ -84,6 +85,21 @@ const RECOGNITION_WIDE = {
   dataVersion: 1,
 }
 
+// An administrator who keeps attendance and loses the reports hub. The
+// capability is new on 2026-10-26, and the thing worth proving is that the
+// bar stops offering Reports rather than offering a door that redirects.
+const NO_REPORTS_ADMIN = {
+  role: 'admin',
+  displayName: 'No Reports',
+  canViewReports: false,
+  canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRoster: false,
+  canManageBlackouts: false,
+  canWriteEmployeeNotes: true,
+  dataVersion: 1,
+}
+
 const MANAGER = {
   role: 'school',
   locationId: 'CrestonMS',
@@ -99,9 +115,10 @@ const PAGES = [
   // Six nav entries and no more, per Liz on 2026-10-26. The expectations
   // name what each tier must be offered; the count assertion is what stops
   // the bar quietly growing back past the width it fits in.
-  ['AppShell', AppShell, '/', [LIZ, LIMITED_ADMIN, RECOGNITION_WIDE, MANAGER], {
+  ['AppShell', AppShell, '/', [LIZ, LIMITED_ADMIN, RECOGNITION_WIDE, MANAGER, NO_REPORTS_ADMIN], {
     admin: ['Dashboard', 'Attendance', 'All-Stars', 'Training', 'Reports', 'Settings'],
     recognition: ['All-Stars'],
+    noReports: ['Dashboard', 'Attendance', 'All-Stars'],
   }, {
     // Moved behind Settings or the Reports hub on 2026-10-26. If one of
     // these reappears in the bar, it has grown back.
@@ -110,11 +127,12 @@ const PAGES = [
     // Delimited, because "Attendance" also appears in the masthead —
     // "Food Service Attendance" — which is branding, not a way in.
     recognition: ['>Attendance<', '>Training<', 'Blackout Calendar'],
+    noReports: ['>Reports<'],
   }],
   ['Reports', Reports, '/reports', [LIZ, RECOGNITION_WIDE], {
-    admin: ['Daily report', 'Custom report', 'Master report'],
-    // No attendance, so only the one report that is not about attendance.
-    recognition: ['Custom report'],
+    admin: ['Daily report', 'Custom report', 'Master report', 'All-Star recognition report'],
+    // No attendance, so only the reports that are not about attendance.
+    recognition: ['Custom report', 'All-Star recognition report'],
   }],
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
@@ -147,6 +165,9 @@ const PAGES = [
     manager: ['Employee Records'],
   }],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
+  ['RecognitionReport', RecognitionReport, '/reports/recognition', [LIZ], {
+    admin: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month'],
+  }],
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],
   ['CalendarView', CalendarView, '/calendar', [LIZ]],
@@ -161,6 +182,7 @@ export function render() {
     for (const access of roles) {
       const who = access === LIMITED_ADMIN ? 'limited'
     : access === RECOGNITION_WIDE ? 'recognition'
+    : access === NO_REPORTS_ADMIN ? 'noReports'
     : access.role === 'admin' ? 'admin' : 'manager'
       try {
         const html = renderToStaticMarkup(

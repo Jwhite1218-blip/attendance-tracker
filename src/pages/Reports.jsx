@@ -11,7 +11,7 @@
 
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
-import { canViewAttendance } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, canViewAttendance } from '../data/futureTools.js'
 
 function ReportCard({ to, title, description }) {
   return (
@@ -28,6 +28,7 @@ function ReportCard({ to, title, description }) {
 export default function Reports() {
   const access = useAuth()
   const seesAttendance = canViewAttendance(access)
+  const seesRecognition = canAccessRecognitionProgram(access)
 
   const reports = [
     seesAttendance && {
@@ -39,6 +40,11 @@ export default function Reports() {
       to: '/reports/custom',
       title: 'Custom report',
       description: 'Pick the schools and the columns you want, then export it as a spreadsheet.',
+    },
+    seesRecognition && {
+      to: '/reports/recognition',
+      title: 'All-Star recognition report',
+      description: 'Every recognition given, filtered by building, award type and month, ready to export as a spreadsheet.',
     },
     seesAttendance && {
       to: '/reports/master',
@@ -53,8 +59,8 @@ export default function Reports() {
         <h1 className="text-xl font-bold text-gray-900">Reports</h1>
         <p className="mt-1 text-sm text-gray-500">
           {seesAttendance
-            ? 'Attendance and employee reports, ready to print or export.'
-            : 'Employee reports, ready to print or export.'}
+            ? 'Attendance, employee and recognition reports, ready to print or export.'
+            : 'Employee and recognition reports, ready to print or export.'}
         </p>
       </header>
 
