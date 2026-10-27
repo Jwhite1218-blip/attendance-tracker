@@ -282,12 +282,15 @@ function filterEntriesForSession(entries, session) {
     filtered[LEGACY_HR_STATUS_KEY] = filterStatusesForEmployees(entries[LEGACY_HR_STATUS_KEY], allowedEmployeeIds)
   }
 
-  // School managers receive only their own building's recognition board. The
-  // same roster boundary is applied again to writes in handleMutate.
+  // School managers receive their own building's recognition board, plus
+  // every Warren Star Shout-Out in the district. The same roster boundary is
+  // applied again to writes in handleMutate — this widens what a building
+  // can read, not what it can record.
   if (entries[RECOGNITION_KEY]) {
-    filtered[RECOGNITION_KEY] = Object.fromEntries(
-      Object.entries(entries[RECOGNITION_KEY] || {})
-        .filter(([, record]) => allowedEmployeeIds.has(String(record?.employeeId)))
+    filtered[RECOGNITION_KEY] = schoolRecognitionView(
+      entries[RECOGNITION_KEY],
+      allowedEmployeeIds,
+      recipientNames(entries)
     )
   }
 
@@ -297,6 +300,52 @@ function filterEntriesForSession(entries, session) {
   })
 
   return filtered
+}
+
+// Liz, 2026-10-26: "make the Warren Star Shout Outs visible across all
+// feeds since they are able to do peer to peer recognitions."
+//
+// A shout-out is recorded against the building the recipient works in, so
+// until now the Lowell manager who gave one to a Creston cook never saw it
+// again. These are the one recognition that crosses buildings by design —
+// anyone may give one, to anyone — so they now reach every session.
+//
+// Only this type. A Star of the Day, a nomination, a drawing and a Coach
+// Buck all stay inside the building that owns them.
+const CROSS_BUILDING_RECOGNITION_TYPES = new Set(['star-shout-out'])
+
+// Names for people a session cannot otherwise see.
+//
+// The alternative was adding those employees to the roster the session
+// receives, which would have put another building's staff into this
+// manager's school picker, their employee cards and their attendance
+// screens. A shout-out needs one thing to be readable — who it was for —
+// so one thing is what travels.
+function recipientNames(entries) {
+  const names = new Map()
+  const record = employee => {
+    const key = employeeKey(employee)
+    const name = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
+    if (key && name) names.set(key, name)
+  }
+  employees.forEach(record)
+  if (Array.isArray(entries?.[CUSTOM_EMPLOYEES_KEY])) entries[CUSTOM_EMPLOYEES_KEY].forEach(record)
+  return names
+}
+
+export function schoolRecognitionView(recognitionMap, allowedEmployeeIds, names = new Map()) {
+  return Object.fromEntries(
+    Object.entries(recognitionMap || {})
+      .flatMap(([id, record]) => {
+        const employeeId = String(record?.employeeId)
+        if (allowedEmployeeIds.has(employeeId)) return [[id, record]]
+        if (!CROSS_BUILDING_RECOGNITION_TYPES.has(String(record?.type))) return []
+        // recipientName rather than a roster entry, so nothing downstream
+        // mistakes this person for somebody the login manages.
+        const name = names.get(employeeId)
+        return [[id, name ? { ...record, recipientName: name } : record]]
+      })
+  )
 }
 
 function rosterForSession(entries, session) {
@@ -621,6 +670,10 @@ export async function handleMutate(store, session, body) {
   }
 
   let mutation = body.mutation
+  // Loaded once and used twice: by the write rules below, and by the reply
+  // filter at the end, which needs the custom employees to name a
+  // shout-out recipient outside this building.
+  let rosterForRules = null
   if (
     key === RECOGNITION_KEY
     && mutation?.type === 'object-patch'
@@ -635,7 +688,7 @@ export async function handleMutate(store, session, body) {
     return jsonResponse({ error: 'Only a district administrator can record Warren Food Services Employee of the Month.' }, 403)
   }
   if (key === RECOGNITION_KEY) {
-    const rosterForRules = await loadSchoolRosterEntries(store)
+    rosterForRules = await loadSchoolRosterEntries(store)
     mutation = recognitionMutationForSession(
       mutation,
       session,
@@ -659,6 +712,18 @@ export async function handleMutate(store, session, body) {
   let publicValue = session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)
     ? filterStatusesForEmployees(value, allowedEmployeeIds)
     : value
+  // A write returns the whole key, and the whole recognition key is the
+  // whole district. Until now a manager recording one star got back every
+  // recognition in Warren — the GET was filtered and the write reply was
+  // not. Filtered through the same function, so the two cannot disagree
+  // about what a building may read.
+  if (session.role === 'school' && key === RECOGNITION_KEY) {
+    publicValue = schoolRecognitionView(
+      value,
+      allowedEmployeeIds,
+      recipientNames(rosterForRules || {})
+    )
+  }
   if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
     publicValue = redactRecordOverrides(publicValue)
   }

@@ -191,9 +191,20 @@ export default function RecognitionProgram() {
   const scopedKeys = new Set(scopedEmployees.map(employeeKey))
   const peerManagers = employees.filter(employee =>
     managerIds.has(employeeKey(employee)) && !scopedKeys.has(employeeKey(employee)))
+  // Liz, 2026-10-26: "make the Warren Star Shout Outs visible across all
+  // feeds since they are able to do peer to peer recognitions." A shout-out
+  // is filed against the recipient's building, so narrowing the view used
+  // to hide the ones this manager gave to somebody at another school.
+  //
+  // Done here rather than only in the feed so the shout-out count on the
+  // banner describes what the link under it opens. Nothing else on the page
+  // moves: stars, nominations, drawings and the building table all filter
+  // by their own type or by an explicit list of buildings.
   const scopedRecords = scopeLocation === 'all'
     ? records
-    : records.filter(record => record.locationId === scopeLocation)
+    : records.filter(record => (
+      record.locationId === scopeLocation || record.type === 'star-shout-out'
+    ))
 
   const schoolYearStart = schoolYearStartFor(new Date())
   const schoolYearRecords = scopedRecords.filter(record => (
@@ -586,8 +597,11 @@ export default function RecognitionProgram() {
               Tracked separately · not earned stars
             </p>
             <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2">
-              <a href="#recognition-history" onClick={() => { setBoardTab('feed'); setHistoryType('star-shout-out') }} className="rounded text-purple-800 underline underline-offset-4 hover:text-purple-600" aria-label={`View all shout-outs (${compilation.shoutOuts} this school year)`}>
-                <SecondaryCount label="Shout-outs" value={compilation.shoutOuts} />
+              <a href="#recognition-history" onClick={() => { setBoardTab('feed'); setHistoryType('star-shout-out') }} className="rounded text-purple-800 underline underline-offset-4 hover:text-purple-600" aria-label={`View all shout-outs across the district (${compilation.shoutOuts} this school year)`}>
+                <SecondaryCount
+                  label={scopeLocation === 'all' ? 'Shout-outs' : 'Shout-outs · whole district'}
+                  value={compilation.shoutOuts}
+                />
               </a>
               <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
               <SecondaryCount label="Building All-Stars" value={compilation.buildingAllStars} />
@@ -1611,21 +1625,28 @@ function AceBucksSection({
             <>
               <ol className="mt-3 divide-y divide-emerald-100 rounded-xl border border-emerald-200">
                 {visible.map((entry, index) => (
-                  <li key={employeeKey(entry.employee)} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#0f3d2e] text-xs font-black text-emerald-200">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-semibold text-gray-900">
-                        {employeeName(entry.employee)}
+                  <li key={employeeKey(entry.employee)}>
+                    {/* The star leaderboards opened a card from a row; this
+                        one did not. Liz, 2026-10-26. */}
+                    <Link
+                      to={`/employee/${employeeKey(entry.employee)}`}
+                      className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-emerald-50"
+                    >
+                      <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#0f3d2e] text-xs font-black text-emerald-200">
+                        {index + 1}
                       </span>
-                      <span className="block text-[11px] text-gray-500">
-                        {LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}
-                        {entry.level ? ` · ${entry.level.symbol} ${entry.level.name}` : ''}
-                        {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ''}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-gray-900 group-hover:text-[#15583f]">
+                          {employeeName(entry.employee)}
+                        </span>
+                        <span className="block text-[11px] text-gray-500">
+                          {LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}
+                          {entry.level ? ` · ${entry.level.symbol} ${entry.level.name}` : ''}
+                          {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ''}
+                        </span>
                       </span>
-                    </span>
-                    <span className="flex-none text-base font-black text-[#15583f]">{entry.count}</span>
+                      <span className="flex-none text-base font-black text-[#15583f]">{entry.count}</span>
+                    </Link>
                   </li>
                 ))}
               </ol>
@@ -1708,6 +1729,11 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
         <div className="mt-4 divide-y divide-gray-100">
           {recent.map(record => {
             const employee = employeeMap.get(String(record.employeeId))
+            // A cross-building shout-out arrives with the recipient's name
+            // and nothing else — no roster entry, so no card to open. The
+            // name is shown plainly rather than as a link that would land
+            // on "unavailable for this login".
+            const name = employeeName(employee) || record.recipientName || record.employeeId
             const type = RECOGNITION_TYPE_MAP[record.type]
             const accent = recognitionAccent(record.type)
             return (
@@ -1718,9 +1744,13 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <Link to={`/employee/${record.employeeId}`} className="text-sm font-bold text-gray-900 hover:text-[#9a651b]">
-                            {employeeName(employee) || record.employeeId}
-                          </Link>
+                          {employee ? (
+                            <Link to={`/employee/${record.employeeId}`} className="text-sm font-bold text-gray-900 hover:text-[#9a651b]">
+                              {name}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-bold text-gray-900">{name}</span>
+                          )}
                           {managerIds?.has(String(record.employeeId)) && (
                             <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${gradeAccent(true).chip}`}>
                               {gradeAccent(true).label}

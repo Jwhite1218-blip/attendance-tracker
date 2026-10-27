@@ -4,7 +4,7 @@ import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
-import { handleStateRequest, handleMutate } from '../state.mjs'
+import { handleStateRequest, handleMutate, schoolRecognitionView } from '../state.mjs'
 import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
 // Liz, 2026-10-20: termination date, last day worked and reason were
@@ -882,4 +882,126 @@ test('a single-building login is unchanged by the list', async () => {
     if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
+})
+
+// Liz, 2026-10-26: "make the Warren Star Shout Outs visible across all feeds
+// since they are able to do peer to peer recognitions."
+//
+// This widens what a building login may READ, which is the kind of change
+// worth pinning precisely: one award type crosses the boundary and the
+// other five do not.
+test('only shout-outs cross the building boundary, and they arrive with a name', () => {
+  const allowed = new Set(['mine'])
+  const names = new Map([['theirs', 'Dana Reyes']])
+  const board = {
+    'own-star': { id: 'own-star', employeeId: 'mine', type: 'star-of-day' },
+    'their-star': { id: 'their-star', employeeId: 'theirs', type: 'star-of-day' },
+    'their-nomination': { id: 'their-nomination', employeeId: 'theirs', type: 'shooting-star' },
+    'their-buck': { id: 'their-buck', employeeId: 'theirs', type: 'ace-buck' },
+    'their-drawing': { id: 'their-drawing', employeeId: 'theirs', type: 'all-star-of-month' },
+    'their-eom': { id: 'their-eom', employeeId: 'theirs', type: 'warren-employee-month' },
+    'their-shout': { id: 'their-shout', employeeId: 'theirs', type: 'star-shout-out' },
+    'own-shout': { id: 'own-shout', employeeId: 'mine', type: 'star-shout-out' },
+  }
+
+  const visible = schoolRecognitionView(board, allowed, names)
+  assert.deepEqual(Object.keys(visible).sort(), ['own-shout', 'own-star', 'their-shout'])
+  assert.equal(visible['their-shout'].recipientName, 'Dana Reyes')
+  // Their own people are already nameable from the roster, so nothing is
+  // bolted onto those records.
+  assert.equal(Object.hasOwn(visible['own-star'], 'recipientName'), false)
+  assert.equal(Object.hasOwn(visible['own-shout'], 'recipientName'), false)
+})
+
+test('a shout-out for somebody with no name on file still travels', () => {
+  const visible = schoolRecognitionView(
+    { ghost: { id: 'ghost', employeeId: 'gone', type: 'star-shout-out' } },
+    new Set(),
+    new Map(),
+  )
+  assert.deepEqual(Object.keys(visible), ['ghost'])
+  assert.equal(Object.hasOwn(visible.ghost, 'recipientName'), false)
+})
+
+test("a building reads another building's shout-out but still not its stars", async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const mine = employees.find(employee => employee.location !== 'Admin')
+    const theirs = employees.find(employee => employee.location !== mine.location && employee.location !== 'Admin')
+    const id = employee => String(employee.kronos_id || employee.id)
+    const base = {
+      monthKey: null, criteria: [], note: '', sourceName: '', recognizedBy: 'Someone',
+      createdAt: '2026-09-01T12:00:00.000Z', date: '2026-09-01',
+    }
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {
+        'their-shout': { ...base, id: 'their-shout', employeeId: id(theirs), locationId: theirs.location, type: 'star-shout-out' },
+        'their-star': { ...base, id: 'their-star', employeeId: id(theirs), locationId: theirs.location, type: 'star-of-day' },
+      },
+    })
+
+    const request = await authenticatedRequest(
+      { role: 'school', locationId: mine.location, canEditAttendance: true },
+      sessions,
+    )
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const board = body.entries['all-star-recognition-v1']
+
+    assert.deepEqual(Object.keys(board), ['their-shout'])
+    assert.equal(board['their-shout'].recipientName, `${theirs.first_name} ${theirs.last_name}`.trim())
+    // The name travels and nothing else does: no roster row, so no card,
+    // no school picker entry and no attendance.
+    assert.equal(body.roster.some(row => id(row) === id(theirs) && row.location === theirs.location
+      && !MANAGER_GRADE_POSITIONS.includes(String(row.position || '').trim())), false)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+// Found while widening the read above: the GET was filtered and the write
+// reply was not, so a manager recording one star was handed every
+// recognition in the district.
+test('recording a star does not hand a building the whole district board', async () => {
+  const mine = employees.find(employee => employee.location !== 'Admin')
+  const theirs = employees.find(employee => employee.location !== mine.location && employee.location !== 'Admin')
+  const id = employee => String(employee.kronos_id || employee.id)
+  const base = {
+    monthKey: null, criteria: [], note: '', sourceName: '', recognizedBy: 'Someone',
+    createdAt: '2026-09-01T12:00:00.000Z', date: '2026-09-01',
+  }
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': {
+      'their-star': { ...base, id: 'their-star', employeeId: id(theirs), locationId: theirs.location, type: 'star-of-day' },
+      'their-shout': { ...base, id: 'their-shout', employeeId: id(theirs), locationId: theirs.location, type: 'star-shout-out' },
+    },
+  })
+
+  const response = await handleMutate(
+    store,
+    { role: 'school', locationId: mine.location, canEditAttendance: true, canEditRecognition: true },
+    {
+      key: 'all-star-recognition-v1',
+      mutation: {
+        type: 'object-patch',
+        set: {
+          'my-star': {
+            ...base, id: 'my-star', employeeId: id(mine), locationId: mine.location,
+            type: 'star-of-day', date: '2026-09-02',
+          },
+        },
+      },
+    },
+  )
+
+  assert.equal(response.status, 200)
+  const { value } = await response.json()
+  assert.deepEqual(Object.keys(value).sort(), ['my-star', 'their-shout'])
+  // Stored in full; it is only the reply to this login that is narrowed.
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')).sort(),
+    ['my-star', 'their-shout', 'their-star'])
 })
