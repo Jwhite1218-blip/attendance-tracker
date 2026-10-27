@@ -46,10 +46,13 @@ function fakeSupabase({ profiles = [], failOn = null } = {}) {
       return { ok: true, status: 200, json: async () => [{ id: 7 }] }
     }
     if (target.includes('/access_profiles?') && (options.method || 'GET') === 'GET') {
-      const match = target.match(/pin_lookup=eq\.([^&]+)/)
-      const found = match
-        ? rows.filter(row => row.pin_lookup === decodeURIComponent(match[1]))
-        : rows
+      const byPin = target.match(/pin_lookup=eq\.([^&]+)/)
+      const byUsername = target.match(/username=eq\.([^&]+)/)
+      const found = byPin
+        ? rows.filter(row => row.pin_lookup === decodeURIComponent(byPin[1]))
+        : byUsername
+          ? rows.filter(row => row.username === decodeURIComponent(byUsername[1]))
+          : rows
       return { ok: true, status: 200, json: async () => found }
     }
     if (target.includes('/access_profiles') && options.method === 'POST') {
@@ -238,4 +241,83 @@ test('table auth is off unless the flag, the backend and the key all agree', () 
   // Setting the flag before the key must not take sign-in down.
   withEnv({ ...on, ATTENDANCE_PIN_KEY: undefined }, () => assert.equal(tableAuthEnabled(), false))
   withEnv({ ...on, ATTENDANCE_PIN_KEY: 'too-short' }, () => assert.equal(tableAuthEnabled(), false))
+})
+
+// --- usernames, 2026-10-26 ----------------------------------------------
+
+function adminRow(pin, username, overrides = {}) {
+  return {
+    id: 'admin-row',
+    pin_lookup: pinLookup(pin),
+    pin_encrypted: 'ignored-here',
+    pin_length: pin.length,
+    username,
+    display_name: 'Liz Schmitt',
+    role: 'admin',
+    location_id: null,
+    employee_id: null,
+    capabilities: { canManageRoster: true, canManageBlackouts: true },
+    source: 'manual',
+    disabled_at: null,
+    ...overrides,
+  }
+}
+
+test('a profile is found by its username, lowercased on the way in', async () => {
+  const fake = fakeSupabase({ profiles: [adminRow('1111', 'eschmitt')] })
+  const row = await store(fake).findByUsername('  EScHmitt ')
+  assert.equal(row.id, 'admin-row')
+  const query = fake.calls.at(-1).url
+  assert.ok(query.includes('username=eq.eschmitt'), query)
+})
+
+// The same refusal findByPin makes, for the same reason: a disabled login
+// is not a login, and the caller must not be able to tell the difference
+// between disabled and absent.
+test('a disabled profile is not found by its username either', async () => {
+  const fake = fakeSupabase({
+    profiles: [adminRow('1111', 'eschmitt', { disabled_at: '2026-10-01T00:00:00Z' })],
+  })
+  assert.equal(await store(fake).findByUsername('eschmitt'), null)
+})
+
+test('an empty username is refused without asking the database', async () => {
+  const fake = fakeSupabase({ profiles: [adminRow('1111', 'eschmitt')] })
+  assert.equal(await store(fake).findByUsername('   '), null)
+  assert.deepEqual(fake.calls, [], 'no query was sent')
+})
+
+test('a username lookup that cannot reach the database returns nothing rather than throwing', async () => {
+  const fake = fakeSupabase({ profiles: [adminRow('1111', 'eschmitt')], failOn: 'access_profiles' })
+  assert.equal(await store(fake).findByUsername('eschmitt'), null)
+})
+
+test('the username travels with the profile so the screen can show it', () => {
+  assert.equal(profileFromRow(adminRow('1111', 'eschmitt')).username, 'eschmitt')
+  assert.equal(Object.hasOwn(profileFromRow(schoolRow('1742')), 'username'), false)
+})
+
+test('a new profile stores its username, and null when it has none', async () => {
+  const fake = fakeSupabase()
+  await store(fake).createProfile({
+    pin: '4242', username: 'cmartin', displayName: 'Chris Martin', role: 'admin',
+    locationId: null, capabilities: {},
+  })
+  const written = JSON.parse(fake.calls.at(-2).body)
+  assert.equal(written.username, 'cmartin')
+
+  const plain = fakeSupabase()
+  await store(plain).createProfile({
+    pin: '4243', displayName: 'Shared Login', role: 'admin', locationId: null, capabilities: {},
+  })
+  assert.equal(JSON.parse(plain.calls.at(-2).body).username, null)
+})
+
+// The way back. If somebody cannot remember their username, clearing it
+// returns that login to signing in with its PIN alone.
+test('a username can be cleared', async () => {
+  const fake = fakeSupabase({ profiles: [adminRow('1111', 'eschmitt')] })
+  await store(fake).updateProfile('admin-row', { username: null }, { actor: 'Liz' })
+  const patch = fake.calls.find(call => call.method === 'PATCH')
+  assert.equal(JSON.parse(patch.body).username, null)
 })

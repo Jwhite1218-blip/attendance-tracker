@@ -75,6 +75,12 @@ function fakeStore({ rows = [], findThrows = false } = {}) {
       if (findThrows) throw new Error('supabase unreachable')
       return rows.find(row => row.pin_lookup === pinLookup(pin)) || null
     },
+    async findByUsername(username) {
+      calls.findByUsername = (calls.findByUsername || 0) + 1
+      if (findThrows) throw new Error('supabase unreachable')
+      const wanted = String(username || '').toLowerCase()
+      return rows.find(row => String(row.username || '').toLowerCase() === wanted) || null
+    },
     markUsed(id) { calls.marked.push(id) },
     async migrateLegacyCredential(pin, access) {
       calls.migrated.push({ pin, access })
@@ -243,3 +249,105 @@ test('a row the deriver rejects does not become a session', async () => {
     assert.equal(profileFromRow(tableRow('2222', { location_id: null })).locationId, undefined)
   })
 })
+
+// --- usernames -----------------------------------------------------------
+//
+// Liz, 2026-10-26: "an extra level of security by adding a username to each
+// login... start this with the admin member logins only first."
+//
+// The whole value of the feature is one rule — a profile that HAS a
+// username cannot be reached without it — and the rule has three ways to
+// leak: the table's own PIN lookup, the legacy blob behind it, and a
+// database outage that makes both unreachable. One test each.
+
+const ADMIN_WITH_USERNAME = {
+  id: 'profile-liz',
+  pin_lookup: pinLookup('1111'),
+  username: 'eschmitt',
+  display_name: 'Liz Schmitt',
+  role: 'admin',
+  location_id: null,
+  employee_id: null,
+  capabilities: { canEditAttendance: true, canManageRoster: true, canManageBlackouts: true },
+  disabled_at: null,
+}
+
+test('a username and the right PIN sign in', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    const access = await resolveAccessForPin('1111', { store, username: 'eschmitt' })
+    assert.equal(access.displayName, 'Liz Schmitt')
+    assert.equal(access.profileId, 'profile-liz')
+  })
+})
+
+test('the username is not case sensitive, because nobody will remember that it was', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    assert.ok(await resolveAccessForPin('1111', { store, username: '  EScHmitt ' }))
+  })
+})
+
+test('a username with the wrong PIN is refused', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    assert.equal(await resolveAccessForPin('9999', { store, username: 'eschmitt' }), null)
+  })
+})
+
+// The rule. Without this the feature is a second box that changes nothing.
+test('a login with a username cannot be reached by its PIN alone', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    assert.equal(await resolveAccessForPin('1111', { store }), null)
+  })
+})
+
+// And the leak behind the rule: 1111 is in the blob as well, so a refusal
+// that merely "misses" would fall through and be granted by the blob.
+test('a PIN-only attempt does not fall through to the legacy codes', async () => {
+  await withEnv({ ...TABLE_ON, ATTENDANCE_LEGACY_CODES_ENABLED: 'true' }, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    assert.equal(await resolveAccessForPin('1111', { store }), null)
+    assert.deepEqual(store.calls.migrated, [], 'nothing migrated, because nothing was granted')
+  })
+})
+
+// The honest cost, pinned so it cannot be forgotten: once a username is
+// set, that login needs the database. The blob has no usernames, so there
+// is nothing safe to fall back to.
+test('a username sign-in fails closed when the database is unreachable', async () => {
+  await withEnv({ ...TABLE_ON, ATTENDANCE_LEGACY_CODES_ENABLED: 'true' }, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME], findThrows: true })
+    assert.equal(await resolveAccessForPin('1111', { store, username: 'eschmitt' }), null)
+  })
+})
+
+test('a username nobody holds is refused without reaching the blob', async () => {
+  await withEnv({ ...TABLE_ON, ATTENDANCE_LEGACY_CODES_ENABLED: 'true' }, async () => {
+    const store = fakeStore({ rows: [ADMIN_WITH_USERNAME] })
+    assert.equal(await resolveAccessForPin('2222', { store, username: 'nobody' }), null)
+    assert.deepEqual(store.calls.migrated, [])
+  })
+})
+
+// The fifteen kitchens. Nothing about their sign-in may change.
+test('a login with no username still signs in with its PIN alone', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [tableRow('2222')] })
+    const access = await resolveAccessForPin('2222', { store })
+    assert.equal(access.displayName, 'Creston Manager (edited)')
+  })
+})
+
+test('a manager who types a username they were never given is refused, not let in', async () => {
+  await withEnv(TABLE_ON, async () => {
+    const store = fakeStore({ rows: [tableRow('2222')] })
+    assert.equal(await resolveAccessForPin('2222', { store, username: 'cmanager' }), null)
+  })
+})
+
+// Disabled rows are filtered by the store, not here, so the assertion that
+// a disabled login cannot be reached by its username lives in
+// access-store.test.mjs against the real query. Asserting it through this
+// fake would only have tested the fake.

@@ -46,6 +46,9 @@ const UI_STRINGS = {
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Food Service Attendance Portal',
+    'gate.usernameLabel': 'Username',
+    'gate.usernameHint': 'administrators only',
+    'gate.usernamePlaceholder': 'leave blank if you do not have one',
     'gate.pinLabel': 'Enter Access PIN',
     'gate.showPin': 'Show access PIN',
     'gate.hidePin': 'Hide access PIN',
@@ -109,6 +112,9 @@ const UI_STRINGS = {
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Portal de Asistencia de Servicio de Alimentos',
+    'gate.usernameLabel': 'Nombre de usuario',
+    'gate.usernameHint': 'solo administradores',
+    'gate.usernamePlaceholder': 'déjelo en blanco si no tiene uno',
     'gate.pinLabel': 'Ingrese su PIN de acceso',
     'gate.showPin': 'Mostrar el PIN de acceso',
     'gate.hidePin': 'Ocultar el PIN de acceso',

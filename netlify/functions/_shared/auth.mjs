@@ -1,4 +1,5 @@
 import { getAccessStore, profileFromRow, tableAuthEnabled } from './access-store.mjs'
+import { pinLookup, pinMatches } from './pin-crypto.mjs'
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { LOCATIONS } from '../../../src/data/locations.js'
 
@@ -510,9 +511,12 @@ function legacyCodesEnabled() {
 //
 // Order matters and is the whole safety argument:
 //
-//   1. The table. If a PIN is there, that answer wins — Liz may have edited
-//      the profile since it migrated, and a stale blob must never override
-//      her.
+//   0. A username, if one was supplied. That picks exactly one profile and
+//      the PIN is then checked against it. Nothing falls through from here:
+//      see below.
+//   1. The table, by PIN. If a PIN is there, that answer wins — Liz may
+//      have edited the profile since it migrated, and a stale blob must
+//      never override her.
 //   2. The blob, exactly as before. On a hit, the credential writes itself
 //      into the table, because a successful legacy sign-in is the only
 //      moment anybody holds the plaintext PIN.
@@ -521,29 +525,80 @@ function legacyCodesEnabled() {
 // cannot create access that did not exist. Both steps are individually
 // switchable: ATTENDANCE_TABLE_AUTH_ENABLED turns off step 1,
 // ATTENDANCE_LEGACY_CODES_ENABLED turns off step 2.
-export async function resolveAccessForPin(pin, { store: injectedStore = null } = {}) {
+//
+// Usernames, added 2026-10-26 at Liz's request, rest on one rule:
+//
+//   A profile that HAS a username can only be reached by supplying it.
+//
+// Without that the feature is decoration. A PIN-only attempt would miss the
+// username path, fall to step 1, match on pin_lookup and let the account
+// through anyway — and if the table were unreachable it would fall further
+// to the blob, which has no usernames at all and would hand over an account
+// Liz believes needs two things. So a PIN-only attempt that lands on a row
+// with a username stops dead, and does not continue to step 2.
+//
+// The cost is honest and worth stating: once a username is set, that login
+// cannot sign in while Supabase is unreachable. The blob fallback exists so
+// nineteen people can still mark attendance during an outage, and this
+// trades that away for the handful of administrators Liz opts in. Managers
+// keep no username and keep the fallback.
+export async function resolveAccessForPin(pin, { store: injectedStore = null, username = '' } = {}) {
   const candidate = String(pin || '')
+  const wantedUsername = String(username || '').trim().toLowerCase()
   const useTable = tableAuthEnabled()
   // Built lazily and only once: constructing it throws when Supabase is
   // unconfigured, which must not happen on the blob-only path.
   let accessStore = injectedStore
   const store = () => (accessStore ||= getAccessStore())
 
+  const sessionFromRow = row => {
+    const access = normalizeAccessProfile(profileFromRow(row))
+    if (!access) {
+      console.error(JSON.stringify({ event: 'access-profile-unusable', profileId: row.id }))
+      return null
+    }
+    // Not awaited: a bookkeeping write must not slow a sign-in, and
+    // markUsed already swallows its own failures.
+    store().markUsed(row.id)
+    // profileId instead of credentialFingerprint — see sessionFromRequest
+    // for why the two must not both be present.
+    return { ...access, profileId: row.id }
+  }
+
+  if (wantedUsername) {
+    // No fallback of any kind from this branch. Somebody who typed a
+    // username is claiming a specific account, and the only thing that may
+    // grant it is that account's own row.
+    if (!useTable) return null
+    try {
+      const row = await store().findByUsername(wantedUsername)
+      if (!row) return null
+      if (!pinMatchesRow(candidate, row)) {
+        console.error(JSON.stringify({ event: 'username-pin-mismatch', profileId: row.id }))
+        return null
+      }
+      return sessionFromRow(row)
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: 'username-auth-failed', reason: String(error?.message || error),
+      }))
+      return null
+    }
+  }
+
   if (useTable) {
     try {
       console.error(JSON.stringify({ event: 'table-auth-active' }))
       const row = await store().findByPin(candidate)
       if (row) {
-        const access = normalizeAccessProfile(profileFromRow(row))
-        if (access) {
-          // Not awaited: a bookkeeping write must not slow a sign-in, and
-          // markUsed already swallows its own failures.
-          store().markUsed(row.id)
-          // profileId instead of credentialFingerprint — see
-          // sessionFromRequest for why the two must not both be present.
-          return { ...access, profileId: row.id }
+        if (row.username) {
+          // The rule. Refused here AND not allowed to continue to the blob,
+          // because the blob would say yes.
+          console.error(JSON.stringify({ event: 'username-required', profileId: row.id }))
+          return null
         }
-        console.error(JSON.stringify({ event: 'access-profile-unusable', profileId: row.id }))
+        const access = sessionFromRow(row)
+        if (access) return access
       }
     } catch (error) {
       console.error(JSON.stringify({
@@ -568,6 +623,19 @@ export async function resolveAccessForPin(pin, { store: injectedStore = null } =
   }
 
   return access
+}
+
+// Does this PIN belong to this row?
+//
+// Compared through the same deterministic lookup column the PIN was found
+// by on the other path, so there is one notion of "this PIN matches" rather
+// than two. A row with no lookup value cannot be matched, which is the safe
+// direction.
+function pinMatchesRow(pin, row) {
+  if (!/^\d{4,8}$/.test(String(pin || ''))) return false
+  const stored = String(row?.pin_lookup || '')
+  if (!stored) return false
+  return pinMatches(pinLookup(String(pin)), stored)
 }
 
 export function createSessionToken(access, now = Date.now(), sessionId = randomUUID()) {

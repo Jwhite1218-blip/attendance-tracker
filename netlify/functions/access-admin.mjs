@@ -17,6 +17,8 @@ import {
   GuardError,
   assertNoPrivilegeEscalation,
   normalizeEmployeeLink,
+  normalizeUsername,
+  assertUsernameAllowedForRole,
   normalizeExtraLocations,
   assertNotLastAdministrator,
   assertNotSelfLockout,
@@ -86,6 +88,7 @@ export function publicProfile(row) {
     pin,
     pinReadable,
     pinLength: row.pin_length,
+    username: row.username || '',
     displayName: row.display_name,
     role: row.role,
     locationId: row.location_id,
@@ -164,9 +167,11 @@ async function handleCreate(request, stores) {
     const { displayName, role, locationId } = assertValidProfileInput(body)
     const capabilities = normalizeCapabilities(body.capabilities, { primaryLocationId: locationId })
     assertNoPrivilegeEscalation(session, capabilities)
+    const username = normalizeUsername(body.username)
+    assertUsernameAllowedForRole(username, role)
 
     const created = await store.createProfile(
-      { pin, displayName, role, locationId, employeeId: normalizeEmployeeLink(body.employeeId), capabilities },
+      { pin, username, displayName, role, locationId, employeeId: normalizeEmployeeLink(body.employeeId), capabilities },
       { actor: session.displayName }
     )
     return jsonResponse({ profile: publicProfile(created) }, 201)
@@ -199,6 +204,17 @@ async function handleUpdate(request, stores) {
     }
     if (body.employeeId !== undefined) {
       patch.employeeId = normalizeEmployeeLink(body.employeeId)
+    }
+    // Checked against the role this profile will HAVE after the save, not
+    // the one it has now: setting a username and demoting to a school
+    // login in one request must not slip past because the two halves were
+    // examined separately.
+    if (body.username !== undefined) {
+      patch.username = normalizeUsername(body.username)
+      assertUsernameAllowedForRole(patch.username, body.role ?? profile.role)
+      if (patch.username !== (profile.username || null)) {
+        event = patch.username ? 'username-set' : 'username-cleared'
+      }
     }
     if (body.displayName !== undefined || body.role !== undefined || body.locationId !== undefined) {
       const next = assertValidProfileInput({

@@ -12,6 +12,8 @@ import {
   assertValidProfileInput,
   isOwnProfile,
   normalizeCapabilities,
+  normalizeUsername,
+  assertUsernameAllowedForRole,
 } from './access-guards.mjs'
 
 const LIZ_SESSION = {
@@ -200,4 +202,42 @@ test('turning a section back on for yourself is never blocked', () => {
   assert.doesNotThrow(() => assertNotSelfLockout(session, profile, {
     capabilities: { ...profile.capabilities, canViewAttendance: true },
   }))
+})
+
+// --- usernames, 2026-10-26 ----------------------------------------------
+
+test('a username is lowercased and trimmed, so capitalisation never matters', () => {
+  assert.equal(normalizeUsername('  EScHmitt '), 'eschmitt')
+})
+
+test('blank is no username, which is how a login stays PIN-only', () => {
+  for (const value of ['', '   ', null, undefined]) {
+    assert.equal(normalizeUsername(value), null)
+  }
+})
+
+// A saved empty-ish value would read as "has a username" to the sign-in
+// rule and lock that login out of both paths at once.
+test('a username too short or too long is refused', () => {
+  assert.throws(() => normalizeUsername('ab'), /three characters/)
+  assert.throws(() => normalizeUsername('a'.repeat(41)), /too long/)
+})
+
+test('a username cannot contain a space or an at sign', () => {
+  // An @ invites somebody to type their email address, which this is not.
+  assert.throws(() => normalizeUsername('e schmitt'), /no spaces/)
+  assert.throws(() => normalizeUsername('eschmitt@warren.k12.in.us'), /no spaces/)
+})
+
+test('dots, dashes and underscores are allowed, because names have them', () => {
+  assert.equal(normalizeUsername('fils-aime'), 'fils-aime')
+  assert.equal(normalizeUsername('e.schmitt'), 'e.schmitt')
+  assert.equal(normalizeUsername('m_hall'), 'm_hall')
+})
+
+test('administrators only, for now', () => {
+  assert.throws(() => assertUsernameAllowedForRole('cmanager', 'school'), /administrator logins/)
+  assert.doesNotThrow(() => assertUsernameAllowedForRole('eschmitt', 'admin'))
+  // A school login with no username is the normal case and must pass.
+  assert.doesNotThrow(() => assertUsernameAllowedForRole(null, 'school'))
 })

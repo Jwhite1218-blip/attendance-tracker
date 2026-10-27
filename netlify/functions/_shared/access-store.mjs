@@ -19,7 +19,7 @@ const DEFAULT_DISTRICT_SLUG = 'warren-township'
 export class ConflictError extends Error {}
 
 const PROFILE_COLUMNS = [
-  'id', 'pin_encrypted', 'pin_lookup', 'pin_length', 'display_name', 'role',
+  'id', 'pin_encrypted', 'pin_lookup', 'pin_length', 'username', 'display_name', 'role',
   'location_id', 'employee_id', 'capabilities', 'source', 'disabled_at',
   'last_used_at', 'created_at', 'created_by', 'updated_at', 'updated_by',
 ].join(',')
@@ -30,6 +30,20 @@ function environmentValue(name) {
 
 function logEvent(event, detail = {}) {
   console.error(JSON.stringify({ event, ...detail }))
+}
+
+// Which unique index a 409 came from. PostgREST names the constraint in the
+// body; if it does not, the PIN is the older and likelier clash.
+async function conflictMessage(response) {
+  let detail = ''
+  try {
+    detail = JSON.stringify(await response.clone().json())
+  } catch {
+    detail = ''
+  }
+  return detail.includes('username')
+    ? 'That username is already in use.'
+    : 'That code is already in use.'
 }
 
 // A row becomes the same shape the environment blob holds, so
@@ -44,6 +58,7 @@ export function profileFromRow(row) {
     ...capabilities,
     role: row.role,
     displayName: row.display_name,
+    ...(row.username ? { username: row.username } : {}),
     ...(row.location_id ? { locationId: row.location_id } : {}),
     ...(row.employee_id ? { employeeId: row.employee_id } : {}),
   }
@@ -113,6 +128,43 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
         return row
       } catch (error) {
         logEvent('access-profile-lookup-failed', { reason: String(error?.message || error) })
+        return null
+      }
+    },
+
+    // Liz, 2026-10-26. Sign-in starts from the person rather than from the
+    // digits: find the one profile that answers to this username, then the
+    // caller checks the PIN against it.
+    //
+    // Fails soft like findByPin, and for the same reason — but note the
+    // consequence is different. A username sign-in that cannot reach the
+    // database returns null and stops, because there is no environment
+    // blob holding usernames to fall back to. That is the correct failure:
+    // refusing a sign-in beats letting a PIN alone through for an account
+    // that is supposed to need two things.
+    async findByUsername(username) {
+      const wanted = String(username || '').trim().toLowerCase()
+      if (!wanted) return null
+      try {
+        const id = await districtId()
+        const query = new URLSearchParams({
+          district_id: `eq.${id}`,
+          username: `eq.${wanted}`,
+          select: PROFILE_COLUMNS,
+          limit: '1',
+        })
+        const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles?${query}`, { headers: headers() })
+        if (!response.ok) throw new Error(`status ${response.status}`)
+        const rows = await response.json()
+        const row = Array.isArray(rows) ? rows[0] : null
+        if (!row) return null
+        if (row.disabled_at) {
+          logEvent('access-profile-disabled-attempt', { profileId: row.id })
+          return null
+        }
+        return row
+      } catch (error) {
+        logEvent('access-profile-username-lookup-failed', { reason: String(error?.message || error) })
         return null
       }
     },
@@ -213,7 +265,7 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
       return (Array.isArray(rows) ? rows[0] : null) || null
     },
 
-    async createProfile({ pin, displayName, role, locationId, employeeId, capabilities }, { actor = '' } = {}) {
+    async createProfile({ pin, username, displayName, role, locationId, employeeId, capabilities }, { actor = '' } = {}) {
       const id = await districtId()
       const response = await fetchImpl(`${apiBaseUrl}/rest/v1/access_profiles`, {
         method: 'POST',
@@ -223,6 +275,7 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
           pin_encrypted: encryptPin(pin),
           pin_lookup: pinLookup(pin),
           pin_length: pinLengthOf(pin),
+          username: username || null,
           display_name: displayName,
           role,
           location_id: role === 'school' ? locationId : null,
@@ -234,10 +287,10 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
           updated_by: actor,
         }),
       })
-      // 23505 is the unique violation on (district_id, pin_lookup). Surfaced
-      // as a plain conflict so the caller can say "that code is taken"
-      // without saying whose it is.
-      if (response.status === 409) throw new ConflictError('That code is already in use.')
+      // 23505, on either unique index. Reported without naming whose row
+      // it clashed with, but saying which field to change — "already in
+      // use" with no clue which box to edit is a dead end.
+      if (response.status === 409) throw new ConflictError(await conflictMessage(response))
       if (!response.ok) throw new Error(`Supabase access profile create failed with status ${response.status}.`)
       const rows = await response.json()
       const created = Array.isArray(rows) ? rows[0] : null
@@ -257,6 +310,10 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
         body.pin_lookup = pinLookup(patch.pin)
         body.pin_length = pinLengthOf(patch.pin)
       }
+      // Null clears a username, which returns that login to signing in
+      // with its PIN alone. That is the way back if somebody is locked out,
+      // so it has to stay possible.
+      if (patch.username !== undefined) body.username = patch.username
       if (patch.displayName !== undefined) body.display_name = patch.displayName
       if (patch.role !== undefined) body.role = patch.role
       if (patch.locationId !== undefined) body.location_id = patch.locationId
@@ -276,7 +333,7 @@ export function createAccessStore({ baseUrl, secretKey, districtSlug, fetchImpl 
         headers: headers({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
         body: JSON.stringify(body),
       })
-      if (response.status === 409) throw new ConflictError('That code is already in use.')
+      if (response.status === 409) throw new ConflictError(await conflictMessage(response))
       if (!response.ok) throw new Error(`Supabase access profile update failed with status ${response.status}.`)
       const rows = await response.json()
       const updated = Array.isArray(rows) ? rows[0] : null

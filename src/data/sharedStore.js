@@ -301,10 +301,13 @@ export async function getServerSession() {
   return body.access || null
 }
 
-export async function createServerSession(pin) {
+// username is empty for the fifteen building logins and for every
+// administrator Liz has not opted in, and the server treats empty as
+// "PIN only" — the behaviour every login had before 2026-10-26.
+export async function createServerSession(pin, username = '') {
   const body = await requestJson('/api/session', {
     method: 'POST',
-    body: JSON.stringify({ pin }),
+    body: JSON.stringify({ pin, username }),
   })
   return body.access
 }

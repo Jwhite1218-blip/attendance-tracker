@@ -46,6 +46,7 @@ export default function PinGate({ children }) {
   // Use 'checking' string sentinel so it's distinct from null (= not authed)
   const [authed, setAuthed] = useState('checking')
   const [pin, setPin] = useState('')
+  const [username, setUsername] = useState('')
   const [error, setError] = useState('')
   const [showPin, setShowPin] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -169,7 +170,7 @@ export default function PinGate({ children }) {
     setError('')
 
     try {
-      const access = await createServerSession(pin)
+      const access = await createServerSession(pin, username.trim().toLowerCase())
       configureClientAccess(access)
       await loadSharedState()
       setAuthed(access)
@@ -250,6 +251,28 @@ export default function PinGate({ children }) {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-charcoal-700 rounded-xl border border-charcoal-600 p-6 shadow-xl">
+          {/* Above the PIN and optional, so the fifteen managers can
+              ignore it and sign in exactly as they did yesterday. An
+              administrator Liz has given a username must fill it in: the
+              server refuses their PIN on its own. */}
+          <label htmlFor="access-username" className="block text-sm font-medium text-charcoal-100 mb-2">
+            {t('gate.usernameLabel')}
+            <span className="ml-2 text-xs font-normal text-charcoal-300">{t('gate.usernameHint')}</span>
+          </label>
+          <input
+            id="access-username"
+            type="text"
+            value={username}
+            onChange={e => { setUsername(e.target.value); setError('') }}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={40}
+            disabled={submitting}
+            placeholder={t('gate.usernamePlaceholder')}
+            className="mb-4 w-full rounded-lg border border-charcoal-500 bg-charcoal-800 px-4 py-2.5 text-center text-base lowercase text-brand-100 placeholder-charcoal-400 transition-all focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30"
+          />
+
           <label htmlFor="access-pin" className="block text-sm font-medium text-charcoal-100 mb-3">{t('gate.pinLabel')}</label>
           <div className="relative">
             <input

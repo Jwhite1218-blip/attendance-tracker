@@ -81,6 +81,42 @@ export function normalizeExtraLocations(value, primary) {
   return extras
 }
 
+// The username a login signs in with, beside its PIN.
+//
+// Liz, 2026-10-26: first initial and last name, "eschmitt for example".
+// Lowercased here so that the thing stored, the thing compared and the
+// thing the unique index sees are all the same string — a username that
+// only works when typed with the same capitalisation is a support call.
+//
+// Letters, digits, dot, dash and underscore. No spaces and no @, because a
+// username that looks like an email address invites somebody to type their
+// email address, and that is not what this is.
+//
+// Empty means no username, which is a profile that signs in with its PIN
+// alone — the state every login is in until Liz changes one.
+export function normalizeUsername(value) {
+  if (value === null || value === undefined) return null
+  const username = String(value).trim().toLowerCase()
+  if (!username) return null
+  if (username.length < 3) refuse('A username needs at least three characters.')
+  if (username.length > 40) refuse('That username is too long.')
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    refuse('A username can use letters, numbers, dots, dashes and underscores — no spaces.')
+  }
+  return username
+}
+
+// Administrators first, per Liz on 2026-10-26. A building login that
+// acquired a username would stop working the moment its manager typed only
+// a PIN, and the fifteen of them are the least able to ring somebody about
+// it. The database carries the same rule, so neither side can be the only
+// thing standing between a manager and their roster.
+export function assertUsernameAllowedForRole(username, role) {
+  if (username && role !== 'admin') {
+    refuse('Usernames are for administrator logins for now. A school login signs in with its PIN.')
+  }
+}
+
 export function assertValidProfileInput({ displayName, role, locationId }) {
   const name = String(displayName || '').trim()
   if (!name) refuse('Give this login a name.')

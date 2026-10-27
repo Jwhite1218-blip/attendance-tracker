@@ -67,11 +67,16 @@ function hashKey(value) {
   return createHash('sha256').update(String(value || 'unknown')).digest('hex')
 }
 
-function rateLimitKeys(ip, pin) {
+// The per-credential counter is keyed on what was actually typed, so a
+// username sign-in is counted separately from a bare PIN. Liz, 2026-10-26:
+// without the username in the key, five wrong guesses at eschmitt would
+// also lock out whoever legitimately holds that PIN on another login.
+function rateLimitKeys(ip, pin, username = '') {
   const ipHash = hashKey(ip)
+  const credential = username ? `${username}:${pin}` : pin
   return {
     ip: `ip-${ipHash}`,
-    pin: `pin-${ipHash}-${hashKey(pin)}`,
+    pin: `pin-${ipHash}-${hashKey(credential)}`,
   }
 }
 
@@ -97,15 +102,20 @@ async function handleLogin(request, context, stores) {
   const parsedBody = await request.json().catch(() => null)
   const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
   const pin = String(body.pin || '').trim()
+  // Lowercased here as well as in the resolver, so the rate-limit key and
+  // the lookup agree about what "eschmitt" is. Length-capped before it is
+  // hashed into a key: an unbounded field from an unauthenticated request
+  // should not decide how much work this does.
+  const username = String(body.username || '').trim().toLowerCase().slice(0, 40)
   const now = Date.now()
-  const keys = rateLimitKeys(context.ip, pin)
+  const keys = rateLimitKeys(context.ip, pin, username)
 
   const ipAttempt = await reserveAttempt(stores.rate, keys.ip, now, MAX_IP_ATTEMPTS)
   if (ipAttempt.limited) return limitedResponse()
 
   let access = null
   try {
-    if (/^\d{4,8}$/.test(pin)) access = await resolveAccessForPin(pin)
+    if (/^\d{4,8}$/.test(pin)) access = await resolveAccessForPin(pin, { username })
   } catch {
     return jsonResponse({ error: 'Secure login is temporarily unavailable.' }, 503)
   }
@@ -113,7 +123,7 @@ async function handleLogin(request, context, stores) {
   if (!access) {
     const pinAttempt = await reserveAttempt(stores.rate, keys.pin, now, MAX_PIN_FAILURES)
     if (pinAttempt.limited) return limitedResponse()
-    return jsonResponse({ error: 'Invalid PIN. Please try again.' }, 401)
+    return jsonResponse({ error: 'Those sign-in details were not recognised. Please try again.' }, 401)
   }
 
   await Promise.all([

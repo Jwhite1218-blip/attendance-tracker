@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import { suggestUsername } from '../data/usernames.js'
 import { LOCATION_MAP, LOCATIONS } from '../data/locations.js'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 
@@ -326,6 +327,7 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
   const editing = Boolean(profile)
   const [form, setForm] = useState(() => ({
     displayName: profile?.displayName || '',
+    username: profile?.username || '',
     role: profile?.role || 'school',
     locationId: profile?.locationId || '',
     // From the resolved list the server reports, minus the primary. Seeding
@@ -382,6 +384,11 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
     event.preventDefault()
     const values = {
       displayName: form.displayName.trim(),
+      // Sent for administrators only, and sent as an empty string rather
+      // than omitted when cleared, so that removing a username is a thing
+      // the server is actually told about. Omitting it would read as "do
+      // not change", and a login could never be put back to PIN-only.
+      username: form.role === 'admin' ? form.username.trim().toLowerCase() : '',
       role: form.role,
       locationId: form.role === 'school' ? form.locationId : null,
       employeeId: form.employeeId || null,
@@ -410,6 +417,45 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
             className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal"
           />
         </label>
+
+        {/* Administrators only, per Liz on 2026-10-26. The server and the
+            database each refuse a username on a school login as well, so
+            hiding the box is a courtesy rather than the control. */}
+        {form.role === 'admin' && (
+          <label className="block text-xs font-semibold text-gray-700 sm:col-span-2">
+            Username
+            <span className="ml-2 font-normal text-gray-400">
+              optional — once set, this login needs it as well as the PIN
+            </span>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={form.username}
+                onChange={event => update('username', event.target.value)}
+                placeholder="eschmitt"
+                autoComplete="off"
+                spellCheck={false}
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-normal lowercase"
+              />
+              <button
+                type="button"
+                onClick={() => update('username', suggestUsername(form.displayName))}
+                disabled={!form.displayName.trim()}
+                className="flex-none rounded-lg border border-brand-300 bg-white px-3 py-2 text-xs font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-40"
+              >
+                Suggest
+              </button>
+            </div>
+            <p className="mt-1 font-normal text-[11px] text-gray-500">
+              First initial and last name. Leave blank and this login keeps signing in with its PIN alone.
+              {form.username.trim() && !profile?.username && (
+                <strong className="block text-amber-700">
+                  Test this on another login before setting one on your own — a username you cannot
+                  remember locks you out of the page that would fix it.
+                </strong>
+              )}
+            </p>
+          </label>
+        )}
 
         <label className="block text-xs font-semibold text-gray-700">
           Type
