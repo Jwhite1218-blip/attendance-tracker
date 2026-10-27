@@ -416,11 +416,17 @@ function rosterEmployeeById(entries, id) {
 // district office — a Shout-Out may be sent to anybody manager-grade.
 function managerGradeIds(entries) {
   const recordOverrides = entries?.[RECORD_OVERRIDES_KEY] || {}
+  const locationOverrides = entries?.[LOCATION_OVERRIDES_KEY] || {}
   const customEmployees = Array.isArray(entries?.[CUSTOM_EMPLOYEES_KEY]) ? entries[CUSTOM_EMPLOYEES_KEY] : []
   return new Set(
     [...employees, ...customEmployees]
       .filter(employee => {
         const key = employeeKey(employee)
+        // Effective location, not the one baked into the file: somebody
+        // moved to or from the district office must be judged on where
+        // they work now.
+        const location = String(locationOverrides[key] || employee.location || '').trim()
+        if (location === DISTRICT_OFFICE_LOCATION) return true
         const position = String(recordOverrides[key]?.position || employee.position || '').trim()
         return MANAGER_GRADE_POSITIONS.includes(position)
       })

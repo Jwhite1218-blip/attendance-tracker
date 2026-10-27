@@ -10,6 +10,8 @@ import {
   isManagerGrade,
   managerEmployeeIds,
   splitLeaderboardByGrade,
+  isKitchenManager,
+  DISTRICT_OFFICE_LOCATION,
 } from './recognitionStore.js'
 
 const star = (employeeId, date, locationId) => ({
@@ -137,4 +139,48 @@ test('the building draw itself cannot land on an excluded manager', () => {
 test('a building whose only stars went to managers draws nobody', () => {
   const records = [star('lead', '2026-10-01', 'StonyBrkMS')]
   assert.equal(drawMonthlyAllStar(records, 'StonyBrkMS', '2026-10', 0, new Set(['lead'])), null)
+})
+
+// --- the district office, 2026-10-27 -------------------------------------
+//
+// Liz: Cherese and Marlene are Assistant Directors, not Food Service
+// Managers, and she wants to add district office staff like a marketing
+// manager so a kitchen manager can thank them.
+//
+// Judging on job title alone broke both. Correcting the two titles would
+// have silently dropped them from every Shout-Out list, and each new
+// office title would have needed a code change first — with no error, just
+// a name missing from a dropdown.
+
+test('anyone at the district office is manager-grade, whatever their title', () => {
+  assert.equal(isManagerGrade({ position: 'Assistant Director', location: 'Admin' }), true)
+  assert.equal(isManagerGrade({ position: 'Marketing Manager', location: 'Admin' }), true)
+  assert.equal(isManagerGrade({ position: '', location: 'Admin' }), true)
+})
+
+test('the title list still carries the kitchens', () => {
+  for (const position of MANAGER_GRADE_POSITIONS) {
+    assert.equal(isManagerGrade({ position, location: 'CrestonMS' }), true, position)
+  }
+  assert.equal(isManagerGrade({ position: 'Cook', location: 'CrestonMS' }), false)
+  // The same new title in a building is NOT manager-grade. Only the office
+  // gets the location exemption.
+  assert.equal(isManagerGrade({ position: 'Marketing Manager', location: 'CrestonMS' }), false)
+})
+
+// The point of keeping the two ideas apart: an ACE Coach Buck is for the
+// people running kitchens, and widening the Shout-Out pool must not widen
+// that.
+test('district office staff are manager-grade but never kitchen managers', () => {
+  assert.equal(isKitchenManager({ position: 'Marketing Manager', location: DISTRICT_OFFICE_LOCATION }), false)
+  assert.equal(isKitchenManager({ position: 'Food Service Director', location: DISTRICT_OFFICE_LOCATION }), false)
+  assert.equal(isKitchenManager({ position: 'Food Service Manager', location: 'CrestonMS' }), true)
+})
+
+test('correcting the Assistant Director titles keeps them in the pool', () => {
+  const office = employees
+    .filter(employee => employee.location === DISTRICT_OFFICE_LOCATION)
+    .map(employee => ({ ...employee, position: 'Assistant Director' }))
+  const ids = managerEmployeeIds(office)
+  assert.equal(ids.size, office.length, 'every one of them survives the rename')
 })

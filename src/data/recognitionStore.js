@@ -644,7 +644,29 @@ export function kitchenManagerIds(employees) {
   )
 }
 
+// Manager-grade: the pool a Shout-Out may cross a building boundary to
+// reach, and the pool ranked on the manager leaderboard.
+//
+// Two ways in, and the second matters. Liz, 2026-10-27: Cherese and Marlene
+// are Assistant Directors, not Food Service Managers, and she wants to add
+// district office staff like Van Parham in marketing so a kitchen manager
+// can thank them.
+//
+// Judging purely on job title made both of those break things. Correcting
+// the two titles would have silently removed them from every kitchen
+// manager's Shout-Out list, and every new district-office title would have
+// needed a code change before that person could be thanked at all — with
+// no error, just a name missing from a dropdown.
+//
+// So anyone at the district office is manager-grade whatever their title.
+// It is a small office of senior staff, which is the thing the title list
+// was approximating in the first place.
+//
+// This does not make them kitchen managers: isKitchenManager still excludes
+// the office, so ACE Coach Bucks stay with the people running kitchens, and
+// a Star of the Day is still scoped to the giver's own building.
 export function isManagerGrade(employee) {
+  if (String(employee?.location || '').trim() === DISTRICT_OFFICE_LOCATION) return true
   return MANAGER_GRADE_POSITIONS.includes(String(employee?.position || '').trim())
 }
 
