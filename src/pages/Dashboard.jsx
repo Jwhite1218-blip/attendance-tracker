@@ -20,11 +20,41 @@ export default function Dashboard() {
   const lizAdminAccess = hasLizAdminAccess(access)
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
-  const employees = getEmployeesWithEffectiveLocations()
-  const allEmployees = getEmployeesWithEffectiveLocations({ includeInactive: true })
+
+  // Which schools this dashboard is reporting on. Liz, 2026-10-26: one or
+  // more, with an All-district toggle that is where everybody starts.
+  //
+  // An empty set means the whole district rather than nothing, because that
+  // is the useful default and it keeps the two states — "all" and "some" —
+  // from needing a second flag to tell them apart. Held per tab, so a
+  // narrowed view does not follow somebody into tomorrow.
+  const [selectedSchools, setSelectedSchools] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('attendance-dashboard-schools') || '[]')
+      return new Set(Array.isArray(saved) ? saved : [])
+    } catch {
+      return new Set()
+    }
+  })
+  const rememberSchools = next => {
+    setSelectedSchools(next)
+    try {
+      sessionStorage.setItem('attendance-dashboard-schools', JSON.stringify([...next]))
+    } catch { /* private window */ }
+  }
+  const showingWholeDistrict = selectedSchools.size === 0
+  const inScope = employee => showingWholeDistrict || selectedSchools.has(employee.location)
+
+  const everyEmployee = getEmployeesWithEffectiveLocations()
+  const everyEmployeeIncludingInactive = getEmployeesWithEffectiveLocations({ includeInactive: true })
+  const employees = everyEmployee.filter(inScope)
+  const allEmployees = everyEmployeeIncludingInactive.filter(inScope)
   const inactiveEmployees = allEmployees.filter(employee => !employee.active)
   const totalEmployees = employees.length
   const locationCounts = getLocationCounts()
+  const scopedLocationIds = showingWholeDistrict
+    ? Object.keys(locationCounts)
+    : [...selectedSchools].filter(id => locationCounts[id])
 
   const allFlaggedEmployees = getAllFlaggedEmployees()
     .map(flag => ({ ...flag, employee: allEmployees.find(e => String(e.kronos_id || e.id) === String(flag.empId)) }))
@@ -105,7 +135,9 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-white">Dashboard</h1>
           <p className="text-sm text-charcoal-200 mt-1">
-            {LOCATIONS.length} locations · {totalEmployees} employees · {year} attendance year
+            {showingWholeDistrict
+              ? `${LOCATIONS.length} locations`
+              : `${selectedSchools.size} of ${LOCATIONS.length} locations`} · {totalEmployees} employees · {year} attendance year
           </p>
         </div>
         <div className="self-start sm:self-auto flex flex-wrap items-stretch gap-3">
@@ -211,13 +243,19 @@ export default function Dashboard() {
         />
       )}
 
+      <SchoolFilter
+        locationCounts={locationCounts}
+        selected={selectedSchools}
+        onChange={rememberSchools}
+      />
+
       {/* Stats Row */}
       {/* Inactive headcount is deliberately absent: it lives on /staff with the
           records themselves, so the front page reports only active operations. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
-          <p className="text-3xl font-bold text-gray-900 mt-1">{Object.keys(locationCounts).length}</p>
+          <p className="text-3xl font-bold text-gray-900 mt-1">{scopedLocationIds.length}</p>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Active Staff</p>
@@ -268,44 +306,6 @@ export default function Dashboard() {
             )}
           </Link>
         </div>
-      </div>
-
-      {/* Location Grid */}
-      <h2 className="text-lg font-semibold text-white mb-4">Locations</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {LOCATIONS
-          .filter(loc => locationCounts[loc.id])
-          .sort((a, b) => a.name.localeCompare(b.name))
-          .map(loc => {
-            const count = locationCounts[loc.id] || 0
-            return (
-              <Link
-                key={loc.id}
-                to={`/location/${loc.id}`}
-                className="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all group"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-900 group-hover:text-brand-700 transition-colors">{loc.name}</p>
-                    <p className="text-sm text-gray-500 mt-1">{loc.type}</p>
-                  </div>
-                  <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{loc.id}</span>
-                </div>
-                <div className="mt-4 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center">
-                      <span className="text-sm font-semibold text-brand-600">{count}</span>
-                    </div>
-                    <span className="text-sm text-gray-500">staff</span>
-                  </div>
-                  <svg className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </Link>
-            )
-          })
-        }
       </div>
 
       {/* Code Legend */}
@@ -432,4 +432,91 @@ function formatDateKey(dateKey) {
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+// Which schools the dashboard is reporting on.
+//
+// Liz, 2026-10-26: pills rather than the card grid this replaces, any
+// number of schools at once, and an All-district toggle that is the
+// default. Fifteen cards was five rows of boxes before anybody reached a
+// number; fifteen pills is two rows above them.
+//
+// The cards were also the way into a school's attendance tracker, so that
+// has to survive: narrow to exactly one and a button appears to open it.
+function SchoolFilter({ locationCounts, selected, onChange }) {
+  const navigate = useNavigate()
+  const schools = LOCATIONS
+    .filter(location => locationCounts[location.id])
+    .sort((left, right) => left.name.localeCompare(right.name))
+
+  const everywhere = selected.size === 0
+  const toggle = id => {
+    const next = new Set(selected)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    onChange(next)
+  }
+  const onlyOne = selected.size === 1 ? [...selected][0] : null
+
+  return (
+    <section className="mb-8 rounded-xl border border-charcoal-600 bg-charcoal-800 p-4 sm:p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <h2 className="text-sm font-semibold text-white">Schools</h2>
+        <p className="text-xs text-charcoal-200">
+          {everywhere
+            ? 'Showing every school. Tap any to narrow.'
+            : `Showing ${selected.size} of ${schools.length}. Tap to add or remove.`}
+        </p>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(new Set())}
+          aria-current={everywhere ? 'true' : undefined}
+          className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-colors ${
+            everywhere
+              ? 'border-brand-400 bg-brand-500 text-white'
+              : 'border-charcoal-500 bg-charcoal-700 text-charcoal-100 hover:bg-charcoal-600'
+          }`}
+        >
+          All district
+        </button>
+
+        {schools.map(school => {
+          const on = selected.has(school.id)
+          return (
+            <button
+              key={school.id}
+              type="button"
+              onClick={() => toggle(school.id)}
+              aria-pressed={on}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                on
+                  ? 'border-brand-400 bg-brand-500 text-white'
+                  : 'border-charcoal-500 bg-charcoal-700 text-charcoal-100 hover:bg-charcoal-600'
+              }`}
+            >
+              {school.name}
+              <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                on ? 'bg-white/20 text-white' : 'bg-charcoal-900/60 text-charcoal-200'
+              }`}>
+                {locationCounts[school.id]}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {onlyOne && (
+        <button
+          type="button"
+          onClick={() => navigate(`/location/${encodeURIComponent(onlyOne)}`)}
+          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-brand-400/60 bg-brand-500/10 px-3 py-2 text-xs font-bold text-brand-100 hover:bg-brand-500/20"
+        >
+          Open {LOCATION_MAP[onlyOne]?.name || onlyOne} attendance tracker →
+        </button>
+      )}
+    </section>
+  )
 }
