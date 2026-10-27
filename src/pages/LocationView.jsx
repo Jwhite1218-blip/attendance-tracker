@@ -4,15 +4,15 @@ import { useParams, Link, Navigate, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttendance, readFutureAttendance, setAttendanceCode } from '../data/attendanceStore.js'
-import { buildSchoolInsights, collectWeekExceptions } from '../data/dashboardInsights.js'
+import { getAttendanceRecord, getEmployeeAttendanceYears, getEmployeeYearAttendance, setAttendanceCode } from '../data/attendanceStore.js'
 import { ATTENDANCE_SEVERITY_CLASS, attendanceSeverity, getAllFlaggedEmployees } from '../data/hrFlags.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getWeekDates } from '../data/weekDates.js'
 import { StatusBadge } from '../components/StatusBadge.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
-import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
+import AttendanceCodeReference from '../components/AttendanceCodeReference.jsx'
+import EmployeeCardPicker from '../components/EmployeeCardPicker.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 import TransferModal from '../components/TransferModal.jsx'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
@@ -59,7 +59,6 @@ export default function LocationView() {
   const [transferTarget, setTransferTarget] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [picker, setPicker] = useState(null)
-  const [activeInsight, setActiveInsight] = useState(null)
 
   const dates = useMemo(() => getWeekDates(weekOffset), [weekOffset])
   const roster = useMemo(() => getRosterForLocation(id), [id, refreshKey, dataVersion])
@@ -102,16 +101,6 @@ export default function LocationView() {
     })
     return stats
   }, [attendance, roster, dates])
-
-  const weekExceptions = useMemo(
-    () => collectWeekExceptions(roster, dates, attendance),
-    [roster, dates, attendance]
-  )
-
-  const schoolInsights = useMemo(
-    () => buildSchoolInsights(roster, readFutureAttendance),
-    [attendance, roster]
-  )
 
   // Normalize the URL if a school-role session typed/followed a link to another school
   if (role === 'school' && !myLocations.includes(urlId)) {
@@ -197,14 +186,13 @@ export default function LocationView() {
         </div>
       )}
 
-      <SchoolDashboardInsights
-        activeInsight={activeInsight}
-        onInsightChange={setActiveInsight}
-        onEmployeeSelect={openEmployeeRecord}
-        weekExceptions={weekExceptions}
-        weekLabel={`${formatDate(dates[0])} – ${formatDate(dates[6])}`}
-        {...schoolInsights}
-      />
+      {/* The same opening as the Attendance tab, in the order Liz asked
+          for on 2026-10-26: find one person, read what the codes mean, then
+          the week. Both pieces are the Attendance tab's own components, so
+          the two screens cannot drift into saying different things. */}
+      <EmployeeCardPicker employees={roster} lockedLocationId={id} className="mb-4" />
+
+      <AttendanceCodeReference className="mb-4" />
 
       {/* Quick Stats */}
       <div className="flex flex-wrap gap-2 mb-4">

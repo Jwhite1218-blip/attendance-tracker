@@ -13,7 +13,7 @@
 // Build:  npx vite build --ssr scripts/render-pages.jsx --outDir dist/ssr
 // Run:    node scripts/render-pages.mjs
 import { renderToStaticMarkup } from 'react-dom/server'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AuthContext } from '../src/components/PinGate.jsx'
 import LanguageProvider from '../src/components/LanguageProvider.jsx'
 
@@ -136,10 +136,20 @@ const PAGES = [
   }],
   ['Dashboard', Dashboard, '/', [LIZ]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
-  // No expectation here: without a roster under Node this page renders
-  // almost nothing for anybody, so it can only show that it does not throw.
-  // The gate it uses is tested directly in approvalRequests.test.js.
-  ['LocationView', LocationView, '/location/CrestonMS', [LIZ, LIMITED_ADMIN, MANAGER]],
+  // Liz, 2026-10-26: the building tracker opens the way the Attendance tab
+  // does, and the school overview that duplicated the dashboard is gone.
+  // Both are assertable even with no roster under Node, because the picker
+  // and the code reference render regardless of who is on the list.
+  ['LocationView', LocationView, '/location/CrestonMS', [LIZ, LIMITED_ADMIN, MANAGER], {
+    admin: ['Choose an employee', 'Attendance Code Reference'],
+    limited: ['Choose an employee', 'Attendance Code Reference'],
+    manager: ['Choose an employee', 'Attendance Code Reference'],
+  }, {
+    // The school overview lives on the dashboard now, not here.
+    admin: ['School Overview'],
+    limited: ['School Overview'],
+    manager: ['School Overview'],
+  }, '/location/:id'],
   ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
   ['Training', Training, '/training', [LIZ, MANAGER]],
   ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER], {
@@ -178,7 +188,13 @@ const PAGES = [
 
 export function render() {
   const results = []
-  for (const [name, Page, path, roles, expect = {}, forbid = {}] of PAGES) {
+  // A seventh field: the route pattern, for a page that reads useParams.
+  //
+  // Until 2026-10-26 every page was rendered bare inside the router, so a
+  // page keyed on an address parameter saw none — LocationView took its
+  // "Location not found" branch in all three of its checks and nothing on
+  // the real screen was ever rendered here at all.
+  for (const [name, Page, path, roles, expect = {}, forbid = {}, routePath] of PAGES) {
     for (const access of roles) {
       const who = access === LIMITED_ADMIN ? 'limited'
     : access === RECOGNITION_WIDE ? 'recognition'
@@ -188,7 +204,11 @@ export function render() {
         const html = renderToStaticMarkup(
           <MemoryRouter initialEntries={[path]}>
             <AuthContext.Provider value={access}>
-              <LanguageProvider><Page /></LanguageProvider>
+              <LanguageProvider>
+                {routePath
+                  ? <Routes><Route path={routePath} element={<Page />} /></Routes>
+                  : <Page />}
+              </LanguageProvider>
             </AuthContext.Provider>
           </MemoryRouter>
         )
