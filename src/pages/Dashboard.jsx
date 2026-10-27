@@ -8,6 +8,8 @@ import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus
 import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
 import { collectMonthExceptions, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, canViewReports, hasLizAdminAccess } from '../data/futureTools.js'
+import { backupReminder } from '../data/backupReminder.js'
+import { lastBackupExport } from '../data/programSettings.js'
 import InsightDrilldown from '../components/InsightDrilldown.jsx'
 import MetricTile from '../components/MetricTile.jsx'
 import RecognitionMetrics, { recognitionTilesFor } from '../components/RecognitionMetrics.jsx'
@@ -23,6 +25,10 @@ export default function Dashboard() {
   const lizAdminAccess = hasLizAdminAccess(access)
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const seesReports = canViewReports(access)
+  // Only shown to the one person who can actually run it. Liz, 2026-10-27:
+  // "can you set me up a notification at the end of each month within it to
+  // remind me to export?"
+  const backupDue = lizAdminAccess ? backupReminder(lastBackupExport()) : null
   const [activeDrilldown, setActiveDrilldown] = useState(null)
 
   // Which schools this dashboard is reporting on. Liz, 2026-10-26: one or
@@ -209,6 +215,8 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {backupDue && <BackupReminderBanner reminder={backupDue} />}
+
       {/* Dashboard drill-downs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
         {drilldowns.map(item => (
@@ -304,6 +312,37 @@ export default function Dashboard() {
         </div>
       )}
 
+    </div>
+  )
+}
+
+// The monthly nudge to download a backup.
+//
+// Amber rather than red: nothing is broken, and a dashboard that cries
+// wolf in red every month end stops being read. It disappears the moment
+// an export is recorded, so it is never telling her to do something she
+// has already done — which is the only way a recurring reminder survives
+// contact with a real person.
+function BackupReminderBanner({ reminder }) {
+  return (
+    <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-amber-900">{reminder.message}</p>
+          <p className="mt-0.5 text-xs text-amber-800">{reminder.detail}</p>
+          {reminder.lastExportedAt && (
+            <p className="mt-1 text-[11px] text-amber-700">
+              Last downloaded {new Date(reminder.lastExportedAt).toLocaleDateString('en-US', { dateStyle: 'medium' })}.
+            </p>
+          )}
+        </div>
+        <Link
+          to="/backup-recovery"
+          className="flex-none self-start rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+        >
+          Download backup
+        </Link>
+      </div>
     </div>
   )
 }

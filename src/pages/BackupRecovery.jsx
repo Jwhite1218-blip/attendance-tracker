@@ -14,6 +14,8 @@ function formatDateTime(value) {
   })
 }
 
+import { recordBackupExport } from '../data/programSettings.js'
+
 export default function BackupRecovery() {
   const access = useAuth()
   const [selectedBackup, setSelectedBackup] = useState(null)
@@ -27,6 +29,13 @@ export default function BackupRecovery() {
     setMessage(null)
     try {
       const result = await downloadFullBackup()
+      // Recorded after the download, not before: a failed export should
+      // not silence the reminder. A failure to record is swallowed —
+      // the backup is on her computer either way, and losing the nag is
+      // better than telling her the export failed when it did not.
+      try {
+        recordBackupExport()
+      } catch { /* the file is downloaded; the reminder can wait a month */ }
       setMessage({ type: 'success', text: `${result.filename} downloaded with ${result.sectionCount} data sections.` })
     } catch (error) {
       setMessage({ type: 'error', text: error.message })

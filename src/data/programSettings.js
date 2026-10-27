@@ -224,6 +224,28 @@ export function resetProgramSetting(section, { changedBy = '' } = {}) {
   return next
 }
 
+// When Liz last downloaded a backup.
+//
+// Kept in this key rather than a new one because it is already Liz-tier,
+// already synced to every device she signs in on, and already in the SQL
+// allowlist — a reminder does not justify a migration, and a new state key
+// is four places that can drift.
+//
+// Deliberately does NOT stamp changedAt or changedBy the way
+// saveProgramSettings does. Running a backup is not changing the
+// programme, and the settings audit must not claim she edited milestones
+// on a day she only pressed download.
+export function recordBackupExport(at = new Date()) {
+  const next = { ...readSettings(), lastBackupExportAt: at.toISOString() }
+  writeSharedStorage(PROGRAM_SETTINGS_KEY, next)
+  return next.lastBackupExportAt
+}
+
+export function lastBackupExport() {
+  const value = String(readSettings().lastBackupExportAt || '')
+  return Number.isFinite(Date.parse(value)) ? value : null
+}
+
 export function settingsAudit() {
   const stored = readSettings()
   const changedAt = String(stored.changedAt || '')
