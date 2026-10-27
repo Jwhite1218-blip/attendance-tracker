@@ -8,6 +8,12 @@ import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus
 import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
 import { getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, hasLizAdminAccess } from '../data/futureTools.js'
+import {
+  countAceBucksInSchoolYear,
+  countDailyStarsInMonth,
+  getAllRecognitions,
+  schoolYearStartFor,
+} from '../data/recognitionStore.js'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
@@ -76,26 +82,43 @@ export default function Dashboard() {
   const today = new Date()
   const year = today.getFullYear()
   const monthName = today.toLocaleDateString('en-US', { month: 'long' })
+  const monthKey = `${year}-${String(today.getMonth() + 1).padStart(2, '0')}`
   let totalMarked = 0
   let totalByCode = {}
   ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
 
+  // Two tallies over the same pass. The year-to-date figures still feed the
+  // summary panel that is labelled year-to-date; the month figures are what
+  // the tile and its drill-down now report.
+  //
+  // Liz, 2026-10-26: a year count climbs all year and never comes back down,
+  // so by spring it says nothing about whether this month is going well.
   const employeeExceptions = []
+  let monthMarked = 0
   employees.forEach(emp => {
     const records = getEmployeeYearAttendance(emp.kronos_id || emp.id, year)
     const byCode = {}
     let empCount = 0
-    Object.values(records).forEach(r => {
-      if (r.code) {
-        totalMarked++
-        totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
-        empCount++
-        byCode[r.code] = (byCode[r.code] || 0) + 1
-      }
+    Object.entries(records).forEach(([dateKey, r]) => {
+      if (!r.code) return
+      totalMarked++
+      totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
+      if (!String(dateKey).startsWith(`${monthKey}-`)) return
+      monthMarked++
+      empCount++
+      byCode[r.code] = (byCode[r.code] || 0) + 1
     })
     if (empCount > 0) employeeExceptions.push({ employee: emp, count: empCount, byCode })
   })
   employeeExceptions.sort((a, b) => b.count - a.count)
+
+  // Stars for the month, Bucks for the school year — the two figures Liz
+  // asked for, scoped by the same pills as everything else on the page.
+  const recognitions = recognitionAdminAccess ? getAllRecognitions() : []
+  const recognitionScope = showingWholeDistrict ? [] : scopedLocationIds
+  const starsThisMonth = countDailyStarsInMonth(recognitions, monthKey, recognitionScope)
+  const schoolYearStart = schoolYearStartFor(today)
+  const aceBucksThisYear = countAceBucksInSchoolYear(recognitions, schoolYearStart, recognitionScope)
 
   const birthdays = getCurrentMonthBirthdays(employees, today)
   const requestedTimeOff = getUpcomingRequestedTimeOff(employees, employee => {
@@ -122,9 +145,9 @@ export default function Dashboard() {
     },
     {
       id: 'exceptions',
-      label: `Exceptions (${year})`,
-      count: totalMarked,
-      description: 'Every employee with a marked attendance exception this year',
+      label: `${monthName} Exceptions`,
+      count: monthMarked,
+      description: 'Marked attendance exceptions so far this month',
     },
   ]
 
@@ -252,7 +275,7 @@ export default function Dashboard() {
       {/* Stats Row */}
       {/* Inactive headcount is deliberately absent: it lives on /staff with the
           records themselves, so the front page reports only active operations. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 ${recognitionAdminAccess ? 'xl:grid-cols-4' : ''}`}>
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <p className="text-sm font-medium text-gray-500">Locations</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{scopedLocationIds.length}</p>
@@ -261,27 +284,19 @@ export default function Dashboard() {
           <p className="text-sm font-medium text-gray-500">Active Staff</p>
           <p className="text-3xl font-bold text-gray-900 mt-1">{totalEmployees}</p>
         </div>
+        {recognitionAdminAccess && (
+          <>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm font-medium text-gray-500">Stars in {monthName}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{starsThisMonth}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm font-medium text-gray-500">ACE Bucks · {schoolYearStart}–{String(schoolYearStart + 1).slice(2)}</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{aceBucksThisYear}</p>
+            </div>
+          </>
+        )}
       </div>
-
-      {/* HR Attendance Flags */}
-      <HrFollowUpPanel flaggedEmployees={flaggedEmployees} onEmployeeSelect={openEmployeeRecord} />
-
-      {/* Quick Code Summary */}
-      {totalMarked > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Year-to-Date Summary</h2>
-          <div className="flex flex-wrap gap-3">
-            {ATTENDANCE_CODES.filter(c => c.code && totalByCode[c.code] > 0).map(c => (
-              <div key={c.code} className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[28px]"
-                  style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
-                <span className="text-sm font-semibold text-gray-700">{totalByCode[c.code]}</span>
-                <span className="text-xs text-gray-400">{c.label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Employee Management — the inactive roster itself lives on /staff so a
           departed employee does not sit on the front page looking like an
@@ -308,22 +323,25 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Code Legend */}
-      <div className="mt-8 bg-white rounded-xl border border-gray-200 p-5">
-        <h2 className="text-sm font-semibold text-gray-700 mb-3">Attendance Code Reference</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {ATTENDANCE_CODES.map(c => (
-            <div key={c.code} className="flex items-center gap-2">
-              <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[32px]"
-                style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
-              <div>
-                <p className="text-xs font-medium text-gray-700">{c.label}</p>
-                <p className="text-[10px] text-gray-400">{c.description}</p>
+      {/* HR Attendance Flags */}
+      <HrFollowUpPanel flaggedEmployees={flaggedEmployees} onEmployeeSelect={openEmployeeRecord} />
+
+      {/* Quick Code Summary */}
+      {totalMarked > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 mb-8">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Year-to-Date Summary</h2>
+          <div className="flex flex-wrap gap-3">
+            {ATTENDANCE_CODES.filter(c => c.code && totalByCode[c.code] > 0).map(c => (
+              <div key={c.code} className="flex items-center gap-2">
+                <span className="inline-flex items-center justify-center rounded text-xs font-bold border px-1.5 py-0.5 min-w-[28px]"
+                  style={{ backgroundColor: c.hex.bg, color: c.hex.text, borderColor: c.hex.border }}>{c.shortLabel}</span>
+                <span className="text-sm font-semibold text-gray-700">{totalByCode[c.code]}</span>
+                <span className="text-xs text-gray-400">{c.label}</span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
     </div>
   )
@@ -363,7 +381,7 @@ function DashboardDrilldown({ id, type, monthName, birthdays, requestedTimeOff, 
   const title = type === 'birthdays'
     ? `${monthName} Birthdays`
     : type === 'exceptions'
-      ? 'Employees With Exceptions'
+      ? `Employees With ${monthName} Exceptions`
       : 'Upcoming Requested Time Off'
 
   const items = type === 'birthdays' ? birthdays
@@ -413,7 +431,7 @@ function DashboardDrilldown({ id, type, monthName, birthdays, requestedTimeOff, 
                     </>
                   )}
                   {type === 'exceptions' && (
-                    <p className="text-sm font-semibold text-brand-700">{item.count} total</p>
+                    <p className="text-sm font-semibold text-brand-700">{item.count} this month</p>
                   )}
                 </div>
               </div>

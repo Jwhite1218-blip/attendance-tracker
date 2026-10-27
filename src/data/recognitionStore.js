@@ -352,6 +352,40 @@ export function getAceBuckCount(records, employeeId, startYear) {
   ).length
 }
 
+// District figures for the dashboard tiles. The counters above answer "how
+// much has one person earned"; these answer "how much happened here", so
+// they filter on the building a recognition was given at rather than on an
+// employee id.
+//
+// An empty locationIds means the whole district, which is the same shape the
+// dashboard's school pills use — All district is an empty selection, so the
+// tile and the pills cannot disagree about what "all" means.
+function inLocationScope(record, scope) {
+  return scope.size === 0 || scope.has(String(record?.locationId || ''))
+}
+
+export function countDailyStarsInMonth(records, monthKey, locationIds = []) {
+  const scope = new Set((locationIds || []).map(String))
+  return (records || []).filter(record =>
+    earnsDailyStar(record)
+    && String(record.date || '').startsWith(`${monthKey}-`)
+    && inLocationScope(record, scope)
+  ).length
+}
+
+// Liz, 2026-10-26, asked for "ACE Bucks earned total for the year". The
+// recognition year is the school year, not the calendar year — a Buck
+// earned in May belongs with the one earned the previous September, and
+// resetting in January would split a programme that runs August to June.
+export function countAceBucksInSchoolYear(records, startYear, locationIds = []) {
+  const scope = new Set((locationIds || []).map(String))
+  return (records || []).filter(record =>
+    isAceBuck(record)
+    && isRecognitionInSchoolYear(record, startYear)
+    && inLocationScope(record, scope)
+  ).length
+}
+
 // Deliberately excludes ACE Bucks, so an employee star count stays an
 // employee star count even for a manager who holds both.
 export function getDailyStarCount(records, employeeId, startYear) {

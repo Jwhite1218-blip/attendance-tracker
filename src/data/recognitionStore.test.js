@@ -18,6 +18,8 @@ import {
   buildingRecognitionSummary,
   employeeStarsByLocation,
   recognitionEarnsStar,
+  countDailyStarsInMonth,
+  countAceBucksInSchoolYear,
 } from './recognitionStore.js'
 
 function recognition(overrides = {}) {
@@ -291,4 +293,54 @@ test('a Buck does not inflate the building figures that say Star of the Day only
     [],
     'a Buck is not a star earned at a school'
   )
+})
+
+// The two dashboard tiles Liz asked for on 2026-10-26. Both are district
+// figures, so the thing that must not drift is what they exclude: a star
+// tile that quietly counted nominations or Bucks would read high all year
+// and nobody would know which number was wrong.
+test('the month star tile counts only daily stars, only this month', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-10-02' }),
+    recognition({ id: 'b', date: '2026-10-29' }),
+    recognition({ id: 'c', date: '2026-09-30' }),
+    recognition({ id: 'd', date: '2026-11-01' }),
+    recognition({ id: 'e', date: '2026-10-15', type: 'shooting-star' }),
+    recognition({ id: 'f', date: '2026-10-15', type: 'star-shout-out' }),
+    recognition({ id: 'g', date: '2026-10-15', type: 'ace-buck' }),
+  ]
+  assert.equal(countDailyStarsInMonth(records, '2026-10'), 2)
+})
+
+test('the month star tile follows the school pills, and all district means all', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-10-02', locationId: 'SchoolA' }),
+    recognition({ id: 'b', date: '2026-10-03', locationId: 'SchoolB' }),
+    recognition({ id: 'c', date: '2026-10-04', locationId: 'SchoolC' }),
+  ]
+  assert.equal(countDailyStarsInMonth(records, '2026-10', []), 3)
+  assert.equal(countDailyStarsInMonth(records, '2026-10', ['SchoolA']), 1)
+  assert.equal(countDailyStarsInMonth(records, '2026-10', ['SchoolA', 'SchoolC']), 2)
+})
+
+test('the ACE Buck tile counts the school year, not the calendar year', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-09-10', type: 'ace-buck' }),
+    recognition({ id: 'b', date: '2027-05-10', type: 'ace-buck' }),
+    recognition({ id: 'c', date: '2026-06-30', type: 'ace-buck' }),
+    recognition({ id: 'd', date: '2027-09-01', type: 'ace-buck' }),
+    recognition({ id: 'e', date: '2026-09-11' }),
+  ]
+  // September and the following May belong together; the June before and
+  // the September after belong to the years either side.
+  assert.equal(countAceBucksInSchoolYear(records, 2026), 2)
+  assert.equal(countAceBucksInSchoolYear(records, 2025), 1)
+})
+
+test('the ACE Buck tile narrows with the school pills', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-09-10', type: 'ace-buck', locationId: 'SchoolA' }),
+    recognition({ id: 'b', date: '2026-10-10', type: 'ace-buck', locationId: 'SchoolB' }),
+  ]
+  assert.equal(countAceBucksInSchoolYear(records, 2026, ['SchoolB']), 1)
 })
