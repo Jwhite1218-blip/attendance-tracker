@@ -154,7 +154,7 @@ export default function StaffAdmin() {
             </div>
           </div>
         ) : (
-          <p className="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">No inactive employee records.</p>
+          <p className="text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">No inactive employee cards.</p>
         )}
       </div>
 

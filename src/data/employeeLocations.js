@@ -92,7 +92,7 @@ function buildEmployee(employee, locationOverrides, recordOverrides, managerNote
 }
 
 // Every roster list in the app is alphabetical by last name, then first name —
-// the same order the Employee Records ledger shows. Sorting here rather than in
+// the same order the Employee Cards ledger shows. Sorting here rather than in
 // each view is what puts a newly added employee in their proper place instead
 // of at the bottom: custom employees are appended to the source roster, so any
 // consumer that doesn't sort would otherwise show a new hire last.

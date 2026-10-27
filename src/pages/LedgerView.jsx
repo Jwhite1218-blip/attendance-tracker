@@ -55,16 +55,16 @@ export default function LedgerView() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Employee Records</h1>
+        <h1 className="text-2xl font-bold text-white">Employee Cards</h1>
         <p className="text-sm text-charcoal-200 mt-1">
-          Find an employee, then open the same record used from the school dashboard.
+          Find an employee, then open their card. Or open a whole school&apos;s attendance tracker below.
         </p>
       </div>
 
       <section className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5" aria-labelledby="employee-record-picker">
         <div className="mb-4">
           <h2 id="employee-record-picker" className="text-sm font-semibold text-gray-900">Choose an employee</h2>
-          <p className="text-xs text-gray-400 mt-1">Attendance edits, comments, employee details, and both year views are consolidated in one record.</p>
+          <p className="text-xs text-gray-400 mt-1">Attendance edits, comments, employee details, and both year views are consolidated on one card.</p>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -147,7 +147,7 @@ export default function LedgerView() {
               to={`/employee/${encodeURIComponent(selectedKey)}`}
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
             >
-              Open employee record
+              Open employee card
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
               </svg>
@@ -155,6 +155,43 @@ export default function LedgerView() {
           </div>
         )}
       </section>
+
+      {schoolOptions.length > 0 && (
+      <section className="mt-6" aria-labelledby="school-trackers">
+        <h2 id="school-trackers" className="text-lg font-semibold text-white mb-1">
+          {schoolOptions.length === 1 ? 'Attendance tracker' : 'Attendance trackers by school'}
+        </h2>
+        <p className="text-sm text-charcoal-200 mb-4">Open a whole school&apos;s month at once.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {schoolOptions.map(location => (
+            <Link
+              key={location.id}
+              to={`/location/${location.id}`}
+              className="bg-white rounded-xl border border-gray-200 p-5 hover:border-brand-300 hover:shadow-md transition-all group"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-gray-900 group-hover:text-brand-700 transition-colors">{location.name}</p>
+                  <p className="text-sm text-gray-500 mt-1">{location.type}</p>
+                </div>
+                <span className="text-xs font-mono bg-gray-100 text-gray-600 px-2 py-1 rounded-md">{location.id}</span>
+              </div>
+              <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-brand-50 flex items-center justify-center">
+                    <span className="text-sm font-semibold text-brand-600">{location.count}</span>
+                  </div>
+                  <span className="text-sm text-gray-500">staff</span>
+                </div>
+                <svg className="w-5 h-5 text-gray-400 group-hover:text-brand-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+      )}
     </div>
   )
 }

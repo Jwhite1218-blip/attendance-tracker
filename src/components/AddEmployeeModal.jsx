@@ -95,7 +95,7 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
             <p className="text-xs text-gray-500 mt-1">
               {mode === 'request'
                 ? 'Sends the new employee to Liz for review. Nothing is added to the roster until she approves it.'
-                : 'Creates an active employee record in the shared roster.'}
+                : 'Creates an active employee card in the shared roster.'}
             </p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close">

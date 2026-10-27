@@ -106,7 +106,7 @@ const PAGES = [
     // Moved behind Settings or the Reports hub on 2026-10-26. If one of
     // these reappears in the bar, it has grown back.
     admin: ['Blackout Calendar', 'Change requests', 'Backup & Recovery',
-            'Custom Report', 'Master Report', 'Employee Records', '>Access<'],
+            'Custom Report', 'Master Report', 'Employee Cards', '>Access<'],
     // Delimited, because "Attendance" also appears in the masthead —
     // "Food Service Attendance" — which is branding, not a way in.
     recognition: ['>Attendance<', '>Training<', 'Blackout Calendar'],
@@ -137,7 +137,15 @@ const PAGES = [
     // must turn them away rather than showing the queue.
     limited: ['Only a district administrator reviews change requests'],
   }],
-  ['LedgerView', LedgerView, '/ledger', [LIZ, MANAGER]],
+  // The page is named for what it holds — cards, not personnel records —
+  // and the word "record" must not creep back into its headings.
+  ['LedgerView', LedgerView, '/ledger', [LIZ, MANAGER], {
+    admin: ['Employee Cards'],
+    manager: ['Employee Cards'],
+  }, {
+    admin: ['Employee Records', 'Open employee record'],
+    manager: ['Employee Records'],
+  }],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],

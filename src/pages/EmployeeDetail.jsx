@@ -348,10 +348,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   <button
                     type="button"
                     onClick={() => { setPrintMode('record'); setTimeout(() => window.print(), 0) }}
-                    title="Print everything kept about this employee, for a personnel file"
+                    title="Print everything this card shows about the employee"
                     className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 text-xs font-semibold hover:bg-gray-50"
                   >
-                    Print full record
+                    Print full card
                   </button>
                 </>
               )}
@@ -1141,7 +1141,7 @@ function PrintableEmployeeRecord({
 
   return (
     <div className="hidden print:block text-black">
-      <h1 className="text-xl font-bold">Employee Record — {yearLabel}</h1>
+      <h1 className="text-xl font-bold">Employee Card — {yearLabel}</h1>
       <div className="mt-2 text-sm">
         <p className="font-semibold">
           {employeeCardName(employee)}

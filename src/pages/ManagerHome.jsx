@@ -261,7 +261,7 @@ function YourRecognition({ employeeId }) {
           to={`/employee/${encodeURIComponent(employeeId)}`}
           className="rounded-lg border border-[#e8c65c]/40 bg-[#e8c65c]/10 px-3 py-2 text-xs font-bold text-[#f4d87d] hover:bg-[#e8c65c]/20"
         >
-          Open my record
+          Open my card
         </Link>
       </div>
 

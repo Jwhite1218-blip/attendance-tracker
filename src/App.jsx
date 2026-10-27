@@ -138,7 +138,7 @@ export function AppShell() {
     // managers as the button disappearing, so Liz asked for it back (2026-09-01).
     { path: homePath, label: t('nav.dashboard') },
     // A building's attendance is its own tracker; the district's is the
-    // employee record ledger. One entry, pointing at whichever this login
+    // employee card ledger. One entry, pointing at whichever this login
     // actually has.
     ...(role === 'school'
       ? [{ path: `/location/${locationId}`, label: t('nav.attendance') }]

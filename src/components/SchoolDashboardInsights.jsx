@@ -103,7 +103,7 @@ export default function SchoolDashboardInsights({
           </div>
 
           {activeItems.length === 0 ? (
-            <p className="text-sm text-gray-400 py-3">No matching employee records for this school.</p>
+            <p className="text-sm text-gray-400 py-3">No matching employee cards for this school.</p>
           ) : (
             <div className="divide-y divide-gray-100">
               {activeItems.map(item => {

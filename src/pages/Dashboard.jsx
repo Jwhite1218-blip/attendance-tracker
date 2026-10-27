@@ -378,7 +378,7 @@ function DashboardDrilldown({ id, type, monthName, birthdays, requestedTimeOff, 
       </div>
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-400 py-3">No matching employee records.</p>
+        <p className="text-sm text-gray-400 py-3">No matching employee cards.</p>
       ) : (
         <div className="divide-y divide-gray-100">
           {items.map(item => {
@@ -444,7 +444,6 @@ function formatDateKey(dateKey) {
 // The cards were also the way into a school's attendance tracker, so that
 // has to survive: narrow to exactly one and a button appears to open it.
 function SchoolFilter({ locationCounts, selected, onChange }) {
-  const navigate = useNavigate()
   const schools = LOCATIONS
     .filter(location => locationCounts[location.id])
     .sort((left, right) => left.name.localeCompare(right.name))
@@ -456,8 +455,6 @@ function SchoolFilter({ locationCounts, selected, onChange }) {
     else next.add(id)
     onChange(next)
   }
-  const onlyOne = selected.size === 1 ? [...selected][0] : null
-
   return (
     <section className="mb-8 rounded-xl border border-charcoal-600 bg-charcoal-800 p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -507,16 +504,6 @@ function SchoolFilter({ locationCounts, selected, onChange }) {
           )
         })}
       </div>
-
-      {onlyOne && (
-        <button
-          type="button"
-          onClick={() => navigate(`/location/${encodeURIComponent(onlyOne)}`)}
-          className="mt-3 inline-flex items-center gap-2 rounded-lg border border-brand-400/60 bg-brand-500/10 px-3 py-2 text-xs font-bold text-brand-100 hover:bg-brand-500/20"
-        >
-          Open {LOCATION_MAP[onlyOne]?.name || onlyOne} attendance tracker →
-        </button>
-      )}
     </section>
   )
 }

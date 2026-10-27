@@ -20,7 +20,7 @@ export default function EmployeeRecordPage() {
   if (!employee) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <p className="text-charcoal-200">That employee record is unavailable for this login.</p>
+        <p className="text-charcoal-200">That employee card is unavailable for this login.</p>
         <Link to={homePath} className="text-brand-300 hover:underline mt-2 inline-block">Return to attendance</Link>
       </div>
     )
@@ -43,11 +43,11 @@ export default function EmployeeRecordPage() {
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          <span className="hidden sm:inline">Back to {school?.name || 'Employee Records'}</span>
+          <span className="hidden sm:inline">Back to {school?.name || 'Employee Cards'}</span>
           <span className="sm:hidden">Back</span>
         </Link>
         <div className="flex items-center gap-2 text-xs text-charcoal-200 truncate">
-          <Link to="/ledger" className="hover:text-brand-300 hidden sm:inline">Employee Records</Link>
+          <Link to="/ledger" className="hover:text-brand-300 hidden sm:inline">Employee Cards</Link>
           <span className="hidden sm:inline">/</span>
           <span className="truncate">{employee.first_name} {employee.last_name}</span>
         </div>

@@ -27,7 +27,7 @@ const CAPABILITY_LABELS = [
 // blackout dates. Unticking one of these hides the pages AND stops the
 // records being sent — the server enforces it, this is only the switch.
 const VISIBILITY_FLAGS = [
-  ['canViewAttendance', 'Attendance', 'The tracker, employee records, the ledger and the attendance reports'],
+  ['canViewAttendance', 'Attendance', 'The tracker, employee cards, the ledger and the attendance reports'],
   ['canViewTraining', 'Training', 'Professional Standards hours'],
   ['canViewBlackouts', 'Blackout dates', 'The blackout calendar'],
 ]
