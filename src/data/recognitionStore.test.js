@@ -18,8 +18,9 @@ import {
   buildingRecognitionSummary,
   employeeStarsByLocation,
   recognitionEarnsStar,
-  countDailyStarsInMonth,
-  countAceBucksInSchoolYear,
+  dailyStarsInMonth,
+  aceBucksInSchoolYear,
+  recognitionsOfTypeInSchoolYear,
 } from './recognitionStore.js'
 
 function recognition(overrides = {}) {
@@ -309,7 +310,7 @@ test('the month star tile counts only daily stars, only this month', () => {
     recognition({ id: 'f', date: '2026-10-15', type: 'star-shout-out' }),
     recognition({ id: 'g', date: '2026-10-15', type: 'ace-buck' }),
   ]
-  assert.equal(countDailyStarsInMonth(records, '2026-10'), 2)
+  assert.equal(dailyStarsInMonth(records, '2026-10').length, 2)
 })
 
 test('the month star tile follows the school pills, and all district means all', () => {
@@ -318,9 +319,9 @@ test('the month star tile follows the school pills, and all district means all',
     recognition({ id: 'b', date: '2026-10-03', locationId: 'SchoolB' }),
     recognition({ id: 'c', date: '2026-10-04', locationId: 'SchoolC' }),
   ]
-  assert.equal(countDailyStarsInMonth(records, '2026-10', []), 3)
-  assert.equal(countDailyStarsInMonth(records, '2026-10', ['SchoolA']), 1)
-  assert.equal(countDailyStarsInMonth(records, '2026-10', ['SchoolA', 'SchoolC']), 2)
+  assert.equal(dailyStarsInMonth(records, '2026-10', []).length, 3)
+  assert.equal(dailyStarsInMonth(records, '2026-10', ['SchoolA']).length, 1)
+  assert.equal(dailyStarsInMonth(records, '2026-10', ['SchoolA', 'SchoolC']).length, 2)
 })
 
 test('the ACE Buck tile counts the school year, not the calendar year', () => {
@@ -333,8 +334,8 @@ test('the ACE Buck tile counts the school year, not the calendar year', () => {
   ]
   // September and the following May belong together; the June before and
   // the September after belong to the years either side.
-  assert.equal(countAceBucksInSchoolYear(records, 2026), 2)
-  assert.equal(countAceBucksInSchoolYear(records, 2025), 1)
+  assert.equal(aceBucksInSchoolYear(records, 2026).length, 2)
+  assert.equal(aceBucksInSchoolYear(records, 2025).length, 1)
 })
 
 test('the ACE Buck tile narrows with the school pills', () => {
@@ -342,5 +343,43 @@ test('the ACE Buck tile narrows with the school pills', () => {
     recognition({ id: 'a', date: '2026-09-10', type: 'ace-buck', locationId: 'SchoolA' }),
     recognition({ id: 'b', date: '2026-10-10', type: 'ace-buck', locationId: 'SchoolB' }),
   ]
-  assert.equal(countAceBucksInSchoolYear(records, 2026, ['SchoolB']), 1)
+  assert.equal(aceBucksInSchoolYear(records, 2026, ['SchoolB']).length, 1)
+})
+
+// The nomination tiles, added 2026-10-26 beside the two that count earned
+// awards. A nomination is not a star, so these must never pick one up.
+test('the nomination tiles count one type each, over the school year', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-09-02', type: 'shooting-star' }),
+    recognition({ id: 'b', date: '2027-04-02', type: 'shooting-star' }),
+    recognition({ id: 'c', date: '2026-06-02', type: 'shooting-star' }),
+    recognition({ id: 'd', date: '2026-09-03', type: 'star-shout-out' }),
+    recognition({ id: 'e', date: '2026-09-04' }),
+    recognition({ id: 'f', date: '2026-09-05', type: 'ace-buck' }),
+  ]
+  assert.deepEqual(
+    recognitionsOfTypeInSchoolYear(records, 'shooting-star', 2026).map(r => r.id),
+    ['a', 'b'],
+  )
+  assert.deepEqual(
+    recognitionsOfTypeInSchoolYear(records, 'star-shout-out', 2026).map(r => r.id),
+    ['d'],
+  )
+})
+
+// A tile and its drill-down read the same list, so the number on the tile
+// is the number of rows that open under it. This is the property that
+// stops the two drifting apart.
+test('every dashboard recognition tile hands its drill-down the rows it counted', () => {
+  const records = [
+    recognition({ id: 'a', date: '2026-10-02', locationId: 'SchoolA' }),
+    recognition({ id: 'b', date: '2026-10-03', locationId: 'SchoolB' }),
+    recognition({ id: 'c', date: '2026-10-04', type: 'ace-buck', locationId: 'SchoolA' }),
+  ]
+  const stars = dailyStarsInMonth(records, '2026-10', ['SchoolA'])
+  assert.equal(stars.length, 1)
+  assert.equal(stars[0].id, 'a')
+  const bucks = aceBucksInSchoolYear(records, 2026, ['SchoolA'])
+  assert.equal(bucks.length, 1)
+  assert.equal(bucks[0].id, 'c')
 })

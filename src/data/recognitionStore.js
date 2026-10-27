@@ -353,37 +353,47 @@ export function getAceBuckCount(records, employeeId, startYear) {
 }
 
 // District figures for the dashboard tiles. The counters above answer "how
-// much has one person earned"; these answer "how much happened here", so
-// they filter on the building a recognition was given at rather than on an
+// much has one person earned"; these answer "what happened here", so they
+// filter on the building a recognition was given at rather than on an
 // employee id.
 //
-// An empty locationIds means the whole district, which is the same shape the
-// dashboard's school pills use — All district is an empty selection, so the
-// tile and the pills cannot disagree about what "all" means.
+// They return the records, not a number. Liz, 2026-10-26, asked the tiles
+// to open: a tile and its drill-down that each ran their own filter would
+// eventually disagree about which records they were describing, and the
+// drill-down is how anybody would notice the count was wrong.
+//
+// An empty locationIds means the whole district, the same shape the school
+// pills use — All district is an empty selection, so the tiles and the
+// pills cannot disagree about what "all" means.
 function inLocationScope(record, scope) {
   return scope.size === 0 || scope.has(String(record?.locationId || ''))
 }
 
-export function countDailyStarsInMonth(records, monthKey, locationIds = []) {
+export function dailyStarsInMonth(records, monthKey, locationIds = []) {
   const scope = new Set((locationIds || []).map(String))
   return (records || []).filter(record =>
     earnsDailyStar(record)
     && String(record.date || '').startsWith(`${monthKey}-`)
     && inLocationScope(record, scope)
-  ).length
+  )
 }
 
-// Liz, 2026-10-26, asked for "ACE Bucks earned total for the year". The
-// recognition year is the school year, not the calendar year — a Buck
-// earned in May belongs with the one earned the previous September, and
-// resetting in January would split a programme that runs August to June.
-export function countAceBucksInSchoolYear(records, startYear, locationIds = []) {
+// Liz, 2026-10-26, asked for ACE Bucks and then the two nomination counts
+// "for the year". The recognition year is the school year, not the calendar
+// year — an award earned in May belongs with one earned the previous
+// September, and resetting in January would split a programme that runs
+// August to June in half.
+export function recognitionsOfTypeInSchoolYear(records, type, startYear, locationIds = []) {
   const scope = new Set((locationIds || []).map(String))
   return (records || []).filter(record =>
-    isAceBuck(record)
+    record?.type === type
     && isRecognitionInSchoolYear(record, startYear)
     && inLocationScope(record, scope)
-  ).length
+  )
+}
+
+export function aceBucksInSchoolYear(records, startYear, locationIds = []) {
+  return recognitionsOfTypeInSchoolYear(records, 'ace-buck', startYear, locationIds)
 }
 
 // Deliberately excludes ACE Bucks, so an employee star count stays an
