@@ -124,10 +124,10 @@ export default function StaffAdmin() {
                     {canTouchRoster && (
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={async () => {
                           if (rosterMode === 'request') {
                             try {
-                              submitRequest({
+                              await submitRequest({
                                 type: 'deactivate',
                                 empId: empKey,
                                 employeeName: `${employee.first_name} ${employee.last_name}`,

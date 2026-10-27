@@ -728,10 +728,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                   </p>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       try {
                         if (rosterMode === 'request') {
-                          submitRequest({
+                          await submitRequest({
                             type: 'deactivate',
                             empId: empKey,
                             employeeName: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),
@@ -766,10 +766,10 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                       <div className="flex gap-2 mt-2">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             try {
                               if (rosterMode === 'request') {
-                                submitRequest({
+                                await submitRequest({
                                   type: 'deactivate',
                                   empId: empKey,
                                   employeeName: `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim(),

@@ -170,7 +170,22 @@ export async function loadSharedState() {
   return state
 }
 
-export function writeSharedStorage(key, value) {
+// The same write, awaited.
+//
+// Liz, 2026-10-27: an administrator submitted a request, their screen said
+// "Sent to Liz for review", and nothing had been sent — the database was
+// refusing the write and the flush is asynchronous, so the message went up
+// before anything had happened. A confirmation that cannot be wrong is
+// worth more than one that appears instantly.
+//
+// Use this wherever the screen is about to tell somebody their change is
+// safe. Everywhere else the fire-and-forget version is right: a marked
+// attendance day should not block on the network.
+export function writeSharedStorageConfirmed(key, value) {
+  return writeSharedStorage(key, value, { confirmed: true })
+}
+
+export function writeSharedStorage(key, value, { confirmed = false } = {}) {
   if (!isManagedStorageKey(key)) throw new Error(`Unsupported shared storage key: ${key}`)
   if (!canWriteManagedKey(key)) throw new Error('This session is read-only for that information.')
   const previousRaw = localStorage.getItem(key)
@@ -192,19 +207,46 @@ export function writeSharedStorage(key, value) {
   writePendingWrites(pending)
   announceSyncStatus('saving')
 
-  saveQueue = saveQueue
+  // Split in two so a caller can await the flush itself and see it fail.
+  // saveQueue still swallows the error — the badge reports it — so the
+  // rejection below is always handled even when nobody is awaiting it.
+  const flushed = saveQueue
     .catch(() => undefined)
     .then(() => flushPendingWrites())
-    .then(() => announceSyncStatus('saved'))
+
+  saveQueue = flushed
+    .then(discarded => announceSyncStatus(discarded?.length ? 'pending' : 'saved'))
     .catch(() => announceSyncStatus('pending'))
 
-  return value
+  if (!confirmed) return value
+
+  // Throwing here is safe in a way it would not be inside the flush loop:
+  // the entry has already been removed from the queue, so nothing is left
+  // to retry and nothing behind it is blocked. That was the 2026-10-19
+  // failure and this does not reintroduce it.
+  return flushed.then(discarded => {
+    const refused = (discarded || []).find(entry => entry.key === key)
+    if (refused) {
+      const error = new Error(
+        refused.message || 'The server would not accept that change. Nothing has been saved.'
+      )
+      error.status = refused.status
+      throw error
+    }
+    return value
+  })
 }
 
+// Returns the keys whose writes were thrown away because the server
+// refused them. Dropping a 4xx is right — see the catch below — but until
+// 2026-10-27 nothing above this line could tell that it had happened, so a
+// screen could say "Sent to Liz for review" about a write the database had
+// rejected. The drop is unchanged; it is now reported.
 async function performPendingFlush() {
+  const discarded = []
   const pending = readPendingWrites()
   const entries = Object.entries(pending)
-  if (!entries.length) return
+  if (!entries.length) return discarded
 
   for (const [key, rawPending] of entries) {
     if (key === 'all-star-recognition-v1' && !canWriteManagedKey(key)) {
@@ -265,6 +307,7 @@ async function performPendingFlush() {
           delete latestPending[key]
           writePendingWrites(latestPending)
         }
+        discarded.push({ key, status: error.status, message: error.message })
         continue
       }
       // A 5xx really might clear up. Leave it queued and try again later.
@@ -284,6 +327,8 @@ async function performPendingFlush() {
       localStorage.setItem(key, JSON.stringify(rebasedValue))
     }
   }
+
+  return discarded
 }
 
 export function flushPendingWrites() {

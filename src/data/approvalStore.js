@@ -4,7 +4,7 @@
 // tested on its own. This file is the thin part that talks to the shared
 // store, so a browser is the only thing it needs.
 
-import { writeSharedStorage } from './sharedStore.js'
+import { writeSharedStorageConfirmed } from './sharedStore.js'
 import {
   addEmployee,
   getEffectiveLocation,
@@ -29,22 +29,26 @@ export function getApprovalRequests() {
   }
 }
 
+// Awaited, not fired off. Both callers tell somebody their change is
+// safe, and until 2026-10-27 they said so before the write had left the
+// browser — which is how a database refusing every request went unnoticed
+// for a week.
 function save(requests) {
-  writeSharedStorage(APPROVALS_KEY, pruneDecided(requests))
+  return writeSharedStorageConfirmed(APPROVALS_KEY, pruneDecided(requests))
 }
 
 // Builds and stores in one step, because every caller does both and the
 // validation belongs to the building half.
-export function submitRequest(input) {
+export async function submitRequest(input) {
   const request = buildRequest(input)
   const next = addRequest(getApprovalRequests(), request)
-  save(next)
+  await save(next)
   return request
 }
 
-export function decideApprovalRequest(id, decision) {
+export async function decideApprovalRequest(id, decision) {
   const next = decideRequest(getApprovalRequests(), id, decision)
-  save(next)
+  await save(next)
   return next.find(request => request.id === String(id))
 }
 

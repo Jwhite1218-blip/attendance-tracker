@@ -28,7 +28,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
     setError('')
   }
 
-  const handleSubmit = event => {
+  const handleSubmit = async event => {
     event.preventDefault()
     try {
       if (!form.first_name.trim() || !form.last_name.trim()) throw new Error('First and last name are required.')
@@ -60,7 +60,7 @@ export default function EmployeeEditForm({ employee, onCancel, onSaved }) {
           Object.keys(payload).map(field => [field, field === 'location' ? employee.location : employee[field] ?? ''])
         )
 
-        submitRequest({
+        await submitRequest({
           type: 'edit',
           empId: empKey,
           employeeName: `${employee.first_name} ${employee.last_name}`,

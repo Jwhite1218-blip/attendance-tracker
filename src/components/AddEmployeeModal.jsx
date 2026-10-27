@@ -52,14 +52,14 @@ export default function AddEmployeeModal({ open, onClose, onAdded, defaultLocati
     setError('')
   }
 
-  const handleSubmit = event => {
+  const handleSubmit = async event => {
     event.preventDefault()
     try {
       if (mode === 'request') {
         if (!String(form.first_name || '').trim() || !String(form.last_name || '').trim()) {
           throw new Error('First and last name are required.')
         }
-        submitRequest({
+        await submitRequest({
           type: 'add',
           employeeName: `${form.first_name.trim()} ${form.last_name.trim()}`,
           summary: `${form.position || 'No job title'} · ${LOCATIONS.find(l => l.id === form.location)?.name || form.location || 'No school'}`,

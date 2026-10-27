@@ -18,11 +18,11 @@ export default function TransferModal({ employee, onClose, onTransferred }) {
 
   if (!employee) return null
 
-  const handleTransfer = () => {
+  const handleTransfer = async () => {
     if (!selectedLocation) return
     if (mode === 'request') {
       try {
-        submitRequest({
+        await submitRequest({
           type: 'transfer',
           empId: empKey,
           employeeName: `${employee.first_name} ${employee.last_name}`,

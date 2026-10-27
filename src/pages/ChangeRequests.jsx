@@ -77,13 +77,13 @@ export default function ChangeRequests() {
     )
   }
 
-  const decide = (request, status) => {
+  const decide = async (request, status) => {
     setError('')
     try {
       // The decision is recorded first. If applying then fails, the request
       // reads as approved and not yet applied, which Liz can see and act on —
       // better than a change that happened with no record of who allowed it.
-      decideApprovalRequest(request.id, {
+      await decideApprovalRequest(request.id, {
         status,
         decidedBy: access.displayName,
         decisionNote: notes[request.id] || '',
