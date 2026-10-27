@@ -1,22 +1,16 @@
 import { useState } from 'react'
-import { useProgramTerms } from '../components/useProgramTerms.js'
+
 import { Link, useNavigate } from 'react-router-dom'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import { getLocationCounts, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getEmployeeAttendanceYears, getEmployeeYearAttendance } from '../data/attendanceStore.js'
 import { getAllFlaggedEmployees, mainPageFlagged, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
-import { ATTENDANCE_CODES, CODE_MAP } from '../data/attendanceCodes.js'
-import { getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
+import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
+import { collectMonthExceptions, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, canViewReports, hasLizAdminAccess } from '../data/futureTools.js'
-import {
-  RECOGNITION_TYPE_MAP,
-  aceBucksInSchoolYear,
-  dailyStarsInMonth,
-  getAllRecognitions,
-  recognitionsOfTypeInSchoolYear,
-  schoolYearStartFor,
-} from '../data/recognitionStore.js'
-import { getEmployeeByKey } from '../data/employeeLocations.js'
+import InsightDrilldown from '../components/InsightDrilldown.jsx'
+import MetricTile from '../components/MetricTile.jsx'
+import RecognitionMetrics, { recognitionTilesFor } from '../components/RecognitionMetrics.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import { useAuth } from '../components/PinGate.jsx'
 
@@ -30,7 +24,6 @@ export default function Dashboard() {
   const recognitionAdminAccess = canAccessRecognitionProgram(access)
   const seesReports = canViewReports(access)
   const [activeDrilldown, setActiveDrilldown] = useState(null)
-  const [activeRecognition, setActiveRecognition] = useState(null)
 
   // Which schools this dashboard is reporting on. Liz, 2026-10-26: one or
   // more, with an All-district toggle that is where everybody starts.
@@ -92,71 +85,30 @@ export default function Dashboard() {
   let totalByCode = {}
   ATTENDANCE_CODES.forEach(c => { if (c.code) totalByCode[c.code] = 0 })
 
-  // Two tallies over the same pass. The year-to-date figures still feed the
-  // summary panel that is labelled year-to-date; the month figures are what
-  // the tile and its drill-down now report.
-  //
-  // Liz, 2026-10-26: a year count climbs all year and never comes back down,
-  // so by spring it says nothing about whether this month is going well.
-  const employeeExceptions = []
-  let monthMarked = 0
+  // Year-to-date, for the panel that is labelled year-to-date.
   employees.forEach(emp => {
-    const records = getEmployeeYearAttendance(emp.kronos_id || emp.id, year)
-    const byCode = {}
-    let empCount = 0
-    Object.entries(records).forEach(([dateKey, r]) => {
+    Object.values(getEmployeeYearAttendance(emp.kronos_id || emp.id, year)).forEach(r => {
       if (!r.code) return
       totalMarked++
       totalByCode[r.code] = (totalByCode[r.code] || 0) + 1
-      if (!String(dateKey).startsWith(`${monthKey}-`)) return
-      monthMarked++
-      empCount++
-      byCode[r.code] = (byCode[r.code] || 0) + 1
     })
-    if (empCount > 0) employeeExceptions.push({ employee: emp, count: empCount, byCode })
   })
-  employeeExceptions.sort((a, b) => b.count - a.count)
 
-  // The four recognition figures, scoped by the same pills as everything
-  // else on the page. Each one is a list, and its tile shows that list's
-  // length, so the number and the rows that open under it are the same
-  // thing read twice.
+  // This month, through the collector a manager's dashboard also uses, so
+  // the two pages cannot mean different things by the same tile. Liz,
+  // 2026-10-26.
   //
-  // Liz, 2026-10-26: stars by the month, the other three by the school
-  // year. Stars are the daily rhythm — a running total says nothing about
-  // how this month is going. The other three are rare enough that a month
-  // of them would usually read nought.
-  const recognitions = recognitionAdminAccess ? getAllRecognitions() : []
-  const recognitionScope = showingWholeDistrict ? [] : scopedLocationIds
-  const schoolYearStart = schoolYearStartFor(today)
-  const schoolYearLabel = `${schoolYearStart}–${String(schoolYearStart + 1).slice(2)}`
-  const recognitionTiles = [
-    {
-      id: 'stars',
-      label: `Stars in ${monthName}`,
-      period: `${monthName} ${year}`,
-      records: dailyStarsInMonth(recognitions, monthKey, recognitionScope),
-    },
-    {
-      id: 'ace-buck',
-      label: 'ACE Bucks',
-      period: schoolYearLabel,
-      records: aceBucksInSchoolYear(recognitions, schoolYearStart, recognitionScope),
-    },
-    {
-      id: 'shooting-star',
-      label: 'Shooting Star Nominations',
-      period: schoolYearLabel,
-      records: recognitionsOfTypeInSchoolYear(recognitions, 'shooting-star', schoolYearStart, recognitionScope),
-    },
-    {
-      id: 'star-shout-out',
-      label: 'Warren Star Shout-Outs',
-      period: schoolYearLabel,
-      records: recognitionsOfTypeInSchoolYear(recognitions, 'star-shout-out', schoolYearStart, recognitionScope),
-    },
-  ]
-  const openRecognitionTile = recognitionTiles.find(tile => tile.id === activeRecognition) || null
+  // One row per exception rather than one per employee: the tile counts
+  // marks, so the panel under it has to list marks or the two disagree. It
+  // used to read "2 records" under a tile showing 3. Who has the most is
+  // the HR follow-up list's question, further down this page.
+  const monthExceptions = collectMonthExceptions(employees, monthKey, getEmployeeYearAttendance)
+
+  // Scoped by the same pills as everything else here; an empty list means
+  // the whole district, which is what the pills mean too.
+  const recognitionTiles = recognitionAdminAccess
+    ? recognitionTilesFor({ locationIds: showingWholeDistrict ? [] : scopedLocationIds, today })
+    : []
 
   const birthdays = getCurrentMonthBirthdays(employees, today)
   const requestedTimeOff = getUpcomingRequestedTimeOff(employees, employee => {
@@ -167,6 +119,17 @@ export default function Dashboard() {
     ])
     return Object.assign({}, ...[...attendanceYears].map(attendanceYear => getEmployeeYearAttendance(empKey, attendanceYear)))
   }, today)
+
+  const drilldownItems = {
+    birthdays,
+    'time-off': requestedTimeOff,
+    exceptions: monthExceptions,
+  }
+  const drilldownTitles = {
+    birthdays: `${monthName} Birthdays`,
+    'time-off': 'Upcoming Requested Time Off',
+    exceptions: `${monthName} Exceptions`,
+  }
 
   const drilldowns = [
     {
@@ -189,11 +152,12 @@ export default function Dashboard() {
       to: '/reports/daily',
       label: 'Daily Report',
       description: "Today's exceptions across every school, printable",
+      count: '→',
     },
     {
       id: 'exceptions',
       label: `${monthName} Exceptions`,
-      count: monthMarked,
+      count: monthExceptions.length,
       description: 'Marked attendance exceptions so far this month',
     },
   ].filter(Boolean)
@@ -247,60 +211,30 @@ export default function Dashboard() {
 
       {/* Dashboard drill-downs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        {drilldowns.map(item => (item.to ? (
-          <Link
+        {drilldowns.map(item => (
+          <MetricTile
             key={item.id}
+            label={item.label}
+            description={item.description}
+            count={item.count}
             to={item.to}
-            className="bg-white rounded-xl border border-gray-200 p-5 transition-all hover:border-brand-300 hover:shadow-md"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{item.label}</p>
-                <p className="text-xs text-gray-400 mt-1">{item.description}</p>
-              </div>
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700" aria-hidden="true">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-brand-600 mt-4">Open report</p>
-          </Link>
-        ) : (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setActiveDrilldown(current => current === item.id ? null : item.id)}
-            aria-expanded={activeDrilldown === item.id}
-            aria-controls="dashboard-drilldown"
-            className={`bg-white rounded-xl border p-5 text-left transition-all hover:border-brand-300 hover:shadow-md ${
-              activeDrilldown === item.id ? 'border-brand-400 ring-2 ring-brand-100' : 'border-gray-200'
-            }`}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">{item.label}</p>
-                <p className="text-xs text-gray-400 mt-1">{item.description}</p>
-              </div>
-              <span className="inline-flex min-w-9 h-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700 text-lg font-bold">
-                {item.count}
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-brand-600 mt-4">
-              {activeDrilldown === item.id ? 'Hide details' : 'View details'}
-            </p>
-          </button>
-        )))}
+            linkLabel="Open report"
+            expanded={activeDrilldown === item.id}
+            onToggle={item.to ? undefined : () => setActiveDrilldown(current => (current === item.id ? null : item.id))}
+            controls="dashboard-drilldown"
+          />
+        ))}
       </div>
 
       {activeDrilldown && (
-        <DashboardDrilldown
+        <InsightDrilldown
           id="dashboard-drilldown"
           type={activeDrilldown}
+          title={drilldownTitles[activeDrilldown]}
           monthName={monthName}
-          birthdays={birthdays}
-          requestedTimeOff={requestedTimeOff}
-          employeeExceptions={employeeExceptions}
+          items={drilldownItems[activeDrilldown] || []}
+          onEmployeeSelect={openEmployeeRecord}
+          showLocation
         />
       )}
 
@@ -348,35 +282,7 @@ export default function Dashboard() {
       {/* Recognition — its own line, per Liz on 2026-10-26, so the four
           programme figures read as one set rather than as leftovers beside
           the headcounts. Each opens the records it counted. */}
-      {recognitionAdminAccess && (
-        <>
-          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-            {recognitionTiles.map(tile => (
-              <button
-                key={tile.id}
-                type="button"
-                onClick={() => setActiveRecognition(current => current === tile.id ? null : tile.id)}
-                aria-expanded={activeRecognition === tile.id}
-                aria-controls="recognition-drilldown"
-                className={`bg-white rounded-xl border p-5 text-left transition-all hover:border-brand-300 hover:shadow-md ${
-                  activeRecognition === tile.id ? 'border-brand-400 ring-2 ring-brand-100' : 'border-gray-200'
-                }`}
-              >
-                <p className="text-sm font-medium text-gray-500">{tile.label}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{tile.records.length}</p>
-                <p className="text-xs text-gray-400 mt-1">{tile.period}</p>
-                <p className="text-xs font-semibold text-brand-600 mt-3">
-                  {activeRecognition === tile.id ? 'Hide details' : 'View details'}
-                </p>
-              </button>
-            ))}
-          </div>
-
-          {openRecognitionTile && (
-            <RecognitionDrilldown id="recognition-drilldown" tile={openRecognitionTile} />
-          )}
-        </>
-      )}
+      {recognitionAdminAccess && <RecognitionMetrics tiles={recognitionTiles} />}
 
       {/* HR Attendance Flags */}
       <HrFollowUpPanel flaggedEmployees={flaggedEmployees} onEmployeeSelect={openEmployeeRecord} />
@@ -429,153 +335,6 @@ function FutureToolButton({ symbol, title, url }) {
   }
 
   return <button type="button" disabled className={className} title="Awaiting Liz's approved parameters">{content}</button>
-}
-
-// What opens under a recognition tile.
-//
-// Deliberately a different component from DashboardDrilldown, which is
-// built around an employee and the dates attached to them. These rows are
-// built around a recognition record: one award, one date, one reason. The
-// two were nearly merged and the merged version needed a branch in every
-// field, which is how a list quietly starts showing the wrong thing.
-//
-// The record carries an employee id rather than a name, so names are looked
-// up here. An award for somebody since removed from the roster still shows
-// — it happened, and dropping the row would make the count look wrong.
-function RecognitionDrilldown({ id, tile }) {
-  const term = useProgramTerms()
-  const records = tile.records
-
-  return (
-    <section id={id} className="bg-white rounded-xl border border-brand-200 p-5 mb-8" aria-live="polite">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-sm font-semibold text-gray-800">{tile.label} · {tile.period}</h2>
-        <span className="text-xs font-medium text-gray-400">{records.length} record{records.length === 1 ? '' : 's'}</span>
-      </div>
-
-      {records.length === 0 ? (
-        <p className="text-sm text-gray-400 py-3">Nothing recorded for this period yet.</p>
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {records.map(record => {
-            const employee = getEmployeeByKey(record.employeeId)
-            const name = employee
-              ? `${employee.first_name} ${employee.last_name}`
-              : `Employee ${record.employeeId}`
-            const school = LOCATION_MAP[record.locationId]?.name || record.locationId || 'No school recorded'
-            const reasons = (Array.isArray(record.criteria) ? record.criteria : [])
-              .map(criterion => term.reason(criterion))
-              .filter(Boolean)
-
-            return (
-              <div key={record.id} className="py-3 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1.5 sm:gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {school}
-                    {record.recognizedBy ? ` · from ${record.recognizedBy}` : ''}
-                    {record.sourceName ? ` · ${record.sourceName}` : ''}
-                  </p>
-                  {reasons.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {reasons.map(reason => (
-                        <span key={reason} className="text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-200 rounded px-1.5 py-0.5">
-                          {reason}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {record.note && <p className="text-xs text-gray-500 mt-1">{record.note}</p>}
-                </div>
-                <div className="sm:text-right flex-shrink-0">
-                  <p className="text-sm font-semibold text-brand-700">{formatDateKey(record.date)}</p>
-                  <p className="text-xs text-gray-400">
-                    {term.recognitionLabel(record.type, RECOGNITION_TYPE_MAP[record.type]?.shortLabel || record.type)}
-                  </p>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function DashboardDrilldown({ id, type, monthName, birthdays, requestedTimeOff, employeeExceptions }) {
-  const term = useProgramTerms()
-  const title = type === 'birthdays'
-    ? `${monthName} Birthdays`
-    : type === 'exceptions'
-      ? `Employees With ${monthName} Exceptions`
-      : 'Upcoming Requested Time Off'
-
-  const items = type === 'birthdays' ? birthdays
-    : type === 'exceptions' ? employeeExceptions
-    : requestedTimeOff
-
-  return (
-    <section id={id} className="bg-white rounded-xl border border-brand-200 p-5 mb-8" aria-live="polite">
-      <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-sm font-semibold text-gray-800">{title}</h2>
-        <span className="text-xs font-medium text-gray-400">{items.length} record{items.length === 1 ? '' : 's'}</span>
-      </div>
-
-      {items.length === 0 ? (
-        <p className="text-sm text-gray-400 py-3">No matching employee cards.</p>
-      ) : (
-        <div className="divide-y divide-gray-100">
-          {items.map(item => {
-            const employee = item.employee
-            const employeeKey = employee.kronos_id || employee.id
-            const locationName = LOCATION_MAP[employee.location]?.name || employee.location || 'No location assigned'
-
-            return (
-              <div key={`${employeeKey}-${item.dateKey || item.day || 'exceptions'}`} className="py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-800">{employee.first_name} {employee.last_name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{locationName} · {employee.position || 'Position not listed'}</p>
-                  {type === 'time-off' && item.record.note && (
-                    <p className="text-xs text-gray-500 mt-1">{item.record.note}</p>
-                  )}
-                  {type === 'exceptions' && (
-                    <div className="flex flex-wrap gap-1.5 mt-1.5">
-                      {Object.entries(item.byCode).map(([code, count]) => (
-                        <span key={code} className="text-[10px] font-medium bg-brand-50 text-brand-700 border border-brand-200 rounded px-1.5 py-0.5">
-                          {CODE_MAP[code]?.shortLabel || code} × {count}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="sm:text-right flex-shrink-0">
-                  {type === 'birthdays' && <p className="text-sm font-semibold text-brand-700">{monthName} {item.day}</p>}
-                  {type === 'time-off' && (
-                    <>
-                      <p className="text-sm font-semibold text-brand-700">{formatDateKey(item.dateKey)}</p>
-                      <p className="text-xs text-gray-400">{term.codeLabel(item.record.code, CODE_MAP[item.record.code]?.label || item.record.code)}</p>
-                    </>
-                  )}
-                  {type === 'exceptions' && (
-                    <p className="text-sm font-semibold text-brand-700">{item.count} this month</p>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function formatDateKey(dateKey) {
-  return new Date(`${dateKey}T12:00:00`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 // Which schools the dashboard is reporting on.

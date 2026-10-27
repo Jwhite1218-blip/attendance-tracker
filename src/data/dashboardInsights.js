@@ -62,6 +62,30 @@ export function buildSchoolInsights(roster, readAttendanceForEmployee, reference
   }
 }
 
+// Every marked exception in one calendar month, oldest first.
+//
+// Liz, 2026-10-26, merging the two dashboards: the district page counted a
+// month and a building's page counted a week, which made the same-looking
+// tile mean two different things depending on who was signed in. Both now
+// ask this.
+//
+// readYearAttendance is injected for the same reason as above: the store it
+// would otherwise import reaches for localStorage.
+export function collectMonthExceptions(roster, monthKey, readYearAttendance) {
+  const year = Number(String(monthKey).slice(0, 4))
+  const list = []
+  ;(roster || []).forEach(employee => {
+    const records = readYearAttendance(employee.kronos_id || employee.id, year) || {}
+    Object.entries(records).forEach(([dateKey, record]) => {
+      if (!record?.code || !String(dateKey).startsWith(`${monthKey}-`)) return
+      list.push({ employee, dateKey, code: record.code, note: record.note })
+    })
+  })
+  return list.sort((left, right) => (
+    left.dateKey.localeCompare(right.dateKey) || compareEmployees(left, right)
+  ))
+}
+
 // Every marked exception for a set of days, oldest first.
 export function collectWeekExceptions(roster, dates, attendance) {
   const list = []

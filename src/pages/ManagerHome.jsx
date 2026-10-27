@@ -16,14 +16,14 @@ import { useAuth } from '../components/PinGate.jsx'
 import { useLanguage } from '../components/LanguageProvider.jsx'
 import { LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
-import { getAttendanceCode, getAttendanceRecord, readFutureAttendance } from '../data/attendanceStore.js'
-import { buildSchoolInsights, collectWeekExceptions } from '../data/dashboardInsights.js'
-import { getWeekDates } from '../data/weekDates.js'
+import { getAttendanceCode, getEmployeeYearAttendance, readFutureAttendance } from '../data/attendanceStore.js'
+import { buildSchoolInsights, collectMonthExceptions } from '../data/dashboardInsights.js'
 import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
-import { attendanceSeverityOf, getAllFlaggedEmployees } from '../data/hrFlags.js'
+import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
+import RecognitionMetrics, { recognitionTilesFor } from '../components/RecognitionMetrics.jsx'
+import { attendanceSeverityOf, getAllFlaggedEmployees, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import {
   RECOGNITION_TYPE_MAP,
-  earnsDailyStar,
   getAceBuckCount,
   getAllRecognitions,
   getDailyStarCount,
@@ -32,7 +32,7 @@ import {
   isRecognitionInSchoolYear,
   schoolYearStartFor,
 } from '../data/recognitionStore.js'
-import { translateCount } from '../data/i18n.js'
+
 
 function todayKey() {
   const now = new Date()
@@ -43,7 +43,7 @@ export default function ManagerHome() {
   const navigate = useNavigate()
   const [activeInsight, setActiveInsight] = useState(null)
   const { locationId, locationIds, onLocationChange, canEditRecognition, dataVersion, employeeId } = useAuth()
-  const { locale, t, formatDate } = useLanguage()
+  const { t, formatDate } = useLanguage()
   const school = LOCATION_MAP[locationId]
   const today = todayKey()
 
@@ -61,60 +61,53 @@ export default function ManagerHome() {
     [roster, today, dataVersion]
   )
 
-  const starsThisMonth = useMemo(() => {
-    const monthPrefix = today.slice(0, 7)
-    return getAllRecognitions().filter(record => (
-      record.locationId === locationId
-      && String(record.date || '').startsWith(monthPrefix)
-      && earnsDailyStar(record)
-    )).length
-  }, [locationId, today, dataVersion])
-
-  // The watch list a manager can act on: their own roster, third occurrence and
-  // up. The district front page shows only fourth-and-up; a building manager
-  // sees the earlier stage because they are the one who can still intervene.
-  const needsAttention = useMemo(() => {
-    const rosterKeys = new Set(roster.map(employee => String(employee.kronos_id || employee.id)))
-    return getAllFlaggedEmployees().filter(status => (
-      rosterKeys.has(String(status.empId)) && attendanceSeverityOf(status) !== 'none'
-    )).length
+  // The watch list a manager can act on: their own roster, third occurrence
+  // and up. The district front page shows only fourth-and-up; a building
+  // manager sees the earlier stage because they are the one who can still
+  // intervene.
+  //
+  // Liz, 2026-10-26: shown here in full, through the panel the district
+  // dashboard uses, rather than as a count linking somewhere else. It is
+  // the one list on this page that somebody has to act on, and it was the
+  // one thing they had to leave the page to read.
+  const flaggedEmployees = useMemo(() => {
+    const byKey = new Map(roster.map(employee => [String(employee.kronos_id || employee.id), employee]))
+    const mine = getAllFlaggedEmployees()
+      .map(status => ({ ...status, employee: byKey.get(String(status.empId)) }))
+      .filter(status => status.employee && attendanceSeverityOf(status) !== 'none')
+    return splitFlaggedByEmploymentStatus(mine).active
   }, [roster, dataVersion])
 
-  // The same four cards as the attendance tracker, for the current week.
-  // Liz, 2026-10-11: they should be on the school's dashboard too, not only
-  // on the overview. One component and one set of builders, so the two
-  // screens cannot disagree about what a school's month looks like.
-  const dates = useMemo(() => getWeekDates(0), [])
-  const weekAttendance = useMemo(() => {
-    const map = {}
-    for (const employee of roster) {
-      const empKey = employee.kronos_id || employee.id
-      for (const dateKey of dates) {
-        const record = getAttendanceRecord(empKey, dateKey)
-        if (record) map[`${empKey}-${dateKey}`] = record
-      }
-    }
-    return map
-  }, [roster, dates, dataVersion])
-
+  // The same three cards the district dashboard shows, built by the same
+  // helpers over this school's roster. Liz, 2026-10-11: they should be on
+  // the school's dashboard too, not only on the overview. Liz, 2026-10-26:
+  // and they should mean the same thing on both — exceptions counted a
+  // week here and a month there.
   const schoolInsights = useMemo(
     () => buildSchoolInsights(roster, readFutureAttendance),
     [roster, dataVersion]
   )
-  const weekExceptions = useMemo(
-    () => collectWeekExceptions(roster, dates, weekAttendance),
-    [roster, dates, weekAttendance]
+  const monthExceptions = useMemo(
+    () => collectMonthExceptions(roster, today.slice(0, 7), getEmployeeYearAttendance),
+    [roster, today, dataVersion]
   )
-  const weekLabel = `${formatDate(dates[0], { dateStyle: 'medium' })} – ${formatDate(dates[6], { dateStyle: 'medium' })}`
+
+  // One building's worth of the district's recognition row. The scope is
+  // this kitchen, which is the whole difference between the two pages.
+  const recognitionTiles = useMemo(
+    () => recognitionTilesFor({ locationIds: [locationId] }),
+    [locationId, dataVersion]
+  )
 
   const openEmployeeRecord = employee => {
     navigate(`/employee/${encodeURIComponent(employee.kronos_id || employee.id)}`)
   }
 
+  // Stars moved to the recognition row below, beside the other three
+  // programme figures.
   const tiles = [
     { label: t('managerHome.onRoster'), value: roster.length },
     { label: t('managerHome.markedToday'), value: markedToday },
-    { label: t('managerHome.starsThisMonth'), value: starsThisMonth },
   ]
 
   return (
@@ -128,7 +121,7 @@ export default function ManagerHome() {
         </h1>
         <p className="mt-1 text-xs text-gray-500">{formatDate(today, { dateStyle: 'full' })}</p>
 
-        <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4">
+        <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
           {tiles.map(tile => (
             <div key={tile.label}>
               <dd className="text-2xl font-black text-gray-900">{tile.value}</dd>
@@ -153,22 +146,17 @@ export default function ManagerHome() {
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
         onEmployeeSelect={openEmployeeRecord}
-        weekExceptions={weekExceptions}
-        weekLabel={weekLabel}
+        monthExceptions={monthExceptions}
         {...schoolInsights}
       />
 
-      {needsAttention > 0 && (
-        <Link
-          to={`/location/${encodeURIComponent(locationId)}#hr-follow-up`}
-          className="block rounded-xl border border-amber-200 bg-amber-50 p-4 hover:bg-amber-100"
-        >
-          <p className="text-sm font-bold text-amber-900">
-            {translateCount(locale, 'managerHome.needsAttention', needsAttention)}
-          </p>
-          <p className="mt-0.5 text-xs text-amber-800">{t('managerHome.needsAttentionHint')}</p>
-        </Link>
-      )}
+      {canEditRecognition && <RecognitionMetrics tiles={recognitionTiles} />}
+
+      <HrFollowUpPanel
+        flaggedEmployees={flaggedEmployees}
+        onEmployeeSelect={openEmployeeRecord}
+        showLocation={false}
+      />
 
       <div className="grid gap-3 sm:grid-cols-2">
         <TrackerButton

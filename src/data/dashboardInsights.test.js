@@ -1,6 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from './dashboardInsights.js'
+import {
+  collectMonthExceptions,
+  getCurrentMonthBirthdays,
+  getUpcomingRequestedTimeOff,
+} from './dashboardInsights.js'
 import { normalizeBirthday } from './employeeFields.js'
 
 const employees = [
@@ -36,4 +40,33 @@ test('returns future requested time off and excludes other attendance codes', ()
     [1, '2026-08-25'],
     [2, '2026-09-01'],
   ])
+})
+
+// Liz, 2026-10-26: the district dashboard counted a month and a building's
+// dashboard counted a week, so the same-looking tile meant two things. Both
+// now read this one collector.
+test('month exceptions take only the named month, oldest first', () => {
+  const roster = [
+    { kronos_id: 'a', first_name: 'Ann', last_name: 'Zeta' },
+    { kronos_id: 'b', first_name: 'Bob', last_name: 'Alpha' },
+  ]
+  const years = {
+    a: { '2026-09-30': { code: 'LI' }, '2026-10-20': { code: 'UNEX', note: 'called' }, '2026-11-01': { code: 'EO' } },
+    b: { '2026-10-20': { code: 'BER' }, '2026-10-02': { code: 'NCNS' } },
+  }
+  const read = (empId, year) => (year === 2026 ? years[empId] : {})
+
+  const list = collectMonthExceptions(roster, '2026-10', read)
+  assert.deepEqual(
+    list.map(item => `${item.dateKey} ${item.employee.last_name} ${item.code}`),
+    // Same day ties break on the employee comparator this module already
+    // uses everywhere else, which orders on first name.
+    ['2026-10-02 Alpha NCNS', '2026-10-20 Zeta UNEX', '2026-10-20 Alpha BER'],
+  )
+  assert.equal(list[1].note, 'called')
+})
+
+test('a month with nothing marked collects nothing rather than throwing', () => {
+  assert.deepEqual(collectMonthExceptions([{ kronos_id: 'a' }], '2026-12', () => null), [])
+  assert.deepEqual(collectMonthExceptions(null, '2026-12', () => ({})), [])
 })
