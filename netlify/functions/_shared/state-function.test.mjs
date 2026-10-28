@@ -1049,3 +1049,62 @@ test('a district office colleague added in the app reaches every building', asyn
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Liz, 2026-10-27: "so can you confirm that employee cards added by roster
+// import and added in app will be treated the same across all rules?"
+//
+// They did not leave the server the same way. A roster-file employee went
+// out through an allowlist naming the fields that may travel; one added in
+// the app went out through a denylist removing two. The results agreed only
+// because the Add Employee form cannot collect a field the allowlist would
+// have dropped — which is a coincidence that the next new field would end.
+test('an employee added in the app leaves through the same allowlist as one from the file', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const mine = employees.find(employee => employee.location !== 'Admin')
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'employee-custom-records': [{
+        id: 900003,
+        kronos_id: 'added-1',
+        first_name: 'Added',
+        last_name: 'Person',
+        position: 'Cook',
+        location: mine.location,
+        active: true,
+        birthdate: '03-14',
+        service_date: '2024-08-01',
+        // None of these can be entered today. They stand in for whatever
+        // field somebody adds to an employee card next.
+        pay_amount: 21.5,
+        weekly_hours: 32,
+        phone: '555-0101',
+        t_shirt_size: 'L',
+        ssn_last_four: '1234',
+      }],
+    })
+
+    const request = await authenticatedRequest(
+      { role: 'school', locationId: mine.location, canEditAttendance: true },
+      sessions,
+    )
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const [added] = body.entries['employee-custom-records']
+
+    assert.deepEqual(
+      Object.keys(added).sort(),
+      ['birthdate', 'first_name', 'id', 'kronos_id', 'last_name', 'location', 'position', 'service_date'],
+      'exactly the fields a roster-file employee is allowed, and nothing else'
+    )
+
+    // The same shape a building receives for somebody from the file, so no
+    // screen can tell the two apart and no future field sneaks past.
+    const fromFile = body.roster.find(row => String(row.kronos_id || row.id) === String(mine.kronos_id || mine.id))
+    assert.deepEqual(Object.keys(added).sort(), Object.keys(fromFile).sort())
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})

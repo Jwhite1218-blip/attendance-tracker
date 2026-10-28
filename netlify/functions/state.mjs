@@ -56,8 +56,23 @@ function redactRecordOverrides(records) {
   )
 }
 
-function redactCustomEmployees(records) {
-  return (Array.isArray(records) ? records : []).map(withoutLizOnlyEmployeeFields)
+// Both kinds of employee leave the server through the same allowlist.
+//
+// Until 2026-10-27 somebody from the roster file went out through
+// publicEmployee, which names the fields that may leave, while somebody
+// added in the app went through a denylist that removed two. The two
+// agreed, but only because the Add Employee form cannot collect a field
+// the allowlist would have dropped — a coincidence, not a guarantee.
+//
+// The next field added to an employee card would have reached fifteen
+// buildings from one source and not the other, and nothing on any screen
+// would have shown the difference. Liz asked for this after being bitten
+// by the same shape of gap twice in a week.
+//
+// Only reached for sessions below Liz's tier; she sees the stored record.
+function redactCustomEmployees(records, session) {
+  return (Array.isArray(records) ? records : [])
+    .map(employee => publicEmployee(employee, session))
 }
 
 // Withholds whole areas from a session that may not see them.
@@ -88,13 +103,13 @@ function withholdHiddenAreas(entries, session) {
   return kept
 }
 
-function redactLizOnlyEmployeeEntries(entries) {
+function redactLizOnlyEmployeeEntries(entries, session) {
   const redacted = { ...entries }
   if (redacted[RECORD_OVERRIDES_KEY]) {
     redacted[RECORD_OVERRIDES_KEY] = redactRecordOverrides(redacted[RECORD_OVERRIDES_KEY])
   }
   if (Array.isArray(redacted[CUSTOM_EMPLOYEES_KEY])) {
-    redacted[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(redacted[CUSTOM_EMPLOYEES_KEY])
+    redacted[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(redacted[CUSTOM_EMPLOYEES_KEY], session)
   }
   return redacted
 }
@@ -252,7 +267,7 @@ function filterEntriesForSession(entries, session) {
   }
   if (hasLizAdminAccess(session)) return withholdHiddenAreas(entries, session)
   if (session.role === 'admin') {
-    return withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries), session)
+    return withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries, session), session)
   }
 
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, schoolLocationsOf(session))
@@ -287,7 +302,8 @@ function filterEntriesForSession(entries, session) {
         .filter(employee => {
           const key = employeeKey(employee)
           return allowedEmployeeIds.has(key) || managerGrade.has(key)
-        })
+        }),
+      session
     )
   }
   // Manager HR notes are district-administrator records. School sessions do
@@ -751,7 +767,7 @@ export async function handleMutate(store, session, body) {
     publicValue = redactRecordOverrides(publicValue)
   }
   if (!hasLizAdminAccess(session) && key === CUSTOM_EMPLOYEES_KEY) {
-    publicValue = redactCustomEmployees(publicValue)
+    publicValue = redactCustomEmployees(publicValue, session)
   }
   return jsonResponse({ ok: true, value: publicValue })
 }
