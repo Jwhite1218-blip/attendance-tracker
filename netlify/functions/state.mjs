@@ -267,10 +267,27 @@ function filterEntriesForSession(entries, session) {
       filterRecordMap(entries[RECORD_OVERRIDES_KEY], allowedEmployeeIds)
     )
   }
+  // Own staff, plus anybody manager-grade — the same boundary
+  // rosterForSession draws for the people who ship in the roster file.
+  //
+  // Liz, 2026-10-27: her District Admin page listed ten, and a kitchen
+  // manager's Shout-Out list offered three of them. The three were the
+  // ones in employees.json; the other seven had been added through the
+  // app, and a custom record was only ever sent to the building its
+  // employee worked in. So the district office was reachable or not
+  // depending on which way that person had got into the system, which is
+  // not a distinction anybody outside this file could have guessed.
+  //
+  // Same redaction as before, and attendance stays school-scoped: this
+  // widens who a building can NAME, not what it can see about them.
+  const managerGrade = managerGradeIds(entries)
   if (Array.isArray(entries[CUSTOM_EMPLOYEES_KEY])) {
     filtered[CUSTOM_EMPLOYEES_KEY] = redactCustomEmployees(
       entries[CUSTOM_EMPLOYEES_KEY]
-        .filter(employee => allowedEmployeeIds.has(employeeKey(employee)))
+        .filter(employee => {
+          const key = employeeKey(employee)
+          return allowedEmployeeIds.has(key) || managerGrade.has(key)
+        })
     )
   }
   // Manager HR notes are district-administrator records. School sessions do

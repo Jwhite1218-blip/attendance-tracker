@@ -1005,3 +1005,47 @@ test('recording a star does not hand a building the whole district board', async
   assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')).sort(),
     ['my-star', 'their-shout', 'their-star'])
 })
+
+// Liz, 2026-10-27, with a screenshot: her District Admin page listed ten
+// people and a kitchen manager's Shout-Out list offered three of them.
+//
+// The three were the ones that ship in employees.json. The other seven had
+// been added through the app, and a custom employee record was only ever
+// sent to the building that employee worked in — so whether a district
+// office colleague could be thanked depended on how they had got into the
+// system, which is not a distinction anybody could have guessed from the
+// screen.
+test('a district office colleague added in the app reaches every building', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const mine = employees.find(employee => employee.location !== 'Admin')
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'employee-custom-records': [
+        // Not food service, and not in any kitchen — exactly the case.
+        { id: 900001, kronos_id: 'van-1', first_name: 'Van', last_name: 'Parham',
+          position: 'Marketing Manager', location: 'Admin', active: true, t_shirt_size: 'L' },
+        // Somebody else's building. Must stay invisible.
+        { id: 900002, kronos_id: 'other-1', first_name: 'Someone', last_name: 'Else',
+          position: 'Cook', location: 'StonyBrkMS', active: true },
+      ],
+    })
+
+    const request = await authenticatedRequest(
+      { role: 'school', locationId: mine.location, canEditAttendance: true },
+      sessions,
+    )
+    const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+    const custom = body.entries['employee-custom-records'] || []
+    const names = custom.map(row => `${row.first_name} ${row.last_name}`)
+
+    assert.deepEqual(names, ['Van Parham'], 'the office colleague travels; another kitchen does not')
+    // Widened who a building can name, not what it may see about them.
+    assert.equal(Object.hasOwn(custom[0], 't_shirt_size'), false)
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
