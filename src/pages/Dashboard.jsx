@@ -9,6 +9,7 @@ import { ATTENDANCE_CODES } from '../data/attendanceCodes.js'
 import { collectMonthExceptions, getCurrentMonthBirthdays, getUpcomingRequestedTimeOff } from '../data/dashboardInsights.js'
 import { canAccessRecognitionProgram, canSeeLizFutureTools, canViewReports, hasLizAdminAccess } from '../data/futureTools.js'
 import { backupReminder } from '../data/backupReminder.js'
+import YourRecognition from '../components/YourRecognition.jsx'
 import { lastBackupExport } from '../data/programSettings.js'
 import InsightDrilldown from '../components/InsightDrilldown.jsx'
 import MetricTile from '../components/MetricTile.jsx'
@@ -216,6 +217,21 @@ export default function Dashboard() {
       </div>
 
       {backupDue && <BackupReminderBanner reminder={backupDue} />}
+
+      {/* Liz, 2026-10-27: "if an admin member is given recognition, can
+          that show up on their dashboard? just like the managers do."
+          The same band a manager sees, not a second one — two copies of a
+          star count is two numbers that can disagree.
+
+          Nothing renders unless this login is linked to an employee card,
+          so a shared office login shows no panel rather than an empty one.
+          Deliberately outside the school pills: this is about the person
+          signed in, not about whichever buildings they are looking at. */}
+      {access.employeeId && (
+        <div className="mb-4">
+          <YourRecognition employeeId={access.employeeId} />
+        </div>
+      )}
 
       {/* Dashboard drill-downs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
