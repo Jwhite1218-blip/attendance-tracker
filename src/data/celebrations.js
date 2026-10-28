@@ -15,6 +15,16 @@ import { FOOD_DAY_DATE, FOOD_DAY_PATH } from './foodDay.js'
 // manager opening the app at 11pm should not see tomorrow's greeting.
 const DISTRICT_TIME_ZONE = 'America/Indiana/Indianapolis'
 
+// h23 rather than hour12:false, which reports midnight as 24 in some
+// engines and would make the cutoff behave oddly for exactly one hour a
+// day — the hour nobody would be awake to report.
+export function districtHour(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: DISTRICT_TIME_ZONE, hourCycle: 'h23', hour: '2-digit',
+  }).formatToParts(now)
+  return Number(parts.find(part => part.type === 'hour').value)
+}
+
 export function districtDateKey(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: DISTRICT_TIME_ZONE,
@@ -49,12 +59,32 @@ export const CELEBRATIONS = [
     path: '/recognition',
     tone: 'halloween',
     spark: '🎃',
+    // A greeting that opens itself, once, early. Jon, 2026-10-28: on
+    // everyone's PIN until about ten, and never twice for the same person.
+    //
+    // The hour matters as much as the once: somebody signing in at two in
+    // the afternoon to fix a Tuesday is working, not arriving, and a
+    // pumpkin in the way of that is just a pumpkin in the way.
+    popup: { untilHour: 10, graphic: 'pumpkin' },
   },
 ]
 
 export function activeCelebration(now = new Date()) {
   const today = districtDateKey(now)
   return CELEBRATIONS.find(day => today >= day.from && today <= day.to) || null
+}
+
+// The celebration whose pop-up should open now, or null. Whether this
+// person has already seen it is the component's question, not this one —
+// that answer lives in the browser, and this stays pure.
+export function celebrationPopup(now = new Date()) {
+  const celebration = activeCelebration(now)
+  if (!celebration?.popup) return null
+  return districtHour(now) < celebration.popup.untilHour ? celebration : null
+}
+
+export function popupSeenKeyFor(celebration) {
+  return `celebration-popup-seen-${celebration?.id || 'unknown'}`
 }
 
 // Per celebration, so dismissing Halloween does not also silence whatever

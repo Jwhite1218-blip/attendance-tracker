@@ -1,6 +1,14 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CELEBRATIONS, activeCelebration, dismissKeyFor, districtDateKey } from './celebrations.js'
+import {
+  CELEBRATIONS,
+  activeCelebration,
+  celebrationPopup,
+  dismissKeyFor,
+  districtDateKey,
+  districtHour,
+  popupSeenKeyFor,
+} from './celebrations.js'
 
 // Midday UTC so the date is unambiguous in Indianapolis either side of a
 // daylight-saving change.
@@ -61,5 +69,56 @@ test('a celebration never ends before it begins', () => {
     assert.ok(day.from <= day.to, `${day.id} ends before it starts`)
     assert.match(day.from, /^\d{4}-\d{2}-\d{2}$/)
     assert.match(day.to, /^\d{4}-\d{2}-\d{2}$/)
+  }
+})
+
+// --- the morning pop-up ---------------------------------------------------
+//
+// Jon, 2026-10-28: "active on everyone's PIN until like 10, but once they
+// sign in it won't happen again." The once is the component's job; the
+// until-ten is this.
+//
+// Indianapolis is UTC-4 in late October, so 10:00 local is 14:00 UTC.
+
+test('the pop-up opens first thing and stops at ten', () => {
+  assert.equal(celebrationPopup(new Date('2026-10-28T10:30:00Z'))?.id, 'halloween-2026', '6:30am local')
+  assert.equal(celebrationPopup(new Date('2026-10-28T13:59:00Z'))?.id, 'halloween-2026', '9:59am local')
+  assert.equal(celebrationPopup(new Date('2026-10-28T14:00:00Z')), null, '10:00am local, done')
+  assert.equal(celebrationPopup(new Date('2026-10-28T19:00:00Z')), null, 'mid-afternoon')
+})
+
+test('the pop-up only runs on the days the banner does', () => {
+  assert.equal(celebrationPopup(new Date('2026-10-27T12:00:00Z')), null, 'the day before')
+  assert.equal(celebrationPopup(new Date('2026-10-30T12:00:00Z'))?.id, 'halloween-2026', 'the Friday')
+  assert.equal(celebrationPopup(new Date('2026-10-31T12:00:00Z')), null, 'the Saturday')
+})
+
+// Food Day has no pop-up — a celebration gets one only by asking.
+test('a celebration without a pop-up stays a banner', () => {
+  assert.equal(activeCelebration(new Date('2026-09-23T12:00:00Z'))?.id, 'indiana-food-day')
+  assert.equal(celebrationPopup(new Date('2026-09-23T12:00:00Z')), null)
+})
+
+test("the hour is the district's, not the browser's", () => {
+  // 02:00 UTC is 10pm the previous evening in Indianapolis.
+  assert.equal(districtHour(new Date('2026-10-29T02:00:00Z')), 22)
+  // And midnight local reads as 0 rather than 24.
+  assert.equal(districtHour(new Date('2026-10-29T04:00:00Z')), 0)
+})
+
+test('seen and dismissed are remembered separately, per celebration', () => {
+  const keys = CELEBRATIONS.flatMap(day => [popupSeenKeyFor(day), dismissKeyFor(day)])
+  assert.equal(new Set(keys).size, keys.length, 'no key does two jobs')
+})
+
+test('every pop-up has a heading and body in both languages', async () => {
+  const { translate } = await import('./i18n.js')
+  for (const day of CELEBRATIONS.filter(entry => entry.popup)) {
+    for (const locale of ['en', 'es']) {
+      for (const part of ['title', 'body']) {
+        const key = `celebration.popup.${part}.${day.id}`
+        assert.notEqual(translate(locale, key), key, `${key} is missing for ${locale}`)
+      }
+    }
   }
 })

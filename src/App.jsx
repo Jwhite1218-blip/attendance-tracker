@@ -23,6 +23,7 @@ import RecognitionProgram from './pages/RecognitionProgram.jsx'
 import BackupRecovery from './pages/BackupRecovery.jsx'
 import PublicSchoolLeaderboard from './pages/PublicSchoolLeaderboard.jsx'
 import FoodDayCelebration, { FoodDayBanner } from './components/FoodDayCelebration.jsx'
+import CelebrationPopup from './components/CelebrationPopup.jsx'
 import { FOOD_DAY_PATH } from './data/foodDay.js'
 import PinGate, { logout, useAuth } from './components/PinGate.jsx'
 import { LanguageToggle, useLanguage } from './components/LanguageProvider.jsx'
@@ -359,6 +360,7 @@ export function AppShell() {
 
       <main id="main-content">
         <FoodDayBanner pathname={location.pathname} homePath={homePath} />
+        <CelebrationPopup pathname={location.pathname} homePath={homePath} />
         <RouteErrorBoundary routeKey={location.pathname}>
         <Routes>
           <Route path={FOOD_DAY_PATH} element={<FoodDayCelebration homePath={homePath} canRecognize={recognitionAdminAccess} />} />
