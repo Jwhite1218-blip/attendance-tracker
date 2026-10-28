@@ -5,6 +5,11 @@
   font-family: 'Segoe UI', Arial, sans-serif;
 }
 .food-day-banner { background: var(--food-green); color: white; }
+/* One block per celebration tone. Halloween reads as dusk rather than
+   novelty orange — it still sits above a work screen at six in the
+   morning, and has to be legible before it is festive. */
+.food-day-banner--halloween { background: linear-gradient(90deg, #2b1a3d 0%, #4a2545 60%, #7a3410 100%); }
+.food-day-banner--halloween .food-day-banner-spark { font-size: 30px; }
 .food-day-banner-inner {
   max-width: 1400px; margin: auto; padding: 15px 32px;
   display: flex; align-items: center; gap: 22px;

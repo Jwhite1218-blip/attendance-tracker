@@ -46,6 +46,12 @@ const UI_STRINGS = {
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Food Service Attendance Portal',
+    // One line per celebration in celebrations.js. Short: it is read at
+    // six in the morning by somebody with their coat still on.
+    'celebration.indiana-food-day': 'Happy Indiana Food Day, team!',
+    'celebration.halloween-2026': 'Happy Halloween week, team!',
+    'celebration.cta.indiana-food-day': 'Celebrate with us',
+    'celebration.cta.halloween-2026': 'Catch someone shining',
     'gate.usernameLabel': 'Username',
     'gate.usernameHint': 'administrators only',
     'gate.usernamePlaceholder': 'leave blank if you do not have one',
@@ -112,6 +118,10 @@ const UI_STRINGS = {
 
     'gate.district': 'Warren Township',
     'gate.portal': 'Portal de Asistencia de Servicio de Alimentos',
+    'celebration.indiana-food-day': '¡Feliz Día de la Comida de Indiana, equipo!',
+    'celebration.halloween-2026': '¡Feliz semana de Halloween, equipo!',
+    'celebration.cta.indiana-food-day': 'Celebre con nosotros',
+    'celebration.cta.halloween-2026': 'Reconozca a un compañero',
     'gate.usernameLabel': 'Nombre de usuario',
     'gate.usernameHint': 'solo administradores',
     'gate.usernamePlaceholder': 'déjelo en blanco si no tiene uno',
