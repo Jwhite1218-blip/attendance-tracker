@@ -230,6 +230,19 @@ export function createRecognitionRecord(input, options = {}) {
     // a client cannot claim to be another building. PINs themselves are never
     // stored — the signed-in building is what answers "which school".
     recognizedByLocationId: String(input.recognizedByLocationId || '').trim().slice(0, 100),
+    // Liz, 2026-10-27: "if 5 out of 10 employees in the kitchen did
+    // something great and you want to reward the group with one
+    // recognition card but it would mark an individual star each."
+    //
+    // So five records, each a real star that counts toward that person's
+    // own milestone and earns their own drawing entry, tied together by a
+    // shared id. The id is what lets the card printer know they were one
+    // award and print one card with five names rather than five cards.
+    //
+    // Absent on a single award, which is almost all of them.
+    ...(String(input.groupId || '').trim()
+      ? { groupId: String(input.groupId).trim().slice(0, 120) }
+      : {}),
     createdAt,
   }
 }
@@ -273,6 +286,41 @@ export function addRecognition(input, options = {}) {
   records[record.id] = record
   writeSharedStorage(RECOGNITION_STORAGE_KEY, records)
   return record
+}
+
+// One award, several people. Each gets their own record — see groupId in
+// createRecognitionRecord for why that is the right shape rather than one
+// record naming five people.
+//
+// Written in a single save so the five either all land or none do. Building
+// them first means a bad one throws before anything is stored, rather than
+// leaving two stars recorded and three not.
+export function addRecognitionGroup(input, people, options = {}) {
+  const seen = new Set()
+  const chosen = (Array.isArray(people) ? people : [])
+    .map(person => ({
+      employeeId: String(person?.employeeId ?? person ?? '').trim(),
+      // Each record keeps its own building rather than borrowing the first
+      // person's, so the figures stay right if a group award is ever
+      // allowed to cross one.
+      locationId: String(person?.locationId || input?.locationId || '').trim(),
+    }))
+    .filter(person => person.employeeId && !seen.has(person.employeeId) && seen.add(person.employeeId))
+  if (!chosen.length) throw new Error('Choose at least one person.')
+
+  const groupId = chosen.length > 1
+    ? (options.groupId || `group-${Date.now()}-${globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2)}`)
+    : ''
+
+  const built = chosen.map(person => createRecognitionRecord(
+    { ...input, ...person, groupId },
+    { ...options, id: undefined, createdAt: options.createdAt }
+  ))
+
+  const records = readRecognitionMap()
+  for (const record of built) records[record.id] = record
+  writeSharedStorage(RECOGNITION_STORAGE_KEY, records)
+  return built
 }
 
 export function schoolYearStartFor(dateValue = new Date()) {
@@ -499,17 +547,48 @@ export function schoolYearMonthKeys(startYear) {
 // Recognition records turned into printable Star of the Day cards. Only the
 // daily star prints: the physical board is a Star of the Day board, and a
 // nomination is not an award yet.
+// Printable cards. One per star, except that a group award prints once
+// with everybody's name on it — Liz, 2026-10-27: "reward the group with one
+// recognition card but it would mark an individual star each."
+//
+// Order is preserved: a group card appears where its first star did, so a
+// sheet still reads in the order the stars were given.
 export function toStarCardEntries(records, resolveName) {
-  return (Array.isArray(records) ? records : [])
-    .filter(record => record?.type === 'star-of-day')
-    .map(record => ({
-      name: resolveName(record.employeeId) || String(record.employeeId || ''),
+  const cards = []
+  const byGroup = new Map()
+
+  for (const record of (Array.isArray(records) ? records : [])) {
+    if (record?.type !== 'star-of-day') continue
+    const name = resolveName(record.employeeId) || String(record.employeeId || '')
+    const groupId = String(record.groupId || '').trim()
+
+    if (groupId && byGroup.has(groupId)) {
+      // Same award, another person. Their name joins the card already made.
+      byGroup.get(groupId).names.push(name)
+      continue
+    }
+
+    const card = {
+      name,
+      names: [name],
       date: record.date,
       criteria: record.criteria || [],
       otherReason: record.otherReason || '',
       message: record.note || '',
       recognizedBy: record.recognizedBy || '',
-    }))
+    }
+    if (groupId) byGroup.set(groupId, card)
+    cards.push(card)
+  }
+
+  // A single card keeps exactly the shape it has always had — `names` only
+  // appears on a group, so nothing that reads one card has to learn about
+  // groups to stay correct.
+  return cards.map(card => {
+    if (card.names.length > 1) return { ...card, name: card.names.join(', ') }
+    const { names: _names, ...single } = card
+    return single
+  })
 }
 
 // Liz asked for Shout-Outs and Shooting Stars to read differently from the

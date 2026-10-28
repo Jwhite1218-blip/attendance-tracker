@@ -24,6 +24,7 @@ import {
   kitchenManagerIds,
   managerEmployeeIds,
   addRecognition,
+  addRecognitionGroup,
   createRecognitionRecord,
   drawMonthlyAllStar,
   existingMonthlyWinner,
@@ -119,7 +120,10 @@ function formatDate(dateKey) {
 
 
 function emptyRecognitionForm(type) {
-  return { employeeId: '', type, date: localDateKey(), criteria: [], otherReason: '', note: '', sourceName: '' }
+  // employeeIds, plural, because a Star of the Day may be given to several
+  // people at once — Liz, 2026-10-27. Every other surface uses exactly one
+  // and the array simply never grows past it.
+  return { employeeIds: [], type, date: localDateKey(), criteria: [], otherReason: '', note: '', sourceName: '' }
 }
 
 // The extras a manager may record beyond the daily star. Employee of the Month
@@ -347,7 +351,7 @@ export default function RecognitionProgram() {
   const finishConfirmedSubmission = (surface, message, card = null) => {
     surfaceSetters[surface](current => ({
       ...current,
-      employeeId: '',
+      employeeIds: [],
       criteria: [],
       otherReason: '',
       note: '',
@@ -374,23 +378,32 @@ export default function RecognitionProgram() {
     setFeedback(null)
     clearConfirmation(surface)
     try {
-      const employee = employeeMap.get(String(form.employeeId))
-      if (!employee) throw new Error('Choose an employee from your available roster.')
+      const chosen = (form.employeeIds || [])
+        .map(id => employeeMap.get(String(id)))
+        .filter(Boolean)
+      if (!chosen.length) throw new Error('Choose an employee from your available roster.')
       if (!recognitionTypeAllowedForRole(role, form.type, canManageRecognitionAwards)) {
         throw new Error('Only a district administrator can record Warren Food Services Employee of the Month.')
       }
       const draft = createRecognitionRecord({
         ...form,
-        locationId: employee.location,
+        employeeId: String(chosen[0].kronos_id || chosen[0].id),
+        locationId: chosen[0].location,
         recognizedBy: displayName || 'Authenticated manager',
         recognizedByLocationId: role === 'school' ? locationId : DISTRICT_SUBMITTER_ID,
       })
       if (draft.type === 'star-of-day') {
+        // The preview is the card that will print, so for a group it shows
+        // every name — approving something that names one person and
+        // printing something that names five is the one thing this step
+        // exists to prevent.
         setPendingPreview({
           surface,
-          employeeName: employeeName(employee),
+          employeeName: chosen.map(employeeName).join(', '),
+          starCount: chosen.length,
           card: {
-            name: employeeName(employee),
+            name: chosen.map(employeeName).join(', '),
+            names: chosen.map(employeeName),
             date: draft.date,
             criteria: draft.criteria,
             otherReason: draft.otherReason,
@@ -448,22 +461,40 @@ export default function RecognitionProgram() {
       if (!recognitionTypeAllowedForRole(role, form.type, canManageRecognitionAwards)) {
         throw new Error('Only a district administrator can record Warren Food Services Employee of the Month.')
       }
-      const employee = employeeMap.get(String(form.employeeId))
-      if (!employee) throw new Error('Choose an employee from your available roster.')
-      const record = addRecognition({
-        ...form,
-        locationId: employee.location,
-        recognizedBy: displayName || 'Authenticated manager',
-        recognizedByLocationId: role === 'school' ? locationId : DISTRICT_SUBMITTER_ID,
-      })
+      const chosen = (form.employeeIds || [])
+        .map(id => employeeMap.get(String(id)))
+        .filter(Boolean)
+      if (!chosen.length) throw new Error('Choose an employee from your available roster.')
+
+      // One record each, tied by a group id when there is more than one.
+      // Liz, 2026-10-27: five people who did something together earn five
+      // stars and print one card.
+      const records = addRecognitionGroup(
+        {
+          ...form,
+          recognizedBy: displayName || 'Authenticated manager',
+          recognizedByLocationId: role === 'school' ? locationId : DISTRICT_SUBMITTER_ID,
+        },
+        chosen.map(employee => ({
+          employeeId: String(employee.kronos_id || employee.id),
+          locationId: employee.location,
+        })),
+      )
+      const record = records[0]
+      const who = chosen.length === 1
+        ? employeeName(chosen[0])
+        : `${chosen.slice(0, -1).map(employeeName).join(', ')} and ${employeeName(chosen.at(-1))}`
       confirmationMessage = record.type === 'shooting-star'
-        ? `${employeeName(employee)} was added to the quarterly Shooting Star nominations.`
-        : `${employeeName(employee)} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
+        ? `${who} was added to the quarterly Shooting Star nominations.`
+        : chosen.length === 1
+          ? `${who} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
+          : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
       // Only the daily star has a printable card: the physical board is a Star
       // of the Day board, and a nomination is not an award yet.
       card = record.type === 'star-of-day'
         ? {
-          name: employeeName(employee),
+          name: chosen.map(employeeName).join(', '),
+          names: chosen.map(employeeName),
           date: record.date,
           criteria: record.criteria,
           otherReason: record.otherReason,
@@ -822,6 +853,27 @@ function RecognitionEntryForm({
     isManager,
     isAceEligible,
   }).sort(byName)
+  // Liz, 2026-10-27: "from the admin side, it's hard to know which employee
+  // belongs where."
+  //
+  // The building used to be shown only for somebody outside the current
+  // scope, which meant it appeared for a manager looking at peers and never
+  // for the district office — where the list is a hundred and forty-six
+  // names from sixteen buildings and the building is the only thing that
+  // tells two Browns apart.
+  //
+  // Shown whenever the list covers more than one, which is the question it
+  // actually answers. A manager picking from their own kitchen still sees
+  // plain names.
+  // Only the daily star is given to a group. A nomination, a Shout-Out and
+  // a Coach Buck are each about one person by definition.
+  const allowsGroup = form.type === 'star-of-day'
+  const chosenIds = Array.isArray(form.employeeIds) ? form.employeeIds : []
+
+  const recipientsSpanBuildings = new Set(
+    recipients.map(employee => String(employee.location || ''))
+  ).size > 1
+
   const recipientLabel = form.type === 'ace-buck'
     ? 'Which leader'
     : form.type === 'star-shout-out' ? 'Who is being thanked' : 'Team member'
@@ -914,25 +966,83 @@ function RecognitionEntryForm({
           )}
 
           <div className={compact ? 'space-y-4' : 'grid gap-4 md:grid-cols-2'}>
+            {/* A Star of the Day may go to several people at once — Liz,
+                2026-10-27: "if 5 out of 10 employees in the kitchen did
+                something great and you want to reward the group with one
+                recognition card but it would mark an individual star
+                each." Everything else is one person, and stays a plain
+                dropdown rather than a tick list of one. */}
+            {allowsGroup ? (
+              <div className="block">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{recipientLabel}</span>
+                  <span className="text-[11px] text-gray-400">Tick everyone this star is for</span>
+                </div>
+                <div className="mt-1.5 max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-gray-200 p-1.5">
+                  {recipients.length === 0 && (
+                    <p className="px-2 py-3 text-xs text-gray-400">Nobody on this roster yet.</p>
+                  )}
+                  {recipients.map(employee => {
+                    const id = employeeKey(employee)
+                    const ticked = chosenIds.includes(id)
+                    return (
+                      <label
+                        key={id}
+                        className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm ${
+                          ticked ? 'bg-amber-50 text-[#7a4b12]' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={ticked}
+                          onChange={() => onFieldChange(
+                            surface,
+                            'employeeIds',
+                            ticked ? chosenIds.filter(value => value !== id) : [...chosenIds, id],
+                          )}
+                          className="rounded border-gray-300 text-[#c28b24] focus:ring-amber-300"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {employeeListName(employee)}
+                          {recipientsSpanBuildings && employee.location
+                            ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}`
+                            : ''}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+                {/* Said before saving, not after. Five stars is five
+                    drawing entries, and that should never be a surprise. */}
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  {chosenIds.length === 0
+                    ? 'Nobody chosen yet.'
+                    : chosenIds.length === 1
+                      ? 'One star, one card.'
+                      : `${chosenIds.length} stars — one each, counting toward their own milestones and the monthly drawing. One card, naming all ${chosenIds.length}.`}
+                </p>
+              </div>
+            ) : (
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{recipientLabel}</span>
               <select
                 required
-                value={form.employeeId}
-                onChange={event => onFieldChange(surface, 'employeeId', event.target.value)}
+                value={chosenIds[0] || ''}
+                onChange={event => onFieldChange(surface, 'employeeIds', event.target.value ? [event.target.value] : [])}
                 className="mt-1.5 w-full rounded-lg border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#c28b24] focus:outline-none focus:ring-2 focus:ring-amber-100"
               >
                 <option value="">Choose an employee</option>
                 {recipients.map(employee => (
                   <option key={employeeKey(employee)} value={employeeKey(employee)}>
                     {employeeListName(employee)}
-                    {employee.location && !employees.includes(employee)
+                    {recipientsSpanBuildings && employee.location
                       ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}`
                       : ''}
                   </option>
                 ))}
               </select>
             </label>
+            )}
             <label className="block">
               <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Date</span>
               <input
@@ -1686,7 +1796,14 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
   const recent = filtered.slice(0, visibleCount)
   // Counts the whole filtered set, not just what is on screen: the sheet
   // prints everything listed, so the button must not promise fewer.
-  const printableCount = filtered.filter(record => record.type === 'star-of-day').length
+  //
+  // Counts CARDS rather than stars, because since 2026-10-27 a group award
+  // is several stars on one card. Counting the records made the button
+  // offer "3 star cards" for a sheet that prints one.
+  const printableCount = toStarCardEntries(
+    filtered.filter(record => record.type === 'star-of-day'),
+    () => '',
+  ).length
   return (
     <div>
       {/* No heading of its own: the tab above says what this is, and a second

@@ -365,7 +365,14 @@ function ProfileForm({ profile = null, busy, onSubmit, onCancel, onChangePin, on
       .filter(scope)
       .map(employee => ({
         key: String(employee.kronos_id || employee.id),
-        label: `${employee.first_name} ${employee.last_name}${employee.position ? ` — ${employee.position}` : ''}`,
+        // The building first after the name: linking a login is the one job
+        // where "which Brown is this" is the whole question, and for a
+        // district login the list is the entire roster.
+        label: [
+          `${employee.first_name} ${employee.last_name}`,
+          LOCATION_MAP[employee.location]?.name || employee.location || 'No school',
+          employee.position || '',
+        ].filter(Boolean).join(' — '),
       }))
       .sort((left, right) => left.label.localeCompare(right.label))
   }, [form.role, form.locationId])

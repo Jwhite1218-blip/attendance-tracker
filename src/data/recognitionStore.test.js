@@ -18,6 +18,7 @@ import {
   buildingRecognitionSummary,
   employeeStarsByLocation,
   recognitionEarnsStar,
+  toStarCardEntries,
   dailyStarsInMonth,
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
@@ -382,4 +383,81 @@ test('every dashboard recognition tile hands its drill-down the rows it counted'
   const bucks = aceBucksInSchoolYear(records, 2026, ['SchoolA'])
   assert.equal(bucks.length, 1)
   assert.equal(bucks[0].id, 'c')
+})
+
+// --- one card, a star each, 2026-10-27 -----------------------------------
+//
+// Liz: "if 5 out of 10 employees in the kitchen did something great and you
+// want to reward the group with one recognition card but it would mark an
+// individual star each."
+
+test('a group award carries its id; a single award does not', () => {
+  const made = createRecognitionRecord({
+    employeeId: '1', locationId: 'CrestonMS', type: 'star-of-day',
+    date: '2026-10-27', criteria: ['Service'], note: 'Covered the rush together.',
+    groupId: 'group-7',
+  })
+  assert.equal(made.groupId, 'group-7')
+
+  const alone = createRecognitionRecord({
+    employeeId: '1', locationId: 'CrestonMS', type: 'star-of-day',
+    date: '2026-10-27', criteria: ['Service'], note: 'Great day.',
+  })
+  assert.equal(Object.hasOwn(alone, 'groupId'), false, 'absent, not empty')
+})
+
+test('five stars in one group print one card naming all five', () => {
+  const names = { 1: 'Ann Alpha', 2: 'Bo Beta', 3: 'Cy Gamma', 4: 'Di Delta', 5: 'Ed Epsilon' }
+  const group = ['1', '2', '3', '4', '5'].map((employeeId, index) => recognition({
+    id: `g${index}`, employeeId, type: 'star-of-day', date: '2026-10-27',
+    groupId: 'group-7', criteria: ['Teamwork'], note: 'Covered the rush together.',
+  }))
+
+  const cards = toStarCardEntries(group, id => names[id])
+  assert.equal(cards.length, 1, 'one card, not five')
+  assert.equal(cards[0].name, 'Ann Alpha, Bo Beta, Cy Gamma, Di Delta, Ed Epsilon')
+  assert.deepEqual(cards[0].names, Object.values(names))
+  assert.equal(cards[0].message, 'Covered the rush together.')
+})
+
+test('a single star is unchanged, and keeps its place beside a group', () => {
+  const names = { 1: 'Ann Alpha', 2: 'Bo Beta', 9: 'Zed Omega' }
+  const records = [
+    recognition({ id: 'solo-1', employeeId: '9', type: 'star-of-day', date: '2026-10-26' }),
+    recognition({ id: 'g1', employeeId: '1', type: 'star-of-day', date: '2026-10-27', groupId: 'g' }),
+    recognition({ id: 'g2', employeeId: '2', type: 'star-of-day', date: '2026-10-27', groupId: 'g' }),
+  ]
+  const cards = toStarCardEntries(records, id => names[id])
+  assert.deepEqual(cards.map(card => card.name), ['Zed Omega', 'Ann Alpha, Bo Beta'])
+  // A single card is untouched: no names array, so nothing that reads one
+  // card has to know groups exist.
+  assert.equal(Object.hasOwn(cards[0], 'names'), false)
+  assert.deepEqual(cards[1].names, ['Ann Alpha', 'Bo Beta'])
+})
+
+// Each person earns their own star, so the counts and the drawing must see
+// five people — only the printing is shared.
+test('a group of five is five stars, not one', () => {
+  const group = ['1', '2', '3', '4', '5'].map((employeeId, index) => recognition({
+    id: `g${index}`, employeeId, type: 'star-of-day', date: '2026-10-27', groupId: 'group-7',
+  }))
+  assert.equal(group.filter(earnsDailyStar).length, 5)
+  for (const employeeId of ['1', '2', '3', '4', '5']) {
+    assert.equal(getEmployeeStarCount(group, employeeId, 2026), 1, `${employeeId} earns their own`)
+  }
+})
+
+// Two different group awards on the same day must not merge into one card.
+test('two separate group awards print two cards', () => {
+  const names = { 1: 'Ann', 2: 'Bo', 3: 'Cy', 4: 'Di' }
+  const records = [
+    recognition({ id: 'a1', employeeId: '1', type: 'star-of-day', date: '2026-10-27', groupId: 'morning' }),
+    recognition({ id: 'a2', employeeId: '2', type: 'star-of-day', date: '2026-10-27', groupId: 'morning' }),
+    recognition({ id: 'b1', employeeId: '3', type: 'star-of-day', date: '2026-10-27', groupId: 'lunch' }),
+    recognition({ id: 'b2', employeeId: '4', type: 'star-of-day', date: '2026-10-27', groupId: 'lunch' }),
+  ]
+  assert.deepEqual(
+    toStarCardEntries(records, id => names[id]).map(card => card.name),
+    ['Ann, Bo', 'Cy, Di'],
+  )
 })

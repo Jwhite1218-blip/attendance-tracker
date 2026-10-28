@@ -77,6 +77,11 @@ function renderCard(entry) {
   // rule out to the same height and the footer never shifts.
   const slots = written.map(line => `<p class="msg">${escapeHtml(line)}</p>`)
   while (slots.length < 2) slots.push('<span class="ruled"></span>')
+  // Liz, 2026-10-27: a group award prints one card naming everybody, so
+  // the name rule has to hold more than one name. The type steps down as
+  // the list grows rather than at one fixed smaller size, because a card
+  // for two should not be punished for a card for six.
+  const groupSize = Array.isArray(entry?.names) ? entry.names.length : 1
   const message = slots.join('')
 
   return `<article class="card">
@@ -87,7 +92,9 @@ function renderCard(entry) {
     </header>
     <span class="bigstar" aria-hidden="true"></span>
     <div class="namezone">
-      <span class="nameline">${filled ? escapeHtml(entry.name || '') : ''}</span>
+      <span class="nameline${filled && groupSize > 1 ? ` group group-${Math.min(groupSize, 6)}` : ''}">${
+        filled ? escapeHtml(entry.name || '') : ''
+      }</span>
     </div>
     <p class="why">${CARD_LABELS.why[0]}<span class="why-es">${CARD_LABELS.why[1]}</span></p>
     <p class="reasons">${reasons}</p>
@@ -159,6 +166,15 @@ const STYLES = `
               font-family: CardDisplay, "Arial Narrow", Impact, sans-serif;
               font-size: 19px; font-weight: 700; letter-spacing: .01em;
               color: var(--ink); line-height: 1.35; }
+  /* A group card. Several names share one rule, so the type steps down as
+     the list grows and the line is allowed to wrap — a single name keeps
+     the size it has always printed at. */
+  .nameline.group { line-height: 1.2; }
+  .nameline.group-2 { font-size: 17px; }
+  .nameline.group-3 { font-size: 15px; }
+  .nameline.group-4 { font-size: 14px; }
+  .nameline.group-5 { font-size: 13px; }
+  .nameline.group-6 { font-size: 12px; letter-spacing: 0; }
 
   .why { margin: 7px 0 1px; font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
          font-size: 11px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase;
