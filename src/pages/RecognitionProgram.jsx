@@ -35,7 +35,9 @@ import {
   getNextStarLevel,
   getStarLevel,
   earnsDailyStar,
+  editMonthlyWinner,
   redrawExcludedEmployeeIds,
+  removeMonthlyWinner,
   replaceMonthlyWinner,
   setAsideEntries,
   requiresStarMessage,
@@ -157,7 +159,7 @@ export default function RecognitionProgram() {
     dataVersion,
   } = access
   const [localVersion, setLocalVersion] = useState(0)
-  const [redrawing, setRedrawing] = useState(false)
+  const [savingWinner, setSavingWinner] = useState(false)
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
   const [historyType, setHistoryType] = useState('all')
   // Which half of the board panel is showing. Lifted out of the panel
@@ -602,36 +604,107 @@ export default function RecognitionProgram() {
 
   // See replaceMonthlyWinner for why the person drawn is set aside rather
   // than put back in.
-  const handleRedraw = async () => {
+  // Redraw, edit and remove all change what a month holds, and all three are
+  // awaited. prepare() checks everything it can and throws before anything
+  // is written; only then is the save attempted. If the server refuses, the
+  // change is already on this screen, so put back what the server actually
+  // holds rather than leave a winner showing that nobody else will see.
+  const saveWinnerChange = async prepare => {
     setFeedback(null)
-    setRedrawing(true)
+    setSavingWinner(true)
     let saving = false
     try {
-      if (!monthlyWinner) throw new Error('There is no recorded winner to redraw.')
-      const excluded = redrawExcludedEmployeeIds(monthlyWinner, splitApplies ? managerIds : null)
-      const result = drawMonthlyAllStar(records, drawingScope, drawingMonth, undefined, excluded)
-      if (!result) throw new Error('Nobody else has a Star of the Day entry this month, so there is no one to redraw.')
-      const winner = employeeMap.get(String(result.employeeId))
-      if (!winner) throw new Error('The selected employee is not available in this roster.')
+      const { save, message } = prepare()
       saving = true
-      await replaceMonthlyWinner(monthlyWinner, {
+      await save()
+      setFeedback({ type: 'success', message })
+    } catch (error) {
+      if (saving) await loadSharedState().catch(() => undefined)
+      setFeedback({ type: 'error', message: error.message })
+    } finally {
+      setLocalVersion(version => version + 1)
+      setSavingWinner(false)
+    }
+  }
+
+  const handleRedraw = () => saveWinnerChange(() => {
+    if (!monthlyWinner) throw new Error('There is no recorded winner to redraw.')
+    const excluded = redrawExcludedEmployeeIds(monthlyWinner, splitApplies ? managerIds : null)
+    const result = drawMonthlyAllStar(records, drawingScope, drawingMonth, undefined, excluded)
+    if (!result) throw new Error('Nobody else has a Star of the Day entry this month, so there is no one to redraw.')
+    const winner = employeeMap.get(String(result.employeeId))
+    if (!winner) throw new Error('The selected employee is not available in this roster.')
+    return {
+      save: () => replaceMonthlyWinner(monthlyWinner, {
         employeeId: result.employeeId,
         date: monthAwardDate(drawingMonth),
         criteria: [],
         note: drawingNote(result),
         recognizedBy: displayName || 'Authenticated manager',
-      }, { setAsideBy: displayName || 'District administrator' })
-      setFeedback({ type: 'success', message: `${employeeName(winner)} is ${formatMonth(drawingMonth)} All-Star of the Month.` })
-    } catch (error) {
-      // The redraw is already on this screen by the time the server says
-      // no. Put back what the server actually holds rather than leave a
-      // winner showing that nobody else will see.
-      if (saving) await loadSharedState().catch(() => undefined)
-      setFeedback({ type: 'error', message: error.message })
-    } finally {
-      setLocalVersion(version => version + 1)
-      setRedrawing(false)
+      }, { setAsideBy: displayName || 'District administrator' }),
+      message: `${employeeName(winner)} is ${formatMonth(drawingMonth)} All-Star of the Month.`,
     }
+  })
+
+  // Jon, 2026-10-30: "she needs to be able to edit those fully she put one
+  // in the wrong month." See editMonthlyWinner.
+  const handleEditWinner = ({ employeeId, locationId, monthKey }) => saveWinnerChange(() => {
+    if (!monthlyWinner) throw new Error('There is no recorded winner to edit.')
+    if (!monthlyDrawingStatus(monthKey).isOpen) {
+      throw new Error(`${formatMonth(monthKey)} has not reached its drawing week yet.`)
+    }
+    const person = employeeMap.get(String(employeeId))
+    if (!person) throw new Error('Choose who won.')
+    const clash = existingMonthlyWinner(records, locationId, monthKey)
+    if (clash && clash.id !== monthlyWinner.id) {
+      throw new Error(`${LOCATION_MAP[locationId]?.name || locationId} already has a recorded winner for ${formatMonth(monthKey)}. Remove that one first.`)
+    }
+    const personChanged = String(employeeId) !== String(monthlyWinner.employeeId)
+    const buildingName = LOCATION_MAP[locationId]?.name || locationId
+    return {
+      save: async () => {
+        await editMonthlyWinner(monthlyWinner, {
+          employeeId,
+          locationId,
+          monthKey,
+          // A drawn note says how many entries the draw came from, which
+          // stops being true of somebody chosen by hand.
+          ...(personChanged ? { note: 'Recorded by the district.' } : {}),
+        }, { updatedBy: displayName || 'District administrator' })
+        // Follow the winner to where it now lives, so the panel shows the
+        // change rather than an empty month.
+        if (role === 'admin' && scopeLocation === 'all') setDrawingLocation(locationId)
+        setDrawingMonth(monthKey)
+      },
+      message: `${employeeName(person)} is now ${formatMonth(monthKey)} All-Star of the Month for ${buildingName}.`,
+    }
+  })
+
+  const handleRemoveWinner = () => saveWinnerChange(() => {
+    if (!monthlyWinner) throw new Error('There is no recorded winner to remove.')
+    return {
+      save: () => removeMonthlyWinner(monthlyWinner),
+      message: `${formatMonth(drawingMonth)} has no recorded winner for ${LOCATION_MAP[drawingScope]?.name || drawingScope} now, and can be drawn again.`,
+    }
+  })
+
+  // Who may be chosen when a winner is edited by hand: the building's own
+  // roster, less the manager pool once the split applies — the same people
+  // the drawing itself would consider. Their entry count for that month is
+  // shown beside each name, so the choice can still follow the stars.
+  const winnerCandidates = (candidateLocationId, monthKey) => {
+    const entries = getMonthlyDrawingEntries(records, candidateLocationId, monthKey)
+    const counts = new Map()
+    entries.forEach(entry => counts.set(String(entry.employeeId), (counts.get(String(entry.employeeId)) || 0) + 1))
+    return employees
+      .filter(employee => employee.location === candidateLocationId)
+      .filter(employee => !(monthKey >= MANAGER_SPLIT_STARTS_ON && managerIds.has(employeeKey(employee))))
+      .map(employee => ({
+        id: employeeKey(employee),
+        name: employeeListName(employee),
+        entries: counts.get(employeeKey(employee)) || 0,
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name))
   }
 
   return (
@@ -822,8 +895,11 @@ export default function RecognitionProgram() {
               canRedraw={canRedraw}
               redrawEntries={redrawEntries}
               setAside={setAside}
-              redrawing={redrawing}
+              savingWinner={savingWinner}
               onRedraw={handleRedraw}
+              onEditWinner={handleEditWinner}
+              onRemoveWinner={handleRemoveWinner}
+              winnerCandidates={winnerCandidates}
             />
           </div>
           <ShootingStarNominations
@@ -1594,16 +1670,35 @@ function MonthlyDrawing({
   canRedraw = false,
   redrawEntries = [],
   setAside = [],
-  redrawing = false,
+  savingWinner = false,
   onRedraw,
+  onEditWinner,
+  onRemoveWinner,
+  winnerCandidates = () => [],
 }) {
   const uniqueCandidates = new Set(entries.map(entry => entry.employeeId)).size
   const redrawCandidates = new Set(redrawEntries.map(entry => entry.employeeId)).size
-  // Keyed to the winner rather than a plain flag, so the question closes by
-  // itself once the redraw lands or the building or month changes.
-  const [confirmingFor, setConfirmingFor] = useState(null)
-  const confirming = Boolean(monthlyWinner) && confirmingFor === monthlyWinner.id
+  // Which of redraw, edit or remove is open, keyed to the winner rather than
+  // a plain flag, so it closes by itself once the change lands or the
+  // building or month changes.
+  const [panel, setPanel] = useState(null)
+  const open = monthlyWinner && panel?.id === monthlyWinner.id ? panel : null
   const winnerName = employeeName(monthlyWinnerEmployee) || monthlyWinner?.employeeId
+  const openPanel = mode => setPanel({
+    id: monthlyWinner.id,
+    mode,
+    monthKey: monthlyWinner.monthKey,
+    locationId: monthlyWinner.locationId,
+    employeeId: String(monthlyWinner.employeeId),
+  })
+  const candidates = open?.mode === 'edit' ? winnerCandidates(open.locationId, open.monthKey) : []
+  // The winner as recorded stays choosable even if they are no longer on
+  // that building's active roster, so opening the editor never silently
+  // changes who it names.
+  const editOptions = open?.mode === 'edit' && open.employeeId && !candidates.some(person => person.id === open.employeeId)
+    ? [{ id: open.employeeId, name: open.employeeId === String(monthlyWinner.employeeId) ? winnerName : open.employeeId, entries: 0 }, ...candidates]
+    : candidates
+  const personChanged = open?.mode === 'edit' && open.employeeId !== String(monthlyWinner.employeeId)
   return (
     <section className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -1669,7 +1764,21 @@ function MonthlyDrawing({
               </details>
             )}
           </div>
-          {canRedraw && (confirming ? (
+          {canRedraw && !open && (
+            <div className="mt-2 grid grid-cols-3 gap-1">
+              {[['edit', 'Edit…'], ['redraw', 'Redraw…'], ['remove', 'Remove…']].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => openPanel(mode)}
+                  className="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {canRedraw && open?.mode === 'redraw' && (
             <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
               <p className="text-xs font-bold text-gray-900">Set aside {winnerName} and draw again?</p>
               <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
@@ -1677,34 +1786,91 @@ function MonthlyDrawing({
                   ? `${winnerName} is left out of this redraw. The new winner is drawn from the other ${redrawEntries.length} entr${redrawEntries.length === 1 ? 'y' : 'ies'} (${redrawCandidates} ${redrawCandidates === 1 ? 'person' : 'people'}). Building managers and the public board will only see the new winner.`
                   : 'Nobody else has a Star of the Day entry this month, so there is no one to redraw.'}
               </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={onRedraw}
-                  disabled={redrawing || redrawEntries.length === 0}
-                  className="rounded-lg bg-[#211b12] px-3 py-2 text-xs font-black uppercase tracking-wide text-[#ffd75c] hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {redrawing ? 'Redrawing…' : 'Set aside and redraw'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingFor(null)}
-                  disabled={redrawing}
-                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                >
-                  Cancel
-                </button>
-              </div>
+              <WinnerPanelButtons
+                confirmLabel={savingWinner ? 'Redrawing…' : 'Set aside and redraw'}
+                onConfirm={onRedraw}
+                confirmDisabled={savingWinner || redrawEntries.length === 0}
+                onCancel={() => setPanel(null)}
+                busy={savingWinner}
+              />
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setConfirmingFor(monthlyWinner.id)}
-              className="mt-2 w-full rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800"
-            >
-              Redraw this month…
-            </button>
-          ))}
+          )}
+          {canRedraw && open?.mode === 'edit' && (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+              <p className="text-xs font-bold text-gray-900">Edit the recorded winner</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Month</span>
+                  <input
+                    type="month"
+                    value={open.monthKey}
+                    onChange={event => setPanel({ ...open, monthKey: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Building</span>
+                  <select
+                    value={open.locationId}
+                    onChange={event => {
+                      const locationId = event.target.value
+                      // A person belongs to one building, so changing it
+                      // clears the choice unless they work there too.
+                      const stillThere = winnerCandidates(locationId, open.monthKey).some(person => person.id === open.employeeId)
+                      setPanel({ ...open, locationId, employeeId: stillThere ? open.employeeId : '' })
+                    }}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                  >
+                    {availableLocations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}
+                  </select>
+                </label>
+              </div>
+              <label className="mt-2 block">
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Winner</span>
+                <select
+                  value={open.employeeId}
+                  onChange={event => setPanel({ ...open, employeeId: event.target.value })}
+                  className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                >
+                  <option value="">Choose who won</option>
+                  {editOptions.map(person => (
+                    <option key={person.id} value={person.id}>
+                      {person.name}{person.entries ? ` — ${person.entries} entr${person.entries === 1 ? 'y' : 'ies'}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {personChanged && open.employeeId && (
+                <p className="mt-2 text-[11px] leading-relaxed text-gray-600">
+                  Chosen by hand rather than drawn, so the award will read &ldquo;Recorded by the district&rdquo; instead of the drawing&apos;s entry count.
+                </p>
+              )}
+              <WinnerPanelButtons
+                confirmLabel={savingWinner ? 'Saving…' : 'Save changes'}
+                onConfirm={() => onEditWinner({ employeeId: open.employeeId, locationId: open.locationId, monthKey: open.monthKey })}
+                confirmDisabled={savingWinner || !open.employeeId || !open.monthKey || !open.locationId}
+                onCancel={() => setPanel(null)}
+                busy={savingWinner}
+              />
+            </div>
+          )}
+          {canRedraw && open?.mode === 'remove' && (
+            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-3">
+              <p className="text-xs font-bold text-gray-900">
+                Remove {winnerName} as {formatMonth(drawingMonth)} winner for {LOCATION_MAP[drawingScope]?.name || drawingScope}?
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+                The month goes back to having no winner, and can be drawn again from everyone&apos;s entries.
+              </p>
+              <WinnerPanelButtons
+                confirmLabel={savingWinner ? 'Removing…' : 'Remove winner'}
+                onConfirm={onRemoveWinner}
+                confirmDisabled={savingWinner}
+                onCancel={() => setPanel(null)}
+                busy={savingWinner}
+              />
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -1740,6 +1906,29 @@ function MonthlyDrawing({
         </>
       )}
     </section>
+  )
+}
+
+function WinnerPanelButtons({ confirmLabel, onConfirm, confirmDisabled, onCancel, busy }) {
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={onConfirm}
+        disabled={confirmDisabled}
+        className="rounded-lg bg-[#211b12] px-3 py-2 text-xs font-black uppercase tracking-wide text-[#ffd75c] hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        {confirmLabel}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        disabled={busy}
+        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+      >
+        Cancel
+      </button>
+    </div>
   )
 }
 

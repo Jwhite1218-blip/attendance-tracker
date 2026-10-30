@@ -568,6 +568,66 @@ export function replaceMonthlyWinner(winner, input, { setAsideBy = '', setAsideA
   return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
 }
 
+// Jon, 2026-10-30: "she needs to be able to edit those fully she put one in
+// the wrong month." A recorded winner can be moved to another month or
+// building, or given to somebody else.
+//
+// Revalidated through createRecognitionRecord, like a training edit, so a
+// correction cannot produce a record the drawing would have refused. Identity,
+// creation time and any redraw history are kept; who changed it and when
+// are added alongside.
+//
+// One winner per building per month still holds: moving a winner onto a
+// month that already has one is refused rather than leaving two.
+export function editMonthlyWinner(winner, changes, { updatedBy = '', updatedAt = new Date().toISOString() } = {}) {
+  if (!winner?.id || winner.type !== 'all-star-of-month') {
+    throw new Error('There is no recorded winner to edit.')
+  }
+  const records = readRecognitionMap()
+  if (!records[winner.id]) throw new Error('That winner is no longer recorded.')
+  const monthKey = String(changes?.monthKey ?? winner.monthKey)
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) throw new Error('Choose a valid month.')
+  const [year, month] = monthKey.split('-').map(Number)
+  // Dated the last day of its month, like a fresh draw, so the two never
+  // disagree about which month the award belongs to.
+  const lastDay = String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, '0')
+
+  const record = {
+    ...createRecognitionRecord({
+      ...winner,
+      ...changes,
+      type: 'all-star-of-month',
+      monthKey,
+      date: `${monthKey}-${lastDay}`,
+      criteria: [],
+    }, { id: winner.id, createdAt: winner.createdAt }),
+    updatedAt,
+    updatedBy: String(updatedBy || '').trim().slice(0, 200),
+  }
+  const clash = Object.values(records).find(other =>
+    other?.id !== winner.id
+    && other?.type === 'all-star-of-month'
+    && other.locationId === record.locationId
+    && other.monthKey === record.monthKey
+  )
+  if (clash) throw new Error('That building already has a recorded winner for that month. Remove it first.')
+
+  records[winner.id] = record
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
+}
+
+// Takes the winner off the month entirely, so it can be drawn again from
+// scratch. Any redraw history goes with it: a fresh draw starts with
+// everybody back in.
+export function removeMonthlyWinner(winner) {
+  if (!winner?.id || winner.type !== 'all-star-of-month') {
+    throw new Error('There is no recorded winner to remove.')
+  }
+  const records = readRecognitionMap()
+  delete records[winner.id]
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => winner)
+}
+
 // Liz asked for the school-year leaderboard condensed to a top ten. Ties that
 // straddle the cut are kept: two people on the same star count are the same
 // standing, and dropping one of them because of an alphabetical tiebreak reads

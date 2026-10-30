@@ -653,6 +653,11 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
         || (recognition.recognizedByLocationId !== undefined
           && (typeof recognition.recognizedByLocationId !== 'string'
             || recognition.recognizedByLocationId.length > 100))
+        // Present only on a record that has been corrected since.
+        || (recognition.updatedAt !== undefined
+          && (typeof recognition.updatedAt !== 'string' || Number.isNaN(Date.parse(recognition.updatedAt))))
+        || (recognition.updatedBy !== undefined
+          && (typeof recognition.updatedBy !== 'string' || recognition.updatedBy.length > 200))
         || typeof recognition.createdAt !== 'string'
         || Number.isNaN(Date.parse(recognition.createdAt))
       ) {

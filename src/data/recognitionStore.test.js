@@ -22,7 +22,9 @@ import {
   dailyStarsInMonth,
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
+  editMonthlyWinner,
   redrawExcludedEmployeeIds,
+  removeMonthlyWinner,
   replaceMonthlyWinner,
   setAsideEntries,
 } from './recognitionStore.js'
@@ -242,6 +244,96 @@ test('a redraw is refused when there is no recorded winner', () => {
     () => replaceMonthlyWinner(recognition(), { employeeId: '300' }),
     /no recorded winner/
   )
+})
+
+// Jon, 2026-10-30: "she needs to be able to edit those fully she put one in
+// the wrong month."
+function installRecognitionServer(records) {
+  installTestBrowserStorage()
+  configureClientAccess({ role: 'admin', canEditAttendance: true, canEditRecognition: true })
+  localStorage.setItem('all-star-recognition-v1', JSON.stringify(
+    Object.fromEntries(records.map(record => [record.id, record]))
+  ))
+  const sent = []
+  globalThis.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body || '{}')
+    sent.push(body)
+    return { ok: true, status: 200, json: async () => ({ ok: true, value: JSON.parse(localStorage.getItem(body.key)) }) }
+  }
+  return () => sent.filter(body => body.key === 'all-star-recognition-v1')
+}
+
+test('a winner put in the wrong month moves, keeping who it is and when it was drawn', async () => {
+  const setAside = [{ employeeId: '100', setAsideAt: '2026-10-29T14:00:00.000Z', setAsideBy: 'Liz' }]
+  const winner = monthlyWinnerRecord({ date: '2026-10-31', monthKey: '2026-10', redraw: { setAside } })
+  const sentRecognition = installRecognitionServer([winner])
+
+  const record = await editMonthlyWinner(
+    winner,
+    { monthKey: '2026-09' },
+    { updatedBy: 'Liz', updatedAt: '2026-10-30T17:00:00.000Z' }
+  )
+
+  assert.equal(record.id, winner.id)
+  assert.equal(record.employeeId, '200')
+  assert.equal(record.locationId, 'SchoolA')
+  assert.equal(record.monthKey, '2026-09')
+  // Dated the last day of its new month, as a fresh draw would be.
+  assert.equal(record.date, '2026-09-30')
+  assert.equal(record.createdAt, winner.createdAt)
+  assert.equal(record.note, winner.note)
+  assert.deepEqual(record.redraw, { setAside })
+  assert.equal(record.updatedAt, '2026-10-30T17:00:00.000Z')
+  assert.equal(record.updatedBy, 'Liz')
+
+  const writes = sentRecognition()
+  assert.equal(writes.length, 1)
+  assert.deepEqual(Object.keys(writes[0].mutation.set), [winner.id])
+  assert.deepEqual(writes[0].mutation.remove, [])
+})
+
+test('a winner can be given to somebody else or moved to another building', async () => {
+  const winner = monthlyWinnerRecord()
+  installRecognitionServer([winner])
+
+  const record = await editMonthlyWinner(
+    winner,
+    { employeeId: '300', locationId: 'SchoolB', note: 'Recorded by the district.' },
+    { updatedBy: 'Liz' }
+  )
+  assert.equal(record.employeeId, '300')
+  assert.equal(record.locationId, 'SchoolB')
+  assert.equal(record.monthKey, '2026-08')
+  assert.equal(record.note, 'Recorded by the district.')
+})
+
+test('a winner cannot be moved onto a month that already has one', async () => {
+  const winner = monthlyWinnerRecord({ id: 'august', monthKey: '2026-08' })
+  const september = monthlyWinnerRecord({ id: 'september', employeeId: '300', monthKey: '2026-09', date: '2026-09-30' })
+  const sentRecognition = installRecognitionServer([winner, september])
+
+  assert.throws(() => editMonthlyWinner(winner, { monthKey: '2026-09' }), /already has a recorded winner/)
+  assert.throws(() => editMonthlyWinner(winner, { monthKey: '2026-13' }), /valid month/)
+  assert.equal(sentRecognition().length, 0, 'nothing was sent')
+  // The same building in another month, or another building in the same
+  // month, is fine.
+  const moved = await editMonthlyWinner(winner, { monthKey: '2026-09', locationId: 'SchoolB' })
+  assert.equal(moved.locationId, 'SchoolB')
+})
+
+test('removing a winner leaves the month empty, ready to be drawn again', async () => {
+  const winner = monthlyWinnerRecord()
+  const star = recognition({ id: 'star-1', employeeId: '300' })
+  const sentRecognition = installRecognitionServer([winner, star])
+
+  await removeMonthlyWinner(winner)
+
+  const writes = sentRecognition()
+  assert.equal(writes.length, 1)
+  assert.deepEqual(writes[0].mutation.set, {})
+  assert.deepEqual(writes[0].mutation.remove, [winner.id])
+  assert.deepEqual(Object.keys(JSON.parse(localStorage.getItem('all-star-recognition-v1'))), ['star-1'])
+  assert.throws(() => removeMonthlyWinner(star), /no recorded winner/)
 })
 
 test('a Star of the Day cannot be recorded without saying why they shine', () => {

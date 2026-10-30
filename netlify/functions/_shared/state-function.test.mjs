@@ -1258,3 +1258,24 @@ test('a redraw history must be well formed, and only a drawing may carry one', a
     note: 'Covered the line',
   }), 400)
 })
+
+// Jon, 2026-10-30: Liz put a winner in the wrong month. A corrected record
+// says who corrected it and when, and the server checks both.
+test('a corrected winner may say who changed it, and it must say so properly', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const { redraw: _redraw, ...winner } = redrawnWinner(employee)
+  const attempt = async record => {
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {},
+    })
+    return (await handleMutate(store, drawingAdmin, {
+      key: 'all-star-recognition-v1',
+      mutation: { type: 'object-patch', set: { [record.id]: record }, remove: [] },
+    })).status
+  }
+
+  assert.equal(await attempt({ ...winner, updatedAt: '2026-10-30T17:00:00.000Z', updatedBy: 'District Admin' }), 200)
+  assert.equal(await attempt({ ...winner, updatedAt: 'yesterday', updatedBy: 'District Admin' }), 400)
+  assert.equal(await attempt({ ...winner, updatedAt: '2026-10-30T17:00:00.000Z', updatedBy: 'x'.repeat(201) }), 400)
+})
