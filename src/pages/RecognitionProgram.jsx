@@ -523,7 +523,9 @@ export default function RecognitionProgram() {
         ? `${who} was added to the quarterly Shooting Star nominations.`
         : chosen.length === 1
           ? `${who} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
-          : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
+          : record.type === 'ace-buck'
+            ? `${chosen.length} ACE Coach Bucks recorded, one each for ${who}.`
+            : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
       // Only the daily star has a printable card: the physical board is a Star
       // of the Day board, and a nomination is not an award yet.
       card = record.type === 'star-of-day'
@@ -1013,9 +1015,15 @@ function RecognitionEntryForm({
   // Shown whenever the list covers more than one, which is the question it
   // actually answers. A manager picking from their own kitchen still sees
   // plain names.
-  // Only the daily star is given to a group. A nomination, a Shout-Out and
-  // a Coach Buck are each about one person by definition.
-  const allowsGroup = form.type === 'star-of-day'
+  // The daily star and the Coach Buck are given to a group: one record each,
+  // so every person's own milestone moves. A nomination and a Shout-Out are
+  // each about one person by definition.
+  //
+  // Jon, 2026-10-30: "liz wants to be able to give multiple ACE bucks at
+  // once" — the same ask she made for the daily star on 2026-10-27, from
+  // the district side.
+  const allowsGroup = form.type === 'star-of-day' || form.type === 'ace-buck'
+  const isAceBuck = form.type === 'ace-buck'
   const chosenIds = Array.isArray(form.employeeIds) ? form.employeeIds : []
 
   const recipientsSpanBuildings = new Set(
@@ -1118,13 +1126,16 @@ function RecognitionEntryForm({
                 2026-10-27: "if 5 out of 10 employees in the kitchen did
                 something great and you want to reward the group with one
                 recognition card but it would mark an individual star
-                each." Everything else is one person, and stays a plain
-                dropdown rather than a tick list of one. */}
+                each." A Coach Buck since 2026-10-30, likewise. Everything
+                else is one person, and stays a plain dropdown rather than
+                a tick list of one. */}
             {allowsGroup ? (
               <div className="block">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                   <span className="text-xs font-bold uppercase tracking-wide text-gray-500">{recipientLabel}</span>
-                  <span className="text-[11px] text-gray-400">Tick everyone this star is for</span>
+                  <span className="text-[11px] text-gray-400">
+                    {isAceBuck ? 'Tick every leader this buck is for' : 'Tick everyone this star is for'}
+                  </span>
                 </div>
                 <div className="mt-1.5 max-h-56 space-y-0.5 overflow-y-auto rounded-lg border border-gray-200 p-1.5">
                   {recipients.length === 0 && (
@@ -1165,9 +1176,13 @@ function RecognitionEntryForm({
                 <p className="mt-1.5 text-[11px] text-gray-500">
                   {chosenIds.length === 0
                     ? 'Nobody chosen yet.'
-                    : chosenIds.length === 1
-                      ? 'One star, one card.'
-                      : `${chosenIds.length} stars — one each, counting toward their own milestones and the monthly drawing. One card, naming all ${chosenIds.length}.`}
+                    : isAceBuck
+                      ? chosenIds.length === 1
+                        ? 'One Coach Buck.'
+                        : `${chosenIds.length} Coach Bucks — one each, counting toward their own ACE Coach milestones.`
+                      : chosenIds.length === 1
+                        ? 'One star, one card.'
+                        : `${chosenIds.length} stars — one each, counting toward their own milestones and the monthly drawing. One card, naming all ${chosenIds.length}.`}
                 </p>
               </div>
             ) : (
@@ -1325,7 +1340,9 @@ function RecognitionEntryForm({
                     ? 'Recorded'
                     : confirmation?.type === 'pending'
                       ? 'Awaiting confirmation'
-                      : (currentType?.actionLabel || 'Add to the All-Star board')}
+                      : isAceBuck && chosenIds.length > 1
+                        ? `Award ${chosenIds.length} ACE Coach Bucks`
+                        : (currentType?.actionLabel || 'Add to the All-Star board')}
               </button>
               {confirmation && (
                 <div

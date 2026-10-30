@@ -22,13 +22,14 @@ import {
   dailyStarsInMonth,
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
+  addRecognitionGroup,
   editMonthlyWinner,
   redrawExcludedEmployeeIds,
   removeMonthlyWinner,
   replaceMonthlyWinner,
   setAsideEntries,
 } from './recognitionStore.js'
-import { configureClientAccess } from './sharedStore.js'
+import { configureClientAccess, flushPendingWrites } from './sharedStore.js'
 import { installTestBrowserStorage } from './testBrowserStorage.js'
 
 function recognition(overrides = {}) {
@@ -678,4 +679,39 @@ test('two separate group awards print two cards', () => {
     toStarCardEntries(records, id => names[id]).map(card => card.name),
     ['Ann, Bo', 'Cy, Di'],
   )
+})
+
+// Jon, 2026-10-30: "liz wants to be able to give multiple ACE bucks at once."
+test('several leaders get a Coach Buck each, in one save', async () => {
+  const sentRecognition = installRecognitionServer([])
+  const records = addRecognitionGroup(
+    {
+      type: 'ace-buck',
+      date: '2026-10-30',
+      criteria: ['Safety Leader'],
+      note: '',
+      recognizedBy: 'Liz',
+      recognizedByLocationId: 'district',
+    },
+    [
+      { employeeId: 'mgr-1', locationId: 'CrestonMS' },
+      { employeeId: 'mgr-2', locationId: 'LowellES' },
+      // Ticked twice is still one buck.
+      { employeeId: 'mgr-1', locationId: 'CrestonMS' },
+    ],
+  )
+
+  assert.equal(records.length, 2)
+  assert.deepEqual(records.map(record => record.type), ['ace-buck', 'ace-buck'])
+  // Each buck stays with its own leader's building.
+  assert.deepEqual(records.map(record => record.locationId), ['CrestonMS', 'LowellES'])
+  assert.ok(records[0].groupId)
+  assert.equal(records[0].groupId, records[1].groupId)
+  assert.equal(getAceBuckCount(records, 'mgr-1', 2026), 1)
+  assert.equal(getAceBuckCount(records, 'mgr-2', 2026), 1)
+
+  await flushPendingWrites()
+  const writes = sentRecognition()
+  assert.equal(writes.length, 1)
+  assert.deepEqual(Object.keys(writes[0].mutation.set).sort(), records.map(record => record.id).sort())
 })

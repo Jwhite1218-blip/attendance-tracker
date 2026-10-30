@@ -1279,3 +1279,52 @@ test('a corrected winner may say who changed it, and it must say so properly', a
   assert.equal(await attempt({ ...winner, updatedAt: 'yesterday', updatedBy: 'District Admin' }), 400)
   assert.equal(await attempt({ ...winner, updatedAt: '2026-10-30T17:00:00.000Z', updatedBy: 'x'.repeat(201) }), 400)
 })
+
+// Jon, 2026-10-30: Liz gives several Coach Bucks at once. They arrive as one
+// change, and the server still judges each leader on their own: a cook
+// ticked in by mistake is dropped without taking the others with them.
+test('several Coach Bucks in one change land for every kitchen manager in it', async () => {
+  const id = employee => String(employee.kronos_id || employee.id)
+  const managers = employees
+    .filter(employee => employee.location !== 'Admin'
+      && MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+    .slice(0, 2)
+  const cook = employees.find(employee => employee.location !== 'Admin'
+    && !MANAGER_GRADE_POSITIONS.includes(String(employee.position || '').trim()))
+  assert.equal(managers.length, 2)
+
+  const buck = (employee, recordId) => ({
+    id: recordId,
+    employeeId: id(employee),
+    locationId: employee.location,
+    type: 'ace-buck',
+    date: '2026-10-30',
+    monthKey: null,
+    criteria: ['Safety Leader'],
+    note: '',
+    sourceName: '',
+    recognizedBy: 'District Admin',
+    createdAt: '2026-10-30T17:00:00.000Z',
+    groupId: 'group-1',
+  })
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': {},
+  })
+
+  const response = await handleMutate(store, drawingAdmin, {
+    key: 'all-star-recognition-v1',
+    mutation: {
+      type: 'object-patch',
+      set: {
+        'buck-1': buck(managers[0], 'buck-1'),
+        'buck-2': buck(managers[1], 'buck-2'),
+        'buck-cook': buck(cook, 'buck-cook'),
+      },
+      remove: [],
+    },
+  })
+
+  assert.equal(response.status, 200)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')).sort(), ['buck-1', 'buck-2'])
+})
