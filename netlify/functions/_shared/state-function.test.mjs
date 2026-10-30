@@ -1328,3 +1328,68 @@ test('several Coach Bucks in one change land for every kitchen manager in it', a
   assert.equal(response.status, 200)
   assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')).sort(), ['buck-1', 'buck-2'])
 })
+
+// Jon, 2026-10-30: one Warren Food Services Employee of the Month for the
+// whole district, each month — held by the server as well as the page.
+function employeeOfMonthAward(employee, overrides = {}) {
+  return {
+    id: 'eom-october',
+    employeeId: String(employee.kronos_id || employee.id),
+    locationId: employee.location,
+    type: 'warren-employee-month',
+    date: '2026-10-15',
+    monthKey: null,
+    criteria: ['Qualified through All-Star of the Month'],
+    note: '',
+    sourceName: '',
+    recognizedBy: 'District Admin',
+    createdAt: '2026-10-15T15:00:00.000Z',
+    ...overrides,
+  }
+}
+
+test('the server holds one Employee of the Month for the whole district each month', async () => {
+  const [first, second] = employees.filter(row => row.location !== 'Admin')
+    .filter((row, index, rows) => rows.findIndex(other => other.location === row.location) === index)
+  const existing = employeeOfMonthAward(first)
+  const write = async (store, set, remove = []) => handleMutate(store, drawingAdmin, {
+    key: 'all-star-recognition-v1',
+    mutation: { type: 'object-patch', set, remove },
+  })
+  const freshStore = () => stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': { [existing.id]: existing },
+  })
+
+  // Somebody from another building in the same month is still a second one.
+  const another = employeeOfMonthAward(second, { id: 'eom-second', date: '2026-10-28' })
+  const refused = await write(freshStore(), { [another.id]: another })
+  assert.equal(refused.status, 409)
+  assert.match((await refused.json()).error, /October 2026 already has/)
+
+  // Another month is fine, and so is correcting the one already there.
+  assert.equal((await write(freshStore(), { [another.id]: { ...another, date: '2026-09-28' } })).status, 200)
+  assert.equal((await write(freshStore(), { [existing.id]: { ...existing, note: 'Corrected.' } })).status, 200)
+
+  // Swapping one for another in a single change is fine too.
+  const store = freshStore()
+  assert.equal((await write(store, { [another.id]: another }, [existing.id])).status, 200)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [another.id])
+})
+
+test('only a district administrator can remove an Employee of the Month', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const award = employeeOfMonthAward(employee)
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': { [award.id]: award },
+  })
+  const removal = { key: 'all-star-recognition-v1', mutation: { type: 'object-patch', set: {}, remove: [award.id] } }
+
+  const building = { role: 'school', locationId: employee.location, canEditAttendance: true, canEditRecognition: true }
+  assert.equal((await handleMutate(store, building, removal)).status, 403)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [award.id])
+
+  assert.equal((await handleMutate(store, drawingAdmin, removal)).status, 200)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [])
+})

@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
-import { DISTRICT_OFFICE_LOCATION, MANAGER_GRADE_POSITIONS } from '../../src/data/recognitionStore.js'
+import {
+  DISTRICT_OFFICE_LOCATION,
+  EMPLOYEE_OF_MONTH_TYPE,
+  MANAGER_GRADE_POSITIONS,
+  employeesOfMonth,
+  recognitionMonth,
+} from '../../src/data/recognitionStore.js'
 import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
 import { jsonResponse } from './_shared/auth.mjs'
@@ -761,6 +767,13 @@ export async function handleBackupRestore(store, session, body) {
   })
 }
 
+function monthName(monthKey) {
+  const [year, month] = String(monthKey).split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, 1))
+  if (Number.isNaN(date.valueOf())) return monthKey
+  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+}
+
 export async function handleMutate(store, session, body) {
   const key = String(body.key || '')
   const rosterEntries = session.role === 'school' ? await loadSchoolRosterEntries(store) : {}
@@ -807,6 +820,44 @@ export async function handleMutate(store, session, body) {
     validateMutation(key, mutation)
   } catch {
     return jsonResponse({ error: 'The requested state change is invalid.' }, 400)
+  }
+
+  // Jon, 2026-10-30: one Warren Food Services Employee of the Month for the
+  // whole district, each month. Held here as well as on the page, because
+  // two administrators recording one at the same moment would each pass the
+  // page's check. Only the months this change writes an award into are
+  // judged, so a month that already held two before the rule existed blocks
+  // nothing else — it only has to be put right before more goes into it.
+  //
+  // Removing one now needs the same capability as recording one. Until
+  // this, a removal was never checked against what it removed.
+  if (key === RECOGNITION_KEY && mutation?.type === 'object-patch') {
+    const awards = Object.values(mutation.set || {}).filter(record => record?.type === EMPLOYEE_OF_MONTH_TYPE)
+    const removals = (mutation.remove || []).map(String)
+    if (awards.length || removals.length) {
+      const current = (await store.get(key, { type: 'json' })) || {}
+      // The role is checked outright as well: recognitionTypeAllowedForRole
+      // reads an absent capability as granted, and a building is never
+      // allowed this whatever its session does or does not carry.
+      const canRecordAward = session.role === 'admin' && recognitionTypeAllowedForRole(
+        session.role,
+        EMPLOYEE_OF_MONTH_TYPE,
+        session.canManageRecognitionAwards !== false && session.recognitionOnly !== true
+      )
+      if (!canRecordAward && removals.some(id => current[id]?.type === EMPLOYEE_OF_MONTH_TYPE)) {
+        return jsonResponse({ error: 'Only a district administrator can remove Warren Food Services Employee of the Month.' }, 403)
+      }
+      if (awards.length) {
+        const next = applyStateMutation(key, current, mutation)
+        const crowded = [...new Set(awards.map(recognitionMonth))]
+          .find(month => employeesOfMonth(next, month).length > 1)
+        if (crowded) {
+          return jsonResponse({
+            error: `${monthName(crowded)} already has a Warren Food Services Employee of the Month. Edit or remove that one first.`,
+          }, 409)
+        }
+      }
+    }
   }
 
   if (session.role === 'school' && (key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY)) {

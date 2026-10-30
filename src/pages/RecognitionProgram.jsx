@@ -35,8 +35,14 @@ import {
   getNextStarLevel,
   getStarLevel,
   earnsDailyStar,
+  EMPLOYEE_OF_MONTH_TYPE,
+  RECOGNITION_STORAGE_KEY,
+  editEmployeeOfMonth,
   editMonthlyWinner,
+  employeeOfMonthClash,
+  employeesOfMonth,
   redrawExcludedEmployeeIds,
+  removeEmployeeOfMonth,
   removeMonthlyWinner,
   replaceMonthlyWinner,
   setAsideEntries,
@@ -160,6 +166,7 @@ export default function RecognitionProgram() {
   } = access
   const [localVersion, setLocalVersion] = useState(0)
   const [savingWinner, setSavingWinner] = useState(false)
+  const [employeeOfMonthMonth, setEmployeeOfMonthMonth] = useState(localDateKey().slice(0, 7))
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
   const [historyType, setHistoryType] = useState('all')
   // Which half of the board panel is showing. Lifted out of the panel
@@ -485,6 +492,21 @@ export default function RecognitionProgram() {
     }
   }
 
+  // flushPendingWrites drops a write the server refuses outright and reports
+  // it in what it returns, rather than throwing. Until 2026-10-30 nothing
+  // here looked, so a refused award still said "The shared record is
+  // confirmed." A refusal is not a connection problem — retrying will not
+  // help — so it is marked and handled apart from one.
+  const confirmRecognitionSaved = async () => {
+    const discarded = await flushPendingWrites()
+    const refused = (discarded || []).find(entry => entry.key === RECOGNITION_STORAGE_KEY)
+    if (refused) {
+      const error = new Error(refused.message || 'The server would not accept that change. Nothing has been saved.')
+      error.refused = true
+      throw error
+    }
+  }
+
   const submitRecognition = async (surface, form, event) => {
     event?.preventDefault()
     setFeedback(null)
@@ -500,6 +522,14 @@ export default function RecognitionProgram() {
         .map(id => employeeMap.get(String(id)))
         .filter(Boolean)
       if (!chosen.length) throw new Error('Choose an employee from your available roster.')
+      // One for the whole district each month — see employeesOfMonth.
+      if (form.type === EMPLOYEE_OF_MONTH_TYPE) {
+        const monthKey = String(form.date || '').slice(0, 7)
+        const existing = employeeOfMonthClash(records, monthKey)
+        if (existing) {
+          throw new Error(`${employeeName(employeeMap.get(String(existing.employeeId))) || 'Someone'} is already Employee of the Month for ${formatMonth(monthKey)}. Edit or remove that one first in the Employee of the Month box.`)
+        }
+      }
 
       // One record each, tied by a group id when there is more than one.
       // Liz, 2026-10-27: five people who did something together earn five
@@ -539,10 +569,14 @@ export default function RecognitionProgram() {
           recognizedBy: record.recognizedBy,
         }
         : null
-      await flushPendingWrites()
+      await confirmRecognitionSaved()
       finishConfirmedSubmission(surface, confirmationMessage, card)
     } catch (error) {
-      if (confirmationMessage) {
+      if (error.refused) {
+        await loadSharedState().catch(() => undefined)
+        setLocalVersion(version => version + 1)
+        setFeedback({ type: 'error', message: error.message })
+      } else if (confirmationMessage) {
         const pendingMessage = 'The entry is saved on this device, but the shared record is not confirmed yet. Do not submit it again—use Retry confirmation below.'
         setFeedback({ type: 'error', message: pendingMessage })
         setConfirmations(current => ({
@@ -563,9 +597,16 @@ export default function RecognitionProgram() {
     setSubmittingSurface(surface)
     setFeedback(null)
     try {
-      await flushPendingWrites()
+      await confirmRecognitionSaved()
       finishConfirmedSubmission(surface, confirmation.confirmationMessage, confirmation.card)
-    } catch {
+    } catch (error) {
+      if (error.refused) {
+        await loadSharedState().catch(() => undefined)
+        setLocalVersion(version => version + 1)
+        setFeedback({ type: 'error', message: error.message })
+        clearConfirmation(surface)
+        return
+      }
       const pendingMessage = 'The shared record is still not confirmed. Keep this page open and try again when the connection is restored.'
       setFeedback({ type: 'error', message: pendingMessage })
       setConfirmations(current => ({
@@ -689,6 +730,41 @@ export default function RecognitionProgram() {
       message: `${formatMonth(drawingMonth)} has no recorded winner for ${LOCATION_MAP[drawingScope]?.name || drawingScope} now, and can be drawn again.`,
     }
   })
+
+  // Jon, 2026-10-30: Warren Food Services Employee of the Month is one
+  // person for the whole district each month, chosen by the district — see
+  // employeesOfMonth. Corrected here: person, date, reasons and message.
+  const handleEditEmployeeOfMonth = (award, { employeeId, date, criteria, note }) => saveWinnerChange(() => {
+    const person = employeeMap.get(String(employeeId))
+    if (!person) throw new Error('Choose who was selected.')
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date || '')) || date > localDateKey()) {
+      throw new Error('Choose a date that has already happened.')
+    }
+    if (!criteria?.length) throw new Error('Choose what they qualified through.')
+    const monthKey = date.slice(0, 7)
+    const clash = employeeOfMonthClash(records, monthKey, award.id)
+    if (clash) {
+      throw new Error(`${employeeName(employeeMap.get(String(clash.employeeId))) || 'Someone'} is already Employee of the Month for ${formatMonth(monthKey)}. Remove that one first.`)
+    }
+    return {
+      save: async () => {
+        await editEmployeeOfMonth(award, {
+          employeeId,
+          locationId: person.location,
+          date,
+          criteria,
+          note,
+        }, { updatedBy: displayName || 'District administrator' })
+        setEmployeeOfMonthMonth(monthKey)
+      },
+      message: `${employeeName(person)} is now Warren Food Services Employee of the Month for ${formatMonth(monthKey)}.`,
+    }
+  })
+
+  const handleRemoveEmployeeOfMonth = award => saveWinnerChange(() => ({
+    save: () => removeEmployeeOfMonth(award),
+    message: `${formatMonth(String(award.date).slice(0, 7))} no longer has an Employee of the Month recorded.`,
+  }))
 
   // Who may be chosen when a winner is edited by hand: the building's own
   // roster, less the manager pool once the split applies — the same people
@@ -903,6 +979,22 @@ export default function RecognitionProgram() {
               onRemoveWinner={handleRemoveWinner}
               winnerCandidates={winnerCandidates}
             />
+            {/* District-wide, so only a district session has the whole
+                picture: a building is sent only its own people's awards,
+                and would see an empty month that is not empty. */}
+            {role === 'admin' && (
+              <EmployeeOfMonthPanel
+                monthKey={employeeOfMonthMonth}
+                setMonthKey={setEmployeeOfMonthMonth}
+                awards={employeesOfMonth(records, employeeOfMonthMonth)}
+                employeeMap={employeeMap}
+                people={employees}
+                canEdit={canEditRecognition && canManageRecognitionAwards === true && recognitionOnly !== true}
+                saving={savingWinner}
+                onEdit={handleEditEmployeeOfMonth}
+                onRemove={handleRemoveEmployeeOfMonth}
+              />
+            )}
           </div>
           <ShootingStarNominations
             records={shootingStarNominations}
@@ -1721,8 +1813,11 @@ function MonthlyDrawing({
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-amber-100 text-xl" aria-hidden="true">🏅</span>
         <div>
-          <h2 className="all-star-display text-xl uppercase text-gray-950">All-Star of the Month</h2>
-          <p className="mt-1 text-xs leading-relaxed text-gray-500">Each Star of the Day equals one entry. More daily stars mean a greater chance of selection.</p>
+          {/* "Building" because the district has an award of its own each
+              month — Warren Food Services Employee of the Month, one person
+              for the whole district — and the two were easy to mix up. */}
+          <h2 className="all-star-display text-xl uppercase text-gray-950">Building All-Star of the Month</h2>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">One per building, drawn at random. Each Star of the Day equals one entry, so more daily stars mean a greater chance of selection.</p>
           {managerEntriesHeld > 0 && (
             <p className={`mt-2 rounded-lg border px-3 py-2 text-xs font-semibold ${gradeAccent(true).note}`}>
               {managerEntriesHeld} star{managerEntriesHeld === 1 ? '' : 's'} earned by Worker Leads, Managers or the Director
@@ -1922,6 +2017,200 @@ function MonthlyDrawing({
           )}
         </>
       )}
+    </section>
+  )
+}
+
+function EmployeeOfMonthPanel({
+  monthKey,
+  setMonthKey,
+  awards,
+  employeeMap,
+  people,
+  canEdit,
+  saving,
+  onEdit,
+  onRemove,
+}) {
+  // Keyed to the award, as in MonthlyDrawing, so it closes by itself once
+  // the change lands or the month changes.
+  const [panel, setPanel] = useState(null)
+  const open = awards.find(award => award.id === panel?.id) ? panel : null
+  const reasons = RECOGNITION_CRITERIA[EMPLOYEE_OF_MONTH_TYPE] || []
+  // The whole district, because this is the district's award. The building
+  // goes beside each name, since across sixteen buildings it is the only
+  // thing that tells two people with one surname apart.
+  const choices = [...people].sort((left, right) => employeeListName(left).localeCompare(employeeListName(right)))
+  const openPanel = (award, mode) => setPanel({
+    id: award.id,
+    mode,
+    employeeId: String(award.employeeId),
+    date: award.date,
+    criteria: Array.isArray(award.criteria) ? award.criteria : [],
+    note: award.note || '',
+  })
+
+  return (
+    <section className="rounded-2xl border border-[#d7b44b] bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-[#fdf3d8] text-xl" aria-hidden="true">🏆</span>
+        <div>
+          <h2 className="all-star-display text-xl uppercase text-gray-950">Warren Food Services Employee of the Month</h2>
+          <p className="mt-1 text-xs leading-relaxed text-gray-500">One for the whole district each month, chosen by the district — not drawn, and not one per building.</p>
+        </div>
+      </div>
+
+      <label className="mt-4 block">
+        <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Month</span>
+        <input
+          type="month"
+          value={monthKey}
+          onChange={event => setMonthKey(event.target.value)}
+          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs"
+        />
+      </label>
+
+      {awards.length === 0 && (
+        <p className="mt-4 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-3 text-xs text-gray-500">
+          No Employee of the Month recorded for {formatMonth(monthKey)}.
+          {canEdit && ' Record one from Bonus recognition above.'}
+        </p>
+      )}
+      {/* Only possible for a month recorded before the one-per-month rule.
+          Said plainly, because the fix is the administrator's to make. */}
+      {awards.length > 1 && (
+        <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-800">
+          {formatMonth(monthKey)} has {awards.length} recorded. There should be one — remove the extra.
+        </p>
+      )}
+
+      {awards.map(award => {
+        const person = employeeMap.get(String(award.employeeId))
+        const name = employeeName(person) || award.employeeId
+        const editing = open?.id === award.id ? open : null
+        return (
+          <div key={award.id} className="mt-4">
+            <div className="rounded-xl border border-[#d7b44b] bg-gradient-to-br from-[#fdf3d8] to-white p-4 text-center">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#7a4b12]">Employee of the Month</p>
+              <p className="mt-2 text-lg font-black text-gray-950">🏆 {name}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {LOCATION_MAP[award.locationId]?.name || award.locationId} · {formatDate(award.date)}
+              </p>
+              {award.criteria?.length > 0 && (
+                <p className="mt-2 text-[11px] font-semibold text-[#7a4b12]">{award.criteria.join(' · ')}</p>
+              )}
+              {award.note && <p className="mt-1 text-xs italic text-gray-600">&ldquo;{award.note}&rdquo;</p>}
+            </div>
+
+            {canEdit && !editing && (
+              <div className="mt-2 grid grid-cols-2 gap-1">
+                <button
+                  type="button"
+                  onClick={() => openPanel(award, 'edit')}
+                  className="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                >
+                  Edit…
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPanel(award, 'remove')}
+                  className="rounded-lg px-2 py-1.5 text-[11px] font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+                >
+                  Remove…
+                </button>
+              </div>
+            )}
+
+            {canEdit && editing?.mode === 'edit' && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+                <p className="text-xs font-bold text-gray-900">Edit Employee of the Month</p>
+                <label className="mt-2 block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Employee</span>
+                  <select
+                    value={editing.employeeId}
+                    onChange={event => setPanel({ ...editing, employeeId: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                  >
+                    {!choices.some(employee => employeeKey(employee) === editing.employeeId) && (
+                      <option value={editing.employeeId}>{name}</option>
+                    )}
+                    {choices.map(employee => (
+                      <option key={employeeKey(employee)} value={employeeKey(employee)}>
+                        {employeeListName(employee)}{employee.location ? ` — ${LOCATION_MAP[employee.location]?.name || employee.location}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="mt-2 block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Date</span>
+                  <input
+                    type="date"
+                    value={editing.date}
+                    max={localDateKey()}
+                    onChange={event => setPanel({ ...editing, date: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                  />
+                  <span className="mt-1 block text-[11px] text-gray-500">The month of this date is the month they are Employee of.</span>
+                </label>
+                <fieldset className="mt-2">
+                  <legend className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qualified through</legend>
+                  <div className="mt-1 space-y-1">
+                    {reasons.map(reason => (
+                      <label key={reason} className="flex items-center gap-2 text-xs text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={editing.criteria.includes(reason)}
+                          onChange={() => setPanel({
+                            ...editing,
+                            criteria: editing.criteria.includes(reason)
+                              ? editing.criteria.filter(value => value !== reason)
+                              : [...editing.criteria, reason],
+                          })}
+                          className="rounded border-gray-300 text-[#c28b24] focus:ring-amber-300"
+                        />
+                        {reason}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <label className="mt-2 block">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Why they were selected</span>
+                  <textarea
+                    rows={3}
+                    maxLength={1000}
+                    value={editing.note}
+                    onChange={event => setPanel({ ...editing, note: event.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs"
+                  />
+                </label>
+                <WinnerPanelButtons
+                  confirmLabel={saving ? 'Saving…' : 'Save changes'}
+                  onConfirm={() => onEdit(award, editing)}
+                  confirmDisabled={saving || !editing.employeeId || !editing.date || editing.criteria.length === 0}
+                  onCancel={() => setPanel(null)}
+                  busy={saving}
+                />
+              </div>
+            )}
+
+            {canEdit && editing?.mode === 'remove' && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-3">
+                <p className="text-xs font-bold text-gray-900">Remove {name} as Employee of the Month for {formatMonth(String(award.date).slice(0, 7))}?</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+                  The month goes back to having no Employee of the Month, and one can be recorded again.
+                </p>
+                <WinnerPanelButtons
+                  confirmLabel={saving ? 'Removing…' : 'Remove'}
+                  onConfirm={() => onRemove(award)}
+                  confirmDisabled={saving}
+                  onCancel={() => setPanel(null)}
+                  busy={saving}
+                />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </section>
   )
 }

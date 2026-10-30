@@ -23,7 +23,11 @@ import {
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
   addRecognitionGroup,
+  editEmployeeOfMonth,
   editMonthlyWinner,
+  employeeOfMonthClash,
+  employeesOfMonth,
+  removeEmployeeOfMonth,
   redrawExcludedEmployeeIds,
   removeMonthlyWinner,
   replaceMonthlyWinner,
@@ -714,4 +718,83 @@ test('several leaders get a Coach Buck each, in one save', async () => {
   const writes = sentRecognition()
   assert.equal(writes.length, 1)
   assert.deepEqual(Object.keys(writes[0].mutation.set).sort(), records.map(record => record.id).sort())
+})
+
+// Jon, 2026-10-30: "Employee of the month is supposed to be one employee
+// from the whole district."
+function employeeOfMonthRecord(overrides = {}) {
+  return recognition({
+    id: 'eom-1',
+    employeeId: '200',
+    type: 'warren-employee-month',
+    date: '2026-10-15',
+    criteria: ['Qualified through All-Star of the Month'],
+    note: 'Ran the line all month.',
+    createdAt: '2026-10-15T15:00:00.000Z',
+    ...overrides,
+  })
+}
+
+test('the Employee of the Month belongs to the month of its date, district-wide', () => {
+  const october = employeeOfMonthRecord()
+  const otherBuilding = employeeOfMonthRecord({ id: 'eom-2', employeeId: '300', locationId: 'SchoolB', date: '2026-10-28' })
+  const september = employeeOfMonthRecord({ id: 'eom-3', date: '2026-09-30' })
+  const allStar = monthlyWinnerRecord({ date: '2026-10-31', monthKey: '2026-10' })
+  const records = [october, otherBuilding, september, allStar]
+
+  // Another building in the same month is the same month: there is one for
+  // the whole district, not one per building.
+  assert.deepEqual(employeesOfMonth(records, '2026-10').map(record => record.id), ['eom-1', 'eom-2'])
+  assert.equal(employeeOfMonthClash(records, '2026-10', 'eom-1').id, 'eom-2')
+  assert.equal(employeeOfMonthClash([october, september], '2026-10', 'eom-1'), null)
+  // The building All-Star is a different award and never counts.
+  assert.equal(employeeOfMonthClash([allStar], '2026-10'), null)
+})
+
+test('an Employee of the Month put in the wrong month moves, and can change hands', async () => {
+  const award = employeeOfMonthRecord()
+  const sentRecognition = installRecognitionServer([award])
+
+  const moved = await editEmployeeOfMonth(
+    award,
+    { date: '2026-09-30', employeeId: '300', locationId: 'SchoolB', note: 'Covered two kitchens.' },
+    { updatedBy: 'Liz', updatedAt: '2026-10-30T18:00:00.000Z' }
+  )
+
+  assert.equal(moved.id, award.id)
+  assert.equal(moved.createdAt, award.createdAt)
+  assert.equal(moved.type, 'warren-employee-month')
+  assert.equal(moved.date, '2026-09-30')
+  assert.equal(moved.monthKey, null)
+  assert.equal(moved.employeeId, '300')
+  assert.equal(moved.locationId, 'SchoolB')
+  assert.deepEqual(moved.criteria, award.criteria)
+  assert.equal(moved.note, 'Covered two kitchens.')
+  assert.equal(moved.updatedBy, 'Liz')
+
+  const writes = sentRecognition()
+  assert.equal(writes.length, 1)
+  assert.deepEqual(Object.keys(writes[0].mutation.set), [award.id])
+})
+
+test('an Employee of the Month cannot be moved onto a month that has one', () => {
+  const october = employeeOfMonthRecord()
+  const september = employeeOfMonthRecord({ id: 'eom-sept', employeeId: '300', date: '2026-09-15' })
+  const sentRecognition = installRecognitionServer([october, september])
+
+  assert.throws(() => editEmployeeOfMonth(october, { date: '2026-09-02' }), /already has an Employee of the Month/)
+  assert.throws(() => editEmployeeOfMonth(october, { criteria: [] }), /at least one reason/)
+  assert.equal(sentRecognition().length, 0, 'nothing was sent')
+})
+
+test('removing the Employee of the Month leaves the month open for another', async () => {
+  const award = employeeOfMonthRecord()
+  const star = recognition({ id: 'star-1' })
+  const sentRecognition = installRecognitionServer([award, star])
+
+  await removeEmployeeOfMonth(award)
+
+  assert.deepEqual(sentRecognition()[0].mutation.remove, [award.id])
+  assert.deepEqual(Object.keys(JSON.parse(localStorage.getItem('all-star-recognition-v1'))), ['star-1'])
+  assert.throws(() => removeEmployeeOfMonth(star), /no Employee of the Month/)
 })

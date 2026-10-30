@@ -628,6 +628,66 @@ export function removeMonthlyWinner(winner) {
   return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => winner)
 }
 
+// Jon, 2026-10-30: "Employee of the month is supposed to be one employee
+// from the whole district." Not the building All-Star of the Month above,
+// which is one per building and drawn: this one is chosen by the district,
+// and there is one of it each month.
+//
+// It carries no month key of its own — it was always recorded with a date —
+// so its month is the month of that date. Shared with the server, which
+// holds the same one-per-month line on every write.
+export const EMPLOYEE_OF_MONTH_TYPE = 'warren-employee-month'
+
+export function recognitionMonth(record) {
+  return String(record?.date || '').slice(0, 7)
+}
+
+export function employeesOfMonth(records, monthKey) {
+  return (Array.isArray(records) ? records : Object.values(records || {})).filter(record =>
+    record?.type === EMPLOYEE_OF_MONTH_TYPE && recognitionMonth(record) === monthKey
+  )
+}
+
+export function employeeOfMonthClash(records, monthKey, ignoreId = null) {
+  return employeesOfMonth(records, monthKey).find(record => record.id !== ignoreId) || null
+}
+
+// Same shape as editMonthlyWinner: revalidated, identity and creation time
+// kept, who changed it and when added. The person, date, reasons and message
+// may all change; it may not land on a month that already has one.
+export function editEmployeeOfMonth(record, changes, { updatedBy = '', updatedAt = new Date().toISOString() } = {}) {
+  if (!record?.id || record.type !== EMPLOYEE_OF_MONTH_TYPE) {
+    throw new Error('There is no Employee of the Month to edit.')
+  }
+  const records = readRecognitionMap()
+  if (!records[record.id]) throw new Error('That Employee of the Month is no longer recorded.')
+
+  const updated = {
+    ...createRecognitionRecord({
+      ...record,
+      ...changes,
+      type: EMPLOYEE_OF_MONTH_TYPE,
+    }, { id: record.id, createdAt: record.createdAt }),
+    updatedAt,
+    updatedBy: String(updatedBy || '').trim().slice(0, 200),
+  }
+  if (employeeOfMonthClash(records, recognitionMonth(updated), record.id)) {
+    throw new Error('That month already has an Employee of the Month. Remove that one first.')
+  }
+
+  records[record.id] = updated
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => updated)
+}
+
+export function removeEmployeeOfMonth(record) {
+  if (!record?.id || record.type !== EMPLOYEE_OF_MONTH_TYPE) {
+    throw new Error('There is no Employee of the Month to remove.')
+  }
+  const records = readRecognitionMap()
+  delete records[record.id]
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
+}
+
 // Liz asked for the school-year leaderboard condensed to a top ten. Ties that
 // straddle the cut are kept: two people on the same star count are the same
 // standing, and dropping one of them because of an alphabetical tiebreak reads
