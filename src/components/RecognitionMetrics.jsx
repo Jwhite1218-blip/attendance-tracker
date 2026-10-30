@@ -124,7 +124,7 @@ function RecognitionDrilldown({ id, tile }) {
             const employee = getEmployeeByKey(record.employeeId)
             const name = employee
               ? `${employee.first_name} ${employee.last_name}`
-              : `Employee ${record.employeeId}`
+              : 'Former employee'
             const school = LOCATION_MAP[record.locationId]?.name || record.locationId || 'No school recorded'
             const reasons = (Array.isArray(record.criteria) ? record.criteria : [])
               .map(criterion => term.reason(criterion))

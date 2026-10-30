@@ -84,6 +84,13 @@ function employeeName(employee) {
   return `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
 }
 
+// A name for a recognition, never a payroll number. Somebody nobody can name
+// at all — an app-added employee since deleted — reads as a former employee
+// rather than as a string of digits.
+function recognitionName(nameMap, employeeId, fallback = '') {
+  return employeeName(nameMap.get(String(employeeId))) || fallback || 'Former employee'
+}
+
 // The picker is a lookup list, so it reads "Last, First" like the Employee
 // Records ledger — that is what makes its alphabetical order visible on screen.
 // Star cards, the leaderboard and confirmations stay on employeeName's
@@ -198,6 +205,17 @@ export default function RecognitionProgram() {
     () => new Map(employees.map(employee => [employeeKey(employee), employee])),
     [employees]
   )
+  // For naming people on recognitions already given, which outlive their
+  // time on the active roster. Jon, 2026-10-30: somebody deactivated showed
+  // in the feed as their payroll number. employeeMap stays the active roster
+  // for anything that chooses or draws a person; this one only ever names.
+  const nameMap = useMemo(
+    () => new Map(
+      getEmployeesWithEffectiveLocations({ includeInactive: true })
+        .map(employee => [employeeKey(employee), employee])
+    ),
+    [dataVersion, localVersion]
+  )
   // The eighteen who run the kitchens. Read from the roster rather than
   // stored on records, so every star they have already earned counts in
   // their own pool without a single live record being rewritten.
@@ -252,11 +270,11 @@ export default function RecognitionProgram() {
       const id = String(record.employeeId)
       const existing = byEmployee.get(id)
       if (existing) existing.count += 1
-      else byEmployee.set(id, { id, name: employeeName(employeeMap.get(id)) || id, count: 1 })
+      else byEmployee.set(id, { id, name: recognitionName(nameMap, id), count: 1 })
     }
     return [...byEmployee.values()]
       .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
-  }, [thisMonthStars, employeeMap])
+  }, [thisMonthStars, nameMap])
   const recognizedPeople = new Set(earnedStars.map(record => record.employeeId)).size
   const compilation = {
     dailyStars: schoolYearRecords.filter(record => record.type === 'star-of-day').length,
@@ -335,7 +353,7 @@ export default function RecognitionProgram() {
     ? getMonthlyDrawingEntries(records, drawingScope, drawingMonth, splitApplies ? managerIds : null)
     : []
   const monthlyWinner = drawingScope ? existingMonthlyWinner(records, drawingScope, drawingMonth) : null
-  const monthlyWinnerEmployee = monthlyWinner ? employeeMap.get(String(monthlyWinner.employeeId)) : null
+  const monthlyWinnerEmployee = monthlyWinner ? nameMap.get(String(monthlyWinner.employeeId)) : null
   // The same people the server sends a redraw's history to (state.mjs,
   // canSeeRedrawHistory), so the button never offers something the server
   // would strip on the way in.
@@ -350,7 +368,7 @@ export default function RecognitionProgram() {
     : []
   const setAside = setAsideEntries(monthlyWinner).map(entry => ({
     ...entry,
-    name: employeeName(employeeMap.get(String(entry.employeeId))) || entry.employeeId,
+    name: recognitionName(nameMap, entry.employeeId),
   }))
   const drawingAvailability = monthlyDrawingStatus(drawingMonth)
   const nominationQuarter = quarterWindowFor(new Date())
@@ -471,7 +489,7 @@ export default function RecognitionProgram() {
   }
 
   const handlePrintSheet = visibleRecords => {
-    const cards = toStarCardEntries(visibleRecords, id => employeeName(employeeMap.get(String(id))))
+    const cards = toStarCardEntries(visibleRecords, id => recognitionName(nameMap, id))
     if (!cards.length) {
       setFeedback({ type: 'error', message: 'There are no Star of the Day cards to print in this view.' })
       return
@@ -527,7 +545,7 @@ export default function RecognitionProgram() {
         const monthKey = String(form.date || '').slice(0, 7)
         const existing = employeeOfMonthClash(records, monthKey)
         if (existing) {
-          throw new Error(`${employeeName(employeeMap.get(String(existing.employeeId))) || 'Someone'} is already Employee of the Month for ${formatMonth(monthKey)}. Edit or remove that one first in the Employee of the Month box.`)
+          throw new Error(`${recognitionName(nameMap, existing.employeeId)} is already Employee of the Month for ${formatMonth(monthKey)}. Edit or remove that one first in the Employee of the Month box.`)
         }
       }
 
@@ -744,7 +762,7 @@ export default function RecognitionProgram() {
     const monthKey = date.slice(0, 7)
     const clash = employeeOfMonthClash(records, monthKey, award.id)
     if (clash) {
-      throw new Error(`${employeeName(employeeMap.get(String(clash.employeeId))) || 'Someone'} is already Employee of the Month for ${formatMonth(monthKey)}. Remove that one first.`)
+      throw new Error(`${recognitionName(nameMap, clash.employeeId)} is already Employee of the Month for ${formatMonth(monthKey)}. Remove that one first.`)
     }
     return {
       save: async () => {
@@ -887,7 +905,7 @@ export default function RecognitionProgram() {
                 <RecentRecognition
                   key={`${scopeLocation}-${historyType}`}
                   records={scopedRecords}
-                  employeeMap={employeeMap}
+                  employeeMap={nameMap}
                   managerIds={managerIds}
                   type={historyType}
                   onTypeChange={setHistoryType}
@@ -987,7 +1005,7 @@ export default function RecognitionProgram() {
                 monthKey={employeeOfMonthMonth}
                 setMonthKey={setEmployeeOfMonthMonth}
                 awards={employeesOfMonth(records, employeeOfMonthMonth)}
-                employeeMap={employeeMap}
+                employeeMap={nameMap}
                 people={employees}
                 canEdit={canEditRecognition && canManageRecognitionAwards === true && recognitionOnly !== true}
                 saving={savingWinner}
@@ -998,7 +1016,7 @@ export default function RecognitionProgram() {
           </div>
           <ShootingStarNominations
             records={shootingStarNominations}
-            employeeMap={employeeMap}
+            employeeMap={nameMap}
             quarterLabel={nominationQuarter.label}
           />
         </div>
@@ -1028,7 +1046,7 @@ export default function RecognitionProgram() {
           months={boardMonths}
           schoolYearStart={schoolYearStart}
           records={schoolYearRecords}
-          employeeMap={employeeMap}
+          employeeMap={nameMap}
           submissions={starSubmissionsByLocation}
         />
         <div className="mt-6">
@@ -2086,7 +2104,7 @@ function EmployeeOfMonthPanel({
 
       {awards.map(award => {
         const person = employeeMap.get(String(award.employeeId))
-        const name = employeeName(person) || award.employeeId
+        const name = employeeName(person) || 'Former employee'
         const editing = open?.id === award.id ? open : null
         return (
           <div key={award.id} className="mt-4">
@@ -2256,7 +2274,7 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
             return (
               <div key={record.id} className="py-2.5">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="text-xs font-black text-gray-900">{employeeName(employee) || record.employeeId}</p>
+                  <p className="text-xs font-black text-gray-900">{employeeName(employee) || 'Former employee'}</p>
                   <span className="text-[10px] text-gray-400">{formatDate(record.date)}</span>
                 </div>
                 {record.criteria?.length > 0 && <p className="mt-1 text-[11px] leading-relaxed text-gray-500">{record.criteria.join(' · ')}</p>}
@@ -2483,7 +2501,7 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
             // and nothing else — no roster entry, so no card to open. The
             // name is shown plainly rather than as a link that would land
             // on "unavailable for this login".
-            const name = employeeName(employee) || record.recipientName || record.employeeId
+            const name = employeeName(employee) || record.recipientName || 'Former employee'
             const type = RECOGNITION_TYPE_MAP[record.type]
             const accent = recognitionAccent(record.type)
             return (
@@ -2661,7 +2679,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
                                       to={`/employee/${person.employeeId}`}
                                       className="truncate text-gray-700 hover:text-[#9a651b] hover:underline"
                                     >
-                                      {employeeName(employeeMap.get(String(person.employeeId))) || person.employeeId}
+                                      {recognitionName(employeeMap, person.employeeId)}
                                     </Link>
                                     <span className="flex-none tabular-nums text-gray-400">
                                       {person.count > 1 ? `×${person.count}` : ''}

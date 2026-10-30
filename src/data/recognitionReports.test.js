@@ -80,7 +80,8 @@ test('rows are ordered by date so the export reads as a diary', () => {
 test('an award to somebody no longer on the roster still exports', () => {
   const report = buildRecognitionReport([award({ employeeId: '404' })], resolve, { startYear: 2026 })
   assert.equal(report.rows.length, 1)
-  assert.equal(report.rows[0].employee, 'Employee 404')
+  // Named as a former employee, not by the payroll number.
+  assert.equal(report.rows[0].employee, 'Former employee')
   assert.equal(report.rows[0].position, '')
 })
 

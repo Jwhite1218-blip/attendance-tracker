@@ -99,7 +99,8 @@ export function buildRecognitionReport(records, resolveEmployee, options = {}) {
       school: LOCATION_MAP[record.locationId]?.name || record.locationId || '',
       employee: employee
         ? `${employee.first_name || ''} ${employee.last_name || ''}`.trim()
-        : `Employee ${record.employeeId}`,
+        // Never the id: it is the payroll number, which is off every screen.
+        : 'Former employee',
       position: employee?.position || '',
       award: RECOGNITION_TYPE_MAP[record.type]?.label || record.type || '',
       // The free-text "other" reason is appended rather than replacing the
