@@ -74,6 +74,18 @@ export async function readBackupFile(file) {
   return parseBackupText(await file.text())
 }
 
+// The one-time re-key — see src/data/rekey.js. A preview unless confirm is
+// set, so the screen can show what will move before anything does.
+export async function requestRekey({ confirm = false, confirmation = '' } = {}) {
+  const response = await fetch('/api/state', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'rekey', confirm, confirmation }),
+  })
+  return responseJson(response, 'Unable to reach the re-key right now.')
+}
+
 export async function restoreFullBackup(backup, confirmation) {
   validateBackupEnvelope(backup)
   const response = await fetch('/api/state', {

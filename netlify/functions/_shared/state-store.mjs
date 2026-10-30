@@ -190,6 +190,33 @@ export function createSupabaseStateStore({ baseUrl, secretKey, districtSlug, fet
       entries.set(stateKey, value)
       return value
     },
+
+    // Removes a section outright. Until the re-key nothing needed this: a
+    // restore empties a section it does not carry. But a row whose very
+    // name is a payroll number has to go, not sit there empty.
+    async delete(key) {
+      const id = await districtId()
+      const stateKey = String(key || '')
+      if (!stateKey) throw new Error('A state key is required.')
+
+      const query = new URLSearchParams({ district_id: `eq.${id}`, state_key: `eq.${stateKey}` })
+      const response = await fetchImpl(`${apiBaseUrl}/rest/v1/legacy_state_entries?${query}`, {
+        method: 'DELETE',
+        headers: apiHeaders(secretKey, { 'Content-Profile': 'public', Prefer: 'return=minimal' }),
+      })
+      if (!response.ok) {
+        throw new Error(`Supabase state delete failed with status ${response.status}.`)
+      }
+
+      const entries = await loadEntries()
+      entries.delete(stateKey)
+    },
+
+    // Drops what this instance has cached, so the next read comes from the
+    // database. The re-key checks its own work against a fresh read.
+    async reload() {
+      entriesPromise = null
+    },
   }
 }
 
@@ -207,6 +234,7 @@ export function createBlobsStateStore({
     list: (...args) => store.list(...args),
     get: (...args) => store.get(...args),
     setJSON: (key, value) => store.setJSON(key, value),
+    delete: key => store.delete(key),
     updateJSON: (key, mutation) => updateBlobJSON(
       store,
       key,

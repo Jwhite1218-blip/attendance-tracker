@@ -3,6 +3,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import {
   downloadFullBackup,
   readBackupFile,
+  requestRekey,
   restoreFullBackup,
   validateBackupEnvelope,
 } from '../data/backupRecovery.js'
@@ -73,6 +74,38 @@ export default function BackupRecovery() {
     }
   }
 
+  // The one-time re-key. Preview first: it reports what will move and
+  // changes nothing; only then can it be run.
+  const [rekeyPreview, setRekeyPreview] = useState(null)
+  const [rekeyConfirmation, setRekeyConfirmation] = useState('')
+  const handleRekeyPreview = async () => {
+    setBusy(true)
+    setMessage(null)
+    setRekeyPreview(null)
+    try {
+      setRekeyPreview(await requestRekey())
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message })
+    } finally {
+      setBusy(false)
+    }
+  }
+  const handleRekeyRun = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const result = await requestRekey({ confirm: true, confirmation: rekeyConfirmation })
+      setMessage({
+        type: 'success',
+        text: `Done and checked: ${result.summary.people} people moved to new keys, ${result.summary.loginsRelinked} logins re-linked, and no old employee number is left in the records. Reloading…`,
+      })
+      window.setTimeout(() => window.location.reload(), 2500)
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message })
+      setBusy(false)
+    }
+  }
+
   const summary = selectedBackup ? validateBackupEnvelope(selectedBackup) : null
 
   return (
@@ -127,6 +160,41 @@ export default function BackupRecovery() {
           </button>
         </section>
       </div>
+
+      {/* Jon, 2026-10-30: one-time. Moves every record off the district's
+          payroll number onto the new keys in the roster. Taken out again
+          once it has run. */}
+      <section className="mt-6 rounded-2xl border border-sky-200 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-lg font-bold text-gray-900">Remove employee numbers from the records</h2>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-gray-500">
+          One time only. Every attendance record, star, note and login link is moved from the district payroll number onto a new code that means nothing outside this tracker. Nothing about anybody’s history changes. Download a backup first.
+        </p>
+        <button type="button" onClick={handleRekeyPreview} disabled={busy} className="mt-4 inline-flex items-center justify-center rounded-xl border border-sky-300 bg-sky-50 px-4 py-2.5 text-sm font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-40">
+          Preview what will change
+        </button>
+        {rekeyPreview && (
+          <div className="mt-4 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+            {rekeyPreview.nothingToDo ? (
+              <p className="font-semibold">Nothing to do: no record is named by an employee number.</p>
+            ) : (
+              <>
+                <ul className="space-y-1">
+                  <li><strong>{rekeyPreview.summary.people}</strong> people move to new codes ({rekeyPreview.summary.fromRoster} from the roster, {rekeyPreview.summary.addedInApp} added in the app, {rekeyPreview.summary.notOnAnyRoster} on no roster any more)</li>
+                  <li><strong>{rekeyPreview.summary.sectionsChanged}</strong> data sections are rewritten, <strong>{rekeyPreview.summary.sectionsRenamed}</strong> of them renamed</li>
+                  <li><strong>{rekeyPreview.summary.loginsToRelink}</strong> logins are re-linked to their person{rekeyPreview.summary.loginsChecked ? '' : ' (logins could not be checked here)'}</li>
+                </ul>
+                <label className="mt-4 block">
+                  <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Type REKEY to confirm</span>
+                  <input value={rekeyConfirmation} onChange={event => setRekeyConfirmation(event.target.value)} disabled={busy} autoComplete="off" className="mt-1.5 w-full max-w-xs rounded-lg border border-gray-200 px-3 py-2.5 text-sm font-semibold uppercase tracking-widest focus:border-sky-400 focus:outline-none focus:ring-2 focus:ring-sky-100" />
+                </label>
+                <button type="button" onClick={handleRekeyRun} disabled={rekeyConfirmation !== 'REKEY' || busy} className="mt-3 inline-flex items-center justify-center rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  Move the records now
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </section>
 
       <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
         <h2 className="text-lg font-bold text-gray-900">If the website ever appears down</h2>
