@@ -1108,3 +1108,153 @@ test('an employee added in the app leaves through the same allowlist as one from
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Jon, 2026-10-30: Liz can redraw a building's monthly winner. The person
+// drawn is set aside, and who that was rides on the new winner's record —
+// for the district administrators who run the drawing, and nobody else.
+function redrawnWinner(employee, setAsideId = 'drawn-first') {
+  return {
+    id: 'redrawn-winner',
+    employeeId: String(employee.kronos_id || employee.id),
+    locationId: employee.location,
+    type: 'all-star-of-month',
+    date: '2026-09-30',
+    monthKey: '2026-09',
+    criteria: [],
+    note: 'Selected from 4 building entries; 1 belonged to this employee.',
+    sourceName: '',
+    recognizedBy: 'District Admin',
+    createdAt: '2026-10-01T15:00:00.000Z',
+    redraw: {
+      setAside: [{
+        employeeId: setAsideId,
+        drawnAt: '2026-10-01T14:00:00.000Z',
+        setAsideAt: '2026-10-01T15:00:00.000Z',
+        setAsideBy: 'District Admin',
+      }],
+    },
+  }
+}
+
+const drawingAdmin = {
+  role: 'admin',
+  displayName: 'District Admin',
+  canEditAttendance: true,
+  canEditRecognition: true,
+  canManageRecognitionAwards: true,
+}
+
+test('a building sees its redrawn winner but not who was set aside', () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const winner = redrawnWinner(employee)
+  const visible = schoolRecognitionView({ [winner.id]: winner }, new Set([winner.employeeId]))
+  assert.equal(visible[winner.id].employeeId, winner.employeeId)
+  assert.equal(Object.hasOwn(visible[winner.id], 'redraw'), false)
+})
+
+test('a redraw history reaches the administrators who run the drawing and nobody else', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const sessions = createMemoryBlobStore()
+    const employee = employees.find(row => row.location !== 'Admin')
+    const winner = redrawnWinner(employee)
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': { [winner.id]: winner },
+    })
+    const read = async access => {
+      const request = await authenticatedRequest(access, sessions)
+      const body = await (await handleStateRequest(request, { stateStore: store, sessionStore: sessions })).json()
+      return body.entries['all-star-recognition-v1']?.[winner.id]
+    }
+
+    assert.deepEqual((await read(drawingAdmin)).redraw, winner.redraw)
+
+    const others = {
+      building: { role: 'school', locationId: employee.location, canEditAttendance: true },
+      pilot: { role: 'admin', displayName: 'Pilot', canEditAttendance: false, canEditRecognition: true, recognitionOnly: true },
+      reviewer: { role: 'admin', displayName: 'Reviewer', canEditAttendance: false, canEditRecognition: false },
+    }
+    for (const [who, access] of Object.entries(others)) {
+      const seen = await read(access)
+      assert.equal(seen?.employeeId, winner.employeeId, `${who} still sees the winner`)
+      assert.equal(Object.hasOwn(seen, 'redraw'), false, `${who} is not told about the redraw`)
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
+})
+
+test('an administrator redraw replaces the winner in one change and keeps who was set aside', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const winner = redrawnWinner(employee)
+  const { redraw: _redraw, ...firstDraw } = { ...winner, id: 'first-draw', employeeId: 'drawn-first' }
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': { [firstDraw.id]: firstDraw },
+  })
+
+  const response = await handleMutate(store, drawingAdmin, {
+    key: 'all-star-recognition-v1',
+    mutation: { type: 'object-patch', set: { [winner.id]: winner }, remove: [firstDraw.id] },
+  })
+
+  assert.equal(response.status, 200)
+  const stored = await store.get('all-star-recognition-v1')
+  assert.deepEqual(Object.keys(stored), [winner.id])
+  assert.deepEqual(stored[winner.id].redraw, winner.redraw)
+  const { value } = await response.json()
+  assert.deepEqual(value[winner.id].redraw, winner.redraw)
+})
+
+test('a login that cannot see a redraw history cannot write one either', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const winner = redrawnWinner(employee)
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': {},
+  })
+  const pilot = { role: 'admin', displayName: 'Pilot', canEditRecognition: true, recognitionOnly: true, canManageRecognitionAwards: false }
+
+  const response = await handleMutate(store, pilot, {
+    key: 'all-star-recognition-v1',
+    mutation: { type: 'object-patch', set: { [winner.id]: winner }, remove: [] },
+  })
+
+  assert.equal(response.status, 200)
+  assert.equal(Object.hasOwn((await store.get('all-star-recognition-v1'))[winner.id], 'redraw'), false)
+  assert.equal(Object.hasOwn((await response.json()).value[winner.id], 'redraw'), false)
+})
+
+test('a redraw history must be well formed, and only a drawing may carry one', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const winner = redrawnWinner(employee)
+  const attempt = async record => {
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+      'all-star-recognition-v1': {},
+    })
+    return (await handleMutate(store, drawingAdmin, {
+      key: 'all-star-recognition-v1',
+      mutation: { type: 'object-patch', set: { [record.id]: record }, remove: [] },
+    })).status
+  }
+
+  assert.equal(await attempt(winner), 200)
+  assert.equal(await attempt({ ...winner, redraw: { setAside: [] } }), 400)
+  assert.equal(await attempt({ ...winner, redraw: { setAside: [{ employeeId: '', setAsideAt: winner.createdAt, setAsideBy: 'X' }] } }), 400)
+  assert.equal(await attempt({ ...winner, redraw: { setAside: [{ employeeId: 'a', setAsideAt: 'not a time', setAsideBy: 'X' }] } }), 400)
+  assert.equal(await attempt({
+    ...winner,
+    redraw: { setAside: Array.from({ length: 51 }, (_, index) => ({ employeeId: `p${index}`, setAsideAt: winner.createdAt, setAsideBy: 'X' })) },
+  }), 400)
+  assert.equal(await attempt({
+    ...winner,
+    type: 'star-of-day',
+    monthKey: null,
+    criteria: ['Service'],
+    note: 'Covered the line',
+  }), 400)
+})

@@ -262,12 +262,15 @@ function filterEntriesForSession(entries, session) {
   if (session.recognitionOnly === true) {
     return {
       ...programSettings,
-      ...(entries[RECOGNITION_KEY] ? { [RECOGNITION_KEY]: entries[RECOGNITION_KEY] } : {}),
+      ...(entries[RECOGNITION_KEY] ? { [RECOGNITION_KEY]: withoutRedrawHistory(entries[RECOGNITION_KEY]) } : {}),
     }
   }
-  if (hasLizAdminAccess(session)) return withholdHiddenAreas(entries, session)
+  if (hasLizAdminAccess(session)) return redrawHistoryForSession(withholdHiddenAreas(entries, session), session)
   if (session.role === 'admin') {
-    return withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries, session), session)
+    return redrawHistoryForSession(
+      withholdHiddenAreas(redactLizOnlyEmployeeEntries(entries, session), session),
+      session
+    )
   }
 
   const allowedEmployeeIds = allowedEmployeeIdsForSchool(entries, schoolLocationsOf(session))
@@ -366,12 +369,63 @@ function recipientNames(entries) {
   return names
 }
 
+// A redrawn month carries who was set aside (recognitionStore.js,
+// replaceMonthlyWinner). Jon, 2026-10-30: that is for district
+// administrators only. The people who run the drawing see it, in case the
+// draw is ever questioned; a building, a recognition-only pilot and a
+// read-only reviewer receive the winner and nothing about how the draw got
+// there.
+export function canSeeRedrawHistory(session) {
+  return session?.role === 'admin'
+    && session?.canEditRecognition === true
+    && session?.recognitionOnly !== true
+}
+
+function recordWithoutRedraw(record) {
+  if (!record || typeof record !== 'object' || !Object.hasOwn(record, 'redraw')) return record
+  const { redraw: _redraw, ...rest } = record
+  return rest
+}
+
+export function withoutRedrawHistory(recognitionMap) {
+  return Object.fromEntries(
+    Object.entries(recognitionMap || {}).map(([id, record]) => [id, recordWithoutRedraw(record)])
+  )
+}
+
+function redrawHistoryForSession(entries, session) {
+  if (!entries?.[RECOGNITION_KEY] || canSeeRedrawHistory(session)) return entries
+  return { ...entries, [RECOGNITION_KEY]: withoutRedrawHistory(entries[RECOGNITION_KEY]) }
+}
+
+// The same bound the client keeps.
+const MAX_SET_ASIDE = 50
+
+function validRedrawHistory(redraw) {
+  if (!redraw || typeof redraw !== 'object' || Array.isArray(redraw)) return false
+  const setAside = redraw.setAside
+  if (!Array.isArray(setAside) || setAside.length < 1 || setAside.length > MAX_SET_ASIDE) return false
+  const validTime = value => typeof value === 'string' && !Number.isNaN(Date.parse(value))
+  return setAside.every(entry => (
+    entry
+    && typeof entry === 'object'
+    && !Array.isArray(entry)
+    && typeof entry.employeeId === 'string'
+    && entry.employeeId.trim().length > 0
+    && entry.employeeId.length <= 200
+    && (entry.drawnAt === undefined || validTime(entry.drawnAt))
+    && validTime(entry.setAsideAt)
+    && typeof entry.setAsideBy === 'string'
+    && entry.setAsideBy.length <= 200
+  ))
+}
+
 export function schoolRecognitionView(recognitionMap, allowedEmployeeIds, names = new Map()) {
   return Object.fromEntries(
     Object.entries(recognitionMap || {})
       .flatMap(([id, record]) => {
         const employeeId = String(record?.employeeId)
-        if (allowedEmployeeIds.has(employeeId)) return [[id, record]]
+        if (allowedEmployeeIds.has(employeeId)) return [[id, recordWithoutRedraw(record)]]
         if (!CROSS_BUILDING_RECOGNITION_TYPES.has(String(record?.type))) return []
         // recipientName rather than a roster entry, so nothing downstream
         // mistakes this person for somebody the login manages.
@@ -499,7 +553,10 @@ function recognitionMutationForSession(mutation, session, allowedEmployeeIds, ma
         .map(([recognitionId, recognition]) => [
           recognitionId,
           {
-            ...recognition,
+            // Only the administrators who can see a redraw's history may
+            // write one, so nobody else can plant or rewrite who was set
+            // aside.
+            ...(canSeeRedrawHistory(session) ? recognition : recordWithoutRedraw(recognition)),
             recognizedBy: String(session.displayName || 'Authenticated manager').slice(0, 200),
             // Stamped from the session, never from the client: this is what lets
             // the district see which building handed out each star.
@@ -608,8 +665,13 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
         if (!monthlyDrawingStatus(recognition.monthKey).isOpen) {
           throw new Error('The monthly drawing is not open yet.')
         }
+        if (recognition.redraw !== undefined && !validRedrawHistory(recognition.redraw)) {
+          throw new Error('Monthly All-Star changes contain an invalid redraw history.')
+        }
       } else if (recognition.monthKey !== null) {
         throw new Error('Only monthly All-Star records may contain a drawing month.')
+      } else if (recognition.redraw !== undefined) {
+        throw new Error('Only monthly All-Star records may carry a redraw history.')
       }
     }
     if ((mutation.remove || []).some(value => !String(value || '').trim() || String(value).length > 200)) {
@@ -762,6 +824,8 @@ export async function handleMutate(store, session, body) {
       allowedEmployeeIds,
       recipientNames(rosterForRules || {})
     )
+  } else if (key === RECOGNITION_KEY && !canSeeRedrawHistory(session)) {
+    publicValue = withoutRedrawHistory(value)
   }
   if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
     publicValue = redactRecordOverrides(publicValue)

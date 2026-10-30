@@ -1,4 +1,4 @@
-import { writeSharedStorage } from './sharedStore.js'
+import { writeSharedStorage, writeSharedStorageConfirmed } from './sharedStore.js'
 import { DEFAULT_CRITERION_LABELS, DEFAULT_STAR_LEVELS } from './programDefaults.js'
 import { criterionLabels, starLevels } from './programSettings.js'
 
@@ -242,6 +242,12 @@ export function createRecognitionRecord(input, options = {}) {
     // Absent on a single award, which is almost all of them.
     ...(String(input.groupId || '').trim()
       ? { groupId: String(input.groupId).trim().slice(0, 120) }
+      : {}),
+    // Who a redrawn month set aside — see replaceMonthlyWinner. Only a
+    // drawing can be redrawn, so only a drawing carries it, and it is absent
+    // on every month that was drawn once.
+    ...(type === 'all-star-of-month' && Array.isArray(input.redraw?.setAside) && input.redraw.setAside.length
+      ? { redraw: { setAside: input.redraw.setAside.slice(-MAX_SET_ASIDE).map(cleanSetAside) } }
       : {}),
     createdAt,
   }
@@ -492,6 +498,74 @@ export function existingMonthlyWinner(records, locationId, monthKey) {
     && record.locationId === locationId
     && record.monthKey === monthKey
   ) || null
+}
+
+// Jon, 2026-10-30, for Liz: "a 'redraw' option for employee of the month,
+// the system is merit based but there is a social and semi political reason
+// for needing to redraw names."
+//
+// The person drawn is set aside and the month is drawn again from everybody
+// else's entries. Set aside rather than simply re-rolled: a fully random
+// redraw hands the title straight back to whoever had the most stars, which
+// is usually the person it was meant to move away from. Each further redraw
+// leaves out everyone set aside before it.
+//
+// The server keeps the same bound; fifty in one building's month is
+// already far past anything real.
+const MAX_SET_ASIDE = 50
+
+function cleanSetAside(entry) {
+  const drawnAt = String(entry?.drawnAt || '').trim()
+  return {
+    employeeId: String(entry?.employeeId ?? '').trim().slice(0, 200),
+    ...(drawnAt ? { drawnAt } : {}),
+    setAsideAt: String(entry?.setAsideAt || '').trim(),
+    setAsideBy: String(entry?.setAsideBy || '').trim().slice(0, 200),
+  }
+}
+
+export function setAsideEntries(winner) {
+  return Array.isArray(winner?.redraw?.setAside) ? winner.redraw.setAside : []
+}
+
+// Everyone a redraw of this month must leave out: whoever holds it now,
+// everyone set aside before them, and whatever the caller already excludes
+// (the manager pool, once the split applies).
+export function redrawExcludedEmployeeIds(winner, excludedEmployeeIds = null) {
+  const ids = new Set(excludedEmployeeIds ? [...excludedEmployeeIds].map(String) : [])
+  for (const entry of setAsideEntries(winner)) ids.add(String(entry?.employeeId))
+  if (winner) ids.add(String(winner.employeeId))
+  return ids
+}
+
+// One save: the old winner goes and the new one arrives together, so there
+// is never a moment with two winners or none. Awaited, because the screen
+// is about to announce a new winner and that should not be said of a change
+// the server refused.
+//
+// The list of who was set aside rides on the new record. The server sends it
+// only to the administrators who run the drawing; a building, a pilot and the
+// public board receive the winner and nothing about how the draw got there.
+export function replaceMonthlyWinner(winner, input, { setAsideBy = '', setAsideAt = new Date().toISOString(), ...options } = {}) {
+  if (!winner?.id || winner.type !== 'all-star-of-month') {
+    throw new Error('There is no recorded winner to redraw.')
+  }
+  const record = createRecognitionRecord({
+    ...input,
+    type: 'all-star-of-month',
+    locationId: winner.locationId,
+    monthKey: winner.monthKey,
+    redraw: {
+      setAside: [
+        ...setAsideEntries(winner),
+        { employeeId: winner.employeeId, drawnAt: winner.createdAt, setAsideAt, setAsideBy },
+      ],
+    },
+  }, options)
+  const records = readRecognitionMap()
+  delete records[winner.id]
+  records[record.id] = record
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
 }
 
 // Liz asked for the school-year leaderboard condensed to a top ten. Ties that

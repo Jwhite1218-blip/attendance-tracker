@@ -22,7 +22,12 @@ import {
   dailyStarsInMonth,
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
+  redrawExcludedEmployeeIds,
+  replaceMonthlyWinner,
+  setAsideEntries,
 } from './recognitionStore.js'
+import { configureClientAccess } from './sharedStore.js'
+import { installTestBrowserStorage } from './testBrowserStorage.js'
 
 function recognition(overrides = {}) {
   return {
@@ -116,6 +121,127 @@ test('monthly drawing gives one weighted entry per daily recognition', () => {
   assert.deepEqual(drawMonthlyAllStar(records, 'SchoolA', '2026-08', 0.99), {
     employeeId: '200', entryCount: 2, totalEntries: 3,
   })
+})
+
+// Jon, 2026-10-30: Liz needs to be able to redraw the monthly winner.
+function monthlyWinnerRecord(overrides = {}) {
+  return recognition({
+    id: 'winner-1',
+    employeeId: '200',
+    type: 'all-star-of-month',
+    date: '2026-08-31',
+    monthKey: '2026-08',
+    criteria: [],
+    note: 'Selected from 3 building entries; 2 belonged to this employee.',
+    createdAt: '2026-08-29T15:00:00.000Z',
+    ...overrides,
+  })
+}
+
+test('a redraw leaves out the winner, everyone set aside before, and the manager pool', () => {
+  const winner = monthlyWinnerRecord({
+    redraw: { setAside: [{ employeeId: '100', setAsideAt: '2026-08-29T14:00:00.000Z', setAsideBy: 'Liz' }] },
+  })
+  assert.deepEqual(
+    [...redrawExcludedEmployeeIds(winner, new Set(['900']))].sort(),
+    ['100', '200', '900']
+  )
+  // A month that was never drawn excludes only what the caller passed.
+  assert.deepEqual([...redrawExcludedEmployeeIds(null, new Set(['900']))], ['900'])
+})
+
+test('the person set aside cannot come straight back, however many stars they hold', () => {
+  const records = [
+    recognition({ id: 'a1', employeeId: '200' }),
+    recognition({ id: 'a2', employeeId: '200' }),
+    recognition({ id: 'a3', employeeId: '200' }),
+    recognition({ id: 'b1', employeeId: '300' }),
+  ]
+  const excluded = redrawExcludedEmployeeIds(monthlyWinnerRecord())
+  for (const randomValue of [0, 0.25, 0.5, 0.75, 0.99]) {
+    assert.deepEqual(drawMonthlyAllStar(records, 'SchoolA', '2026-08', randomValue, excluded), {
+      employeeId: '300', entryCount: 1, totalEntries: 1,
+    })
+  }
+  // With the only other candidate set aside too, there is nobody left.
+  const everyone = redrawExcludedEmployeeIds(monthlyWinnerRecord({
+    redraw: { setAside: [{ employeeId: '300', setAsideAt: '2026-08-29T14:00:00.000Z', setAsideBy: 'Liz' }] },
+  }))
+  assert.equal(drawMonthlyAllStar(records, 'SchoolA', '2026-08', 0, everyone), null)
+})
+
+test('only a drawing carries a redraw history, and it is cleaned on the way in', () => {
+  const setAside = [{ employeeId: ' 200 ', drawnAt: '', setAsideAt: '2026-08-29T15:00:00.000Z', setAsideBy: ' Liz ', extra: 'dropped' }]
+  const drawn = createRecognitionRecord({
+    employeeId: '300', locationId: 'SchoolA', type: 'all-star-of-month',
+    date: '2026-08-31', monthKey: '2026-08', criteria: [], redraw: { setAside },
+  })
+  assert.deepEqual(drawn.redraw, {
+    setAside: [{ employeeId: '200', setAsideAt: '2026-08-29T15:00:00.000Z', setAsideBy: 'Liz' }],
+  })
+  assert.deepEqual(setAsideEntries(drawn), drawn.redraw.setAside)
+
+  const star = createRecognitionRecord({
+    employeeId: '300', locationId: 'SchoolA', type: 'star-of-day', date: '2026-08-20',
+    criteria: ['Service'], note: 'Covered the line', redraw: { setAside },
+  })
+  assert.equal(Object.hasOwn(star, 'redraw'), false)
+
+  // A month drawn once has no history at all, not an empty one.
+  const once = createRecognitionRecord({
+    employeeId: '300', locationId: 'SchoolA', type: 'all-star-of-month',
+    date: '2026-08-31', monthKey: '2026-08', criteria: [],
+  })
+  assert.equal(Object.hasOwn(once, 'redraw'), false)
+  assert.deepEqual(setAsideEntries(once), [])
+})
+
+test('a redraw replaces the winner in one save and remembers who was set aside', async () => {
+  installTestBrowserStorage()
+  configureClientAccess({ role: 'admin', canEditAttendance: true, canEditRecognition: true })
+  const earlier = { employeeId: '100', setAsideAt: '2026-08-29T14:00:00.000Z', setAsideBy: 'Liz' }
+  const winner = monthlyWinnerRecord({ redraw: { setAside: [earlier] } })
+  const star = recognition({ id: 'star-1', employeeId: '300' })
+  localStorage.setItem('all-star-recognition-v1', JSON.stringify({ [winner.id]: winner, [star.id]: star }))
+
+  const sent = []
+  globalThis.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body || '{}')
+    sent.push(body)
+    return { ok: true, status: 200, json: async () => ({ ok: true, value: JSON.parse(localStorage.getItem(body.key)) }) }
+  }
+
+  const record = await replaceMonthlyWinner(
+    winner,
+    { employeeId: '300', date: '2026-08-31', criteria: [], note: 'Selected from 1 building entry; 1 belonged to this employee.' },
+    { setAsideBy: 'Liz', setAsideAt: '2026-08-30T16:00:00.000Z' }
+  )
+
+  assert.equal(record.employeeId, '300')
+  assert.equal(record.locationId, 'SchoolA')
+  assert.equal(record.monthKey, '2026-08')
+  assert.deepEqual(record.redraw.setAside, [
+    earlier,
+    { employeeId: '200', drawnAt: '2026-08-29T15:00:00.000Z', setAsideAt: '2026-08-30T16:00:00.000Z', setAsideBy: 'Liz' },
+  ])
+
+  // One request: the old winner removed and the new one set together, so the
+  // month is never without a winner or holding two.
+  const recognitionWrites = sent.filter(body => body.key === 'all-star-recognition-v1')
+  assert.equal(recognitionWrites.length, 1)
+  assert.deepEqual(recognitionWrites[0].mutation.remove, ['winner-1'])
+  assert.deepEqual(Object.keys(recognitionWrites[0].mutation.set), [record.id])
+
+  const stored = JSON.parse(localStorage.getItem('all-star-recognition-v1'))
+  assert.deepEqual(Object.keys(stored).sort(), [record.id, 'star-1'].sort())
+})
+
+test('a redraw is refused when there is no recorded winner', () => {
+  assert.throws(() => replaceMonthlyWinner(null, { employeeId: '300' }), /no recorded winner/)
+  assert.throws(
+    () => replaceMonthlyWinner(recognition(), { employeeId: '300' }),
+    /no recorded winner/
+  )
 })
 
 test('a Star of the Day cannot be recorded without saying why they shine', () => {

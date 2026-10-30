@@ -35,6 +35,9 @@ import {
   getNextStarLevel,
   getStarLevel,
   earnsDailyStar,
+  redrawExcludedEmployeeIds,
+  replaceMonthlyWinner,
+  setAsideEntries,
   requiresStarMessage,
   schoolYearStartFor,
   submitterLocationLabel,
@@ -49,7 +52,7 @@ import {
   recognitionTypeAllowedForRole,
 } from '../data/recognitionRules.js'
 import { coachMilestones } from '../data/programSettings.js'
-import { flushPendingWrites } from '../data/sharedStore.js'
+import { flushPendingWrites, loadSharedState } from '../data/sharedStore.js'
 
 function localDateKey(date = new Date()) {
   return [
@@ -110,6 +113,18 @@ function formatDate(dateKey) {
   })
 }
 
+// A timestamp rather than a date key, read in local time: a redraw at eight
+// in the evening is that day's, not tomorrow's in UTC.
+function formatMoment(isoValue) {
+  const date = new Date(isoValue)
+  if (Number.isNaN(date.valueOf())) return ''
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function drawingNote(result) {
+  return `Selected from ${result.totalEntries} building entr${result.totalEntries === 1 ? 'y' : 'ies'}; ${result.entryCount} belonged to this employee.`
+}
+
 // Opens the card in its own window and sends it straight to the print dialog.
 // The card is written into a fresh document rather than printed from this page
 // so the app's own layout can never bleed into the printed sheet.
@@ -138,9 +153,11 @@ export default function RecognitionProgram() {
     displayName,
     canEditRecognition,
     canManageRecognitionAwards,
+    recognitionOnly,
     dataVersion,
   } = access
   const [localVersion, setLocalVersion] = useState(0)
+  const [redrawing, setRedrawing] = useState(false)
   const [scopeLocation, setScopeLocation] = useState(role === 'school' ? locationId : 'all')
   const [historyType, setHistoryType] = useState('all')
   // Which half of the board panel is showing. Lifted out of the panel
@@ -310,6 +327,22 @@ export default function RecognitionProgram() {
     : []
   const monthlyWinner = drawingScope ? existingMonthlyWinner(records, drawingScope, drawingMonth) : null
   const monthlyWinnerEmployee = monthlyWinner ? employeeMap.get(String(monthlyWinner.employeeId)) : null
+  // The same people the server sends a redraw's history to (state.mjs,
+  // canSeeRedrawHistory), so the button never offers something the server
+  // would strip on the way in.
+  const canRedraw = canEditRecognition && role === 'admin' && recognitionOnly !== true
+  const redrawEntries = monthlyWinner
+    ? getMonthlyDrawingEntries(
+      records,
+      drawingScope,
+      drawingMonth,
+      redrawExcludedEmployeeIds(monthlyWinner, splitApplies ? managerIds : null)
+    )
+    : []
+  const setAside = setAsideEntries(monthlyWinner).map(entry => ({
+    ...entry,
+    name: employeeName(employeeMap.get(String(entry.employeeId))) || entry.employeeId,
+  }))
   const drawingAvailability = monthlyDrawingStatus(drawingMonth)
   const nominationQuarter = quarterWindowFor(new Date())
   const shootingStarNominations = scopedRecords.filter(record => (
@@ -557,13 +590,47 @@ export default function RecognitionProgram() {
         date: monthAwardDate(drawingMonth),
         monthKey: drawingMonth,
         criteria: [],
-        note: `Selected from ${result.totalEntries} building entr${result.totalEntries === 1 ? 'y' : 'ies'}; ${result.entryCount} belonged to this employee.`,
+        note: drawingNote(result),
         recognizedBy: displayName || 'Authenticated manager',
       })
       setLocalVersion(version => version + 1)
       setFeedback({ type: 'success', message: `${employeeName(winner)} is ${formatMonth(drawingMonth)} All-Star of the Month.` })
     } catch (error) {
       setFeedback({ type: 'error', message: error.message })
+    }
+  }
+
+  // See replaceMonthlyWinner for why the person drawn is set aside rather
+  // than put back in.
+  const handleRedraw = async () => {
+    setFeedback(null)
+    setRedrawing(true)
+    let saving = false
+    try {
+      if (!monthlyWinner) throw new Error('There is no recorded winner to redraw.')
+      const excluded = redrawExcludedEmployeeIds(monthlyWinner, splitApplies ? managerIds : null)
+      const result = drawMonthlyAllStar(records, drawingScope, drawingMonth, undefined, excluded)
+      if (!result) throw new Error('Nobody else has a Star of the Day entry this month, so there is no one to redraw.')
+      const winner = employeeMap.get(String(result.employeeId))
+      if (!winner) throw new Error('The selected employee is not available in this roster.')
+      saving = true
+      await replaceMonthlyWinner(monthlyWinner, {
+        employeeId: result.employeeId,
+        date: monthAwardDate(drawingMonth),
+        criteria: [],
+        note: drawingNote(result),
+        recognizedBy: displayName || 'Authenticated manager',
+      }, { setAsideBy: displayName || 'District administrator' })
+      setFeedback({ type: 'success', message: `${employeeName(winner)} is ${formatMonth(drawingMonth)} All-Star of the Month.` })
+    } catch (error) {
+      // The redraw is already on this screen by the time the server says
+      // no. Put back what the server actually holds rather than leave a
+      // winner showing that nobody else will see.
+      if (saving) await loadSharedState().catch(() => undefined)
+      setFeedback({ type: 'error', message: error.message })
+    } finally {
+      setLocalVersion(version => version + 1)
+      setRedrawing(false)
     }
   }
 
@@ -752,6 +819,11 @@ export default function RecognitionProgram() {
               monthlyWinnerEmployee={monthlyWinnerEmployee}
               drawingAvailability={drawingAvailability}
               onDraw={handleMonthlyDrawing}
+              canRedraw={canRedraw}
+              redrawEntries={redrawEntries}
+              setAside={setAside}
+              redrawing={redrawing}
+              onRedraw={handleRedraw}
             />
           </div>
           <ShootingStarNominations
@@ -1519,8 +1591,19 @@ function MonthlyDrawing({
   monthlyWinnerEmployee,
   drawingAvailability,
   onDraw,
+  canRedraw = false,
+  redrawEntries = [],
+  setAside = [],
+  redrawing = false,
+  onRedraw,
 }) {
   const uniqueCandidates = new Set(entries.map(entry => entry.employeeId)).size
+  const redrawCandidates = new Set(redrawEntries.map(entry => entry.employeeId)).size
+  // Keyed to the winner rather than a plain flag, so the question closes by
+  // itself once the redraw lands or the building or month changes.
+  const [confirmingFor, setConfirmingFor] = useState(null)
+  const confirming = Boolean(monthlyWinner) && confirmingFor === monthlyWinner.id
+  const winnerName = employeeName(monthlyWinnerEmployee) || monthlyWinner?.employeeId
   return (
     <section className="rounded-2xl border border-amber-200 bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -1563,11 +1646,66 @@ function MonthlyDrawing({
       </div>
 
       {monthlyWinner ? (
-        <div className="mt-4 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 to-[#fff4c4] p-4 text-center">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Recorded winner</p>
-          <p className="mt-2 text-lg font-black text-gray-950">★ {employeeName(monthlyWinnerEmployee) || monthlyWinner.employeeId}</p>
-          <p className="mt-1 text-xs text-gray-500">{formatMonth(drawingMonth)} - {LOCATION_MAP[drawingScope]?.name || drawingScope}</p>
-        </div>
+        <>
+          <div className="mt-4 rounded-xl border border-amber-300 bg-gradient-to-br from-amber-50 to-[#fff4c4] p-4 text-center">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Recorded winner</p>
+            <p className="mt-2 text-lg font-black text-gray-950">★ {winnerName}</p>
+            <p className="mt-1 text-xs text-gray-500">{formatMonth(drawingMonth)} - {LOCATION_MAP[drawingScope]?.name || drawingScope}</p>
+            {/* Only an administrator's session ever holds this list — the
+                server strips it for everyone else — and it stays folded so
+                the drawing can be run on a shared screen. */}
+            {setAside.length > 0 && (
+              <details className="mt-3 rounded-lg border border-amber-200 bg-white/70 px-3 py-2 text-left">
+                <summary className="cursor-pointer text-[11px] font-semibold text-amber-800">
+                  Redrawn · {setAside.length} name{setAside.length === 1 ? '' : 's'} set aside · district admins only
+                </summary>
+                <ul className="mt-2 space-y-1 text-[11px] leading-relaxed text-gray-600">
+                  {setAside.map((entry, index) => (
+                    <li key={`${entry.employeeId}-${index}`}>
+                      {entry.name} — set aside {formatMoment(entry.setAsideAt)}{entry.setAsideBy ? ` by ${entry.setAsideBy}` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+          {canRedraw && (confirming ? (
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+              <p className="text-xs font-bold text-gray-900">Set aside {winnerName} and draw again?</p>
+              <p className="mt-1 text-[11px] leading-relaxed text-gray-600">
+                {redrawEntries.length > 0
+                  ? `${winnerName} is left out of this redraw. The new winner is drawn from the other ${redrawEntries.length} entr${redrawEntries.length === 1 ? 'y' : 'ies'} (${redrawCandidates} ${redrawCandidates === 1 ? 'person' : 'people'}). Building managers and the public board will only see the new winner.`
+                  : 'Nobody else has a Star of the Day entry this month, so there is no one to redraw.'}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={onRedraw}
+                  disabled={redrawing || redrawEntries.length === 0}
+                  className="rounded-lg bg-[#211b12] px-3 py-2 text-xs font-black uppercase tracking-wide text-[#ffd75c] hover:bg-black disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {redrawing ? 'Redrawing…' : 'Set aside and redraw'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingFor(null)}
+                  disabled={redrawing}
+                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingFor(monthlyWinner.id)}
+              className="mt-2 w-full rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-500 hover:bg-gray-50 hover:text-gray-800"
+            >
+              Redraw this month…
+            </button>
+          ))}
+        </>
       ) : (
         <>
           <div className="mt-4 grid grid-cols-2 gap-3">
