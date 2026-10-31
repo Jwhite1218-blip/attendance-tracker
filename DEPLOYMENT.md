@@ -10,10 +10,31 @@ All Netlify Functions (`session`, `state`, and the disabled-by-default
 `end-of-day-report` schedule) deploy as part of that same build — there is no
 separate application deploy for them.
 
+## Every copy but the live site needs a Netlify login
+
+**Since 2026-10-30**, Visitor access on `allstartracker` is set to **Netlify team
+login for non-production deploys**: deploy previews, branch deploys and the
+permanent address of every past deploy all answer 401 to anyone not signed in
+to the `jwhite1218` team. The live site is unaffected. Viewing a preview means
+signing in to Netlify as a team member first.
+
+Why: Netlify keeps every past deploy online at its own address, and copies
+built between 2026-08-16 and 2026-08-21 carried the whole roster in their
+browser code — pay, hours, hire dates, birthdays and payroll numbers — at
+guessable `deploy-preview-1` … `-10` addresses, with no sign-in. Found and
+closed on 2026-10-30; every deploy from before that evening was then deleted,
+because each still carried the old roster inside its server code.
+
+**An old deploy is not a rollback target any more.** Every deploy from before
+the 2026-10-30 re-key expects payroll-number keys and would show an empty
+tracker against today's data. Delete old deploys freely; never publish one.
+
 ## Deploy previews point at production by default
 
 **Verified August 30, 2026. Treat every `deploy-preview-*--allstartracker.netlify.app`
 URL as live production until the contextual values below are set.**
+(PROJECT_STATE.md records them as applied on 2026-09-28; the login above is
+on top of that, not instead of it.)
 
 Netlify deploy previews are enabled on the live site, so every pull request gets
 a public URL. By default [an environment variable has a single value shared
@@ -71,6 +92,9 @@ allowlist problems — see the parity trap below.
 
 ## The retired site
 
+*2026-10-30: no longer listed among the team's Netlify projects, so it appears
+to have been deleted already.*
+
 **https://localis-attendance-review.netlify.app** — an older, unrelated deploy. As of 2026-08-21 it has no functions and no environment variables, and its last deploy was a one-off manual `netlify deploy` from 2026-08-19 — it is **not** Git-linked and does **not** update automatically. It predates the current app and isn't used by anyone day-to-day. Safe to delete once you've confirmed nobody still has that URL bookmarked (in particular, double-check the district's read-only reviewer(s) — the "Localis" watermarked review role now lives on the real site's own PIN list, not a separate deployment).
 
 ## Environment variables (production)
@@ -84,7 +108,7 @@ netlify env:list --context production --json
 Required:
 - `ATTENDANCE_ACCESS_CODES_JSON` — PIN → role/location/permissions map
 - `ATTENDANCE_SESSION_SECRET` — HMAC signing secret for session cookies
-- `ATTENDANCE_LIZ_EMPLOYEE_ID` — stable identifier used to target Liz's access entry during a PIN rotation
+- `ATTENDANCE_LIZ_EMPLOYEE_ID` — stable identifier used to target Liz's access entry during a PIN rotation. Since the 2026-10-30 re-key this must be Liz's opaque key (`emp-…`, her `kronos_id` in `src/data/employees.json`), never a payroll number. Her display name identifies her as well, so a stale value does not lock her out — but a payroll number here is one the re-key could not reach.
 - `ATTENDANCE_LIZ_REPLACEMENT_PIN` — optional secret replacement PIN; setting it disables the original Liz PIN and rejects existing Liz sessions without logging out other staff
 - `ATTENDANCE_STATE_BACKEND` — currently `supabase` (see below)
 - `ATTENDANCE_REPORT_ENABLED` — `true` only on production after recipient and sender acceptance

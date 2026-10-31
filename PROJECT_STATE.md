@@ -1,6 +1,12 @@
 # Attendance Tracker — Project State
 
-Last verified: 2026-10-19
+Last verified: 2026-10-30
+
+**2026-10-30: the district payroll number is gone — from the records, the
+database, every Netlify copy and the repository's history.** See "Shipped
+2026-10-30" below. The git history was rewritten that night, so **every
+commit hash recorded in this file before that date names a commit that no
+longer exists**; the content is unchanged, only the identifiers moved.
 
 ## Current stage
 Production / live pilot. The recognition work was demonstrated to Liz's team on
@@ -25,16 +31,17 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `82d247d26ca7016a63ed1f2d3159c0fe8a10a718`
-- Test suite: 374 passing (`npm test`)
-- Page render check: 26 clean (`npm run verify:pages`)
-- Confirmed live: `/version.json` returns that commit, 2026-10-19
+- Verified production commit: `35707af6b53a2cbe0a1d35888528a79a5ebfdd97`
+- Test suite: 508 passing (`npm test`)
+- Page render check: 34 clean (`npm run verify:pages`)
+- Confirmed live: `/version.json` returns that commit, 2026-10-30, and it is
+  the only deploy Netlify holds for the site
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
-- Deploy previews: test-only. `ATTENDANCE_STATE_BACKEND=blobs`, report sending disabled, and `VITE_TEST_ENVIRONMENT_LABEL=Preview — test data`. Confirmed applied at build time on 2026-09-28.
-- Dedicated stress lab: `allstartracker-stress-20260821` — use only for isolated destructive/stress testing; do not treat it as the newest product version.
-- Archived legacy site: `archive-attendance-stress-old` — team-only; do not build or deploy to it.
+- Deploy previews: test-only. `ATTENDANCE_STATE_BACKEND=blobs`, report sending disabled, and `VITE_TEST_ENVIRONMENT_LABEL=Preview — test data`. Confirmed applied at build time on 2026-09-28. Since 2026-10-30 every non-production deploy also requires a Netlify team login (see DEPLOYMENT.md).
+- Dedicated stress lab: `allstartracker-stress-20260821` — use only for isolated destructive/stress testing; do not treat it as the newest product version. Its 25 deploys (2026-08-21 – 08-28) predate the clean-up and likely carry the old roster; decide whether to delete it.
+- Archived legacy site: `archive-attendance-stress-old` — team-only; do not build or deploy to it. Same as the stress lab: built in August, likely carries the old roster, a candidate for deletion.
 
 ## The production database
 Supabase project **`gbjikeytzdlzjulrnjvo`** —
@@ -87,6 +94,13 @@ Keep the live attendance workflow stable while making every review/test change
 traceable and isolated from production data.
 
 ## Current rules
+- **No payroll number, anywhere, ever again** — not in the roster, the data,
+  a test, an example file, a code comment or a commit message. Examples use
+  made-up numbers (`30000001`) or opaque keys (`emp-liz00001`). The server
+  refuses a write or a backup that names somebody by one
+  (`src/data/payrollKeys.js`), and `payrollKeys.test.js` fails if the roster
+  file holds any five-to-ten-digit number. The roster field is still called
+  `kronos_id`; it holds the opaque key, and the name is historical.
 - Start all normal feature work from current `main`.
 - Production changes must be committed before deployment.
 - A deploy preview must never use production Supabase credentials or send attendance reports.
@@ -443,6 +457,60 @@ that looked right from the inside.
 - Nothing notifies a requester of the decision. They see it next time they
   open the record.
 
+## Shipped 2026-10-30
+
+**Recognition**, each at Liz's request through Jon, all live:
+- **Building All-Star of the Month can be redrawn.** The person drawn is set
+  aside and the month drawn again from everybody else's entries. Who was set
+  aside rides on the winner's record and reaches only administrators who run
+  the drawing (`canSeeRedrawHistory`); buildings, pilots, reviewers and the
+  public board see the winner alone.
+- **A recorded winner can be edited** — month, building, person — **or
+  removed**. A person chosen by hand gets the note "Recorded by the district."
+  in place of the drawing's entry count.
+- **Warren Food Services Employee of the Month is one per month for the whole
+  district**, held on the page and by the server (409), with its own box to
+  edit or remove it. Removal needs the awards capability. The drawing box is
+  headed "Building All-Star of the Month" so the two are not confused.
+- **ACE Coach Bucks go to several leaders at once** — one record each, one save.
+- **Deactivated employees keep their names** on past recognitions; nothing on
+  screen falls back to an id ("Former employee").
+- **A refused save says so.** The Star of the Day, bonus and Coach Buck forms
+  used to show "The shared record is confirmed." for a write the server had
+  rejected (`confirmRecognitionSaved`).
+- The RESTORE box reads what is typed whatever its case — it displays in
+  capitals, so "restore" looked right and stayed locked.
+
+**The payroll-number clean-up:**
+- **Re-key.** 170 people (145 roster, 25 added in the app before 2026-10-20)
+  moved onto opaque keys; 112 attendance sections renamed; 24 logins
+  re-linked. Rehearsed first against a real backup, in memory: 407 attendance
+  days and 368 recognitions before and after, no person with any difference.
+  The one-time action and its screen came out afterwards; the guards stay.
+- **Database.** `audit_events` had kept a full before-and-after copy of every
+  change since 2026-08-20 — every payroll number, and the phone, hire-date and
+  termination data deleted earlier in October. Cleared, with the pre-change
+  safety copy. Verified by query: no row named by payroll number, no person
+  field holding one, no login linked by one, no audit row mentioning phone,
+  hire date or termination.
+- **Netlify.** 227 old deploys of `allstartracker` deleted — the first 188
+  because their copy of the roster held pay data, the rest because it held
+  payroll numbers. The pre-database file storage (`attendance-shared-state`)
+  emptied. Non-production deploys now need a team login.
+- **Repository.** History rewritten with git filter-repo: every roster version
+  stripped of pay, hours, hire date, middle name, department and payroll
+  number, and the numbers replaced in example files, tests and commit
+  messages too. Verified on 1,145 file versions and 246 commit messages. All
+  31 branches and 7 tags force-pushed.
+- `COMPLIANCE-DISCLOSURE.md` brought up to date, including the preview
+  exposure.
+
+**What went wrong:** the redraw's confirm box copied the RESTORE box's
+capitals styling and stopped Liz mid-way through the re-key. And three real
+payroll numbers were typed into this repository during the work — two as
+test examples, one in a commit message quoting a screenshot — and had to be
+rewritten out with the rest. Hence the first rule above.
+
 ## Decided by Liz, 2026-10-19
 
 Answered by Liz directly, so these are settled unless she reopens them.
@@ -514,7 +582,9 @@ Answered by Liz directly, so these are settled unless she reopens them.
    fewer boxes and has them; anything further is new.
 
 ## Open, waiting on Jon
-1. **Deploy previews are publicly reachable and accept real district PINs**
+1. **Closed 2026-10-30:** every non-production deploy now needs a Netlify team
+   login, so no preview is reachable by anyone else. What follows is kept for
+   the record. *Was:* **Deploy previews are publicly reachable and accept real district PINs**
    (`ATTENDANCE_ACCESS_CODES_JSON` is scoped to all contexts). A password
    under Visitor access, scoped to previews only, closes it. Partly mitigated
    on 2026-10-18: `ATTENDANCE_TABLE_AUTH_ENABLED` is `false` outside
@@ -530,7 +600,8 @@ Answered by Liz directly, so these are settled unless she reopens them.
    already handled for table-sourced sessions and has a test.
 3. **Phone numbers purged** from production on 2026-10-19, 0 rows remaining,
    confirmed. Nothing to do — recorded so the field is not mistaken for
-   still-held data.
+   still-held data. Their copies in the audit log survived that purge and
+   were deleted on 2026-10-30.
 4. **`ATTENDANCE_PIN_KEY` must be recorded outside Netlify.** It encrypts
    every PIN and cannot be read back once secret-flagged. Losing it after
    migration means reissuing every PIN in the district. It is the one piece
@@ -551,3 +622,22 @@ Answered by Liz directly, so these are settled unless she reopens them.
    simulation; `UNEX` (#E56E6A) against `LI` is 1.28. The two-letter labels
    are carrying the distinction on their own. These hexes look like Liz's own
    colour convention, so changing them is her call, not a tidy-up.
+9. **GitHub Support request** to purge the references pull requests #1–#22
+   still hold to the pre-rewrite commits, and cached views. Until GitHub
+   acts, the old commits stay reachable through those references by anyone
+   with access to the private repository.
+10. **Check two Netlify settings for payroll numbers:**
+    `ATTENDANCE_LIZ_EMPLOYEE_ID` (should now be Liz's opaque key — see
+    DEPLOYMENT.md) and `ATTENDANCE_ACCESS_CODES_JSON` (any `employeeId`).
+    Settings are outside anything the re-key could reach.
+11. **Side copies built while the roster held pay data:** the stress lab, the
+    archived stress site and `workforce-hub-demo` at Netlify (team-login
+    only), and the separate `workforce-hub` repository's history. Delete or
+    rebuild.
+12. **The audit log keeps full values going forward.** It holds only opaque
+    keys now, but anything deleted later — a note, a field — will survive in
+    `audit_events` the way the phone numbers did. Decide a retention period,
+    or what it should store.
+13. **Liz's backups from before 2026-10-30** still hold payroll numbers and
+    can no longer be restored. They should be deleted once a new backup
+    exists.
