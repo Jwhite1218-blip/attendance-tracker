@@ -16,8 +16,8 @@ test('the roster names nobody by payroll number, anywhere in the file', () => {
 // Made-up numbers throughout; none is anybody's.
 
 test('a payroll number is five to ten digits standing alone, nothing else', () => {
-  assert.equal(isPayrollKey('emp-8iui5e5i'), true)
-  assert.equal(isPayrollKey(3204252), true)
+  assert.equal(isPayrollKey('30000001'), true)
+  assert.equal(isPayrollKey(3000001), true)
   assert.equal(isPayrollKey('emp-k3x9a2bq'), false)
   assert.equal(isPayrollKey('2026'), false)
   assert.equal(isPayrollKey('1793206131000'), false)

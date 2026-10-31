@@ -58,7 +58,7 @@ test('replacing Liz PIN revokes her existing session without logging out other s
     4101: {
       role: 'admin',
       displayName: 'Elizabeth Schmitt',
-      employeeId: 'emp-pwsfc85t',
+      employeeId: 'emp-liz00001',
       canManageRoster: true,
       canManageBlackouts: true,
     },
@@ -69,7 +69,7 @@ test('replacing Liz PIN revokes her existing session without logging out other s
     },
   })
   process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
-  process.env.ATTENDANCE_LIZ_EMPLOYEE_ID = 'emp-pwsfc85t'
+  process.env.ATTENDANCE_LIZ_EMPLOYEE_ID = 'emp-liz00001'
   delete process.env.ATTENDANCE_LIZ_REPLACEMENT_PIN
 
   try {

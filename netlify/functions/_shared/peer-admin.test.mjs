@@ -9,7 +9,7 @@ import { accessForPin, getAccessCodes } from './auth.mjs'
 const LIZ = {
   role: 'admin',
   displayName: 'Liz Administrator',
-  employeeId: 'emp-pwsfc85t',
+  employeeId: 'emp-liz00001',
   canEditAttendance: true,
   canManageRoster: true,
   canManageBlackouts: true,
@@ -71,7 +71,7 @@ test('a peer administrator gets exactly Liz\'s capabilities under their own name
 test('a peer does not inherit the employee id that identifies Liz', () => {
   withEnvironment(withPeers({ 3333: 'Marrese' }), () => {
     assert.equal(accessForPin('3333').employeeId, null)
-    assert.equal(accessForPin('1111').employeeId, 'emp-pwsfc85t', 'hers is untouched')
+    assert.equal(accessForPin('1111').employeeId, 'emp-liz00001', 'hers is untouched')
   })
 })
 

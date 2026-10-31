@@ -22,7 +22,7 @@ const BLOB_CODES = {
   1111: {
     role: 'admin',
     displayName: 'Liz Administrator',
-    employeeId: 'emp-pwsfc85t',
+    employeeId: 'emp-liz00001',
     canEditAttendance: true,
     canManageRoster: true,
     canManageBlackouts: true,
