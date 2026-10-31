@@ -56,19 +56,23 @@ allowlist and they were not on it — but they should not have been held at
 all. They are now deleted from the file. They remain in the repository's
 version history, which is private; see section 6.
 
-**The district's payroll number is no longer shown or exported anywhere.** It
-remains on each record as the internal key that attendance history, stars and
-notes hang from — removing it outright would orphan every record ever
-entered. It is not displayed on any screen, not in any report column, and not
-in any spreadsheet export; the switch that could restore it to the screen was
-deleted rather than left off. Employees added from 20 October onward receive
-an opaque identifier that means nothing outside this application. Re-keying
-the historic records onto opaque identifiers is planned as a separate,
-backed-up migration.
+**The district's payroll number is no longer held by the application.** It
+came off every screen, report column and spreadsheet export on 20 October
+2026, and employees added from that day were given an opaque identifier
+instead. On 30 October 2026 every record that still used it as a key —
+attendance, recognition, notes, card changes, training, status flags, change
+requests and login links, for 170 people — was moved onto an opaque
+identifier that means nothing outside this application, and the roster file
+was rewritten the same way. The database's audit history and safety copy,
+which still held the old values, were deleted. Verified by query that
+evening: no record, login or audit row names anybody by payroll number, and
+any attempt to write one back is refused.
 
 **Phone numbers** were collected briefly in October 2026 and were deleted from
 the database on 19 October 2026 at HR's request. Zero records remain; this was
-verified by query.
+verified by query. Copies in the database's audit history, along with
+removed hire-date and termination fields, were deleted on 30 October 2026,
+also verified by query.
 
 ## 3. What it does not do
 
@@ -161,12 +165,11 @@ Each item below is verifiable in the source code.
 These are stated plainly because an IT reviewer will find them, and finding
 them undisclosed would reasonably undermine confidence in everything above.
 
-1. **Version history retains what has been removed.** Pay, hours, hire dates
-   and middle names have been deleted from the roster file, but the
-   repository's history still contains them, as it does for any file ever
-   committed. The repository is private. Whether the history also needs
-   rewriting is a question for the review rather than something to decide
-   unilaterally.
+1. **Version history retains what has been removed.** Pay, hours, hire dates,
+   middle names and payroll numbers have been deleted from the roster file,
+   but the repository's history still contains them, as it does for any file
+   ever committed. The repository is private. A rewrite of that history to
+   purge them is planned.
 
 2. **Fifteen public pages show staff names.** Each school has a public
    recognition leaderboard — no sign-in — listing staff **full first and last
@@ -176,10 +179,17 @@ them undisclosed would reasonably undermine confidence in everything above.
    retains access. *Decision needed: keep, reduce to first name and last
    initial, or withdraw pending review.*
 
-3. **Test copies of the site are publicly reachable and accept live PINs.**
-   Netlify publishes a preview copy for each change. These are currently open
-   to the internet and a real district PIN will sign in to them. *This should
-   be closed before any review concludes.*
+3. **Old copies of the site were publicly reachable until 30 October 2026.**
+   Netlify keeps every published copy of the site at its own address. Copies
+   built between 16 and 21 August 2026 — ten of them at easily guessed
+   preview addresses — carried the whole roster file in their browser code,
+   including annual pay, weekly hours, hire dates, birthdays and payroll
+   numbers for all 146 staff, and needed no sign-in. The hosting provider's
+   request logs do not go back far enough to tell whether anyone opened
+   them. Closed on 30 October 2026: every copy other than the live site now
+   requires the owner's Netlify sign-in, and the 188 copies built before 20
+   October were deleted. Checked afterwards: those addresses no longer
+   exist.
 
 4. **PIN strength versus guessing.** A 4-digit PIN allows 10,000
    combinations, of which about nineteen are valid. The current rate limit

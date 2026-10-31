@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import employees from '../../src/data/employees.json' with { type: 'json' }
 import { CODE_MAP } from '../../src/data/attendanceCodes.js'
 import { hasLizAdminAccess } from '../../src/data/futureTools.js'
@@ -10,15 +10,8 @@ import {
   recognitionMonth,
 } from '../../src/data/recognitionStore.js'
 import { monthlyDrawingStatus, recognitionTypeAllowedForRole } from '../../src/data/recognitionRules.js'
-import {
-  buildRekeyMap,
-  payrollKeysInEntries,
-  rekeyEntries,
-  rosterIsRekeyed,
-  sectionsStillNamingOldKeys,
-} from '../../src/data/rekey.js'
+import { payrollKeysInEntries, rosterIsRekeyed } from '../../src/data/payrollKeys.js'
 import { applyStateMutation, createStateMutation } from '../../src/data/stateMutations.js'
-import { getAccessStore, tableAuthEnabled } from './_shared/access-store.mjs'
 import { jsonResponse } from './_shared/auth.mjs'
 import { validatedSessionFromRequest } from './_shared/server-session.mjs'
 import { PermanentStateError, getStateStore } from './_shared/state-store.mjs'
@@ -46,7 +39,6 @@ const BACKUP_VERSION = 1
 const BACKUP_MAX_BYTES = 25 * 1024 * 1024
 const BACKUP_MAX_KEYS = 5000
 const RESTORE_CONFIRMATION = 'RESTORE'
-const REKEY_CONFIRMATION = 'REKEY'
 
 function employeeKey(employee) {
   return String(employee?.kronos_id || employee?.id || '')
@@ -924,118 +916,7 @@ export async function handleMutate(store, session, body, { roster = employees } 
   return jsonResponse({ ok: true, value: publicValue })
 }
 
-// Jon, 2026-10-30 — see src/data/rekey.js. Liz runs this once, from Backup &
-// Recovery, after the roster carrying everybody's new key is live: a preview
-// first, then the move.
-//
-// The order of the writes is the safety of it. A copy of everything as it
-// stood goes first; then every section under its new name; only then are
-// the old payroll-named rows deleted; and last the logins are re-linked. A
-// failure part-way leaves people named twice rather than not at all, and
-// running it again finishes the job.
-//
-// The old-to-new list never leaves this function. It is not stored, not
-// returned and not logged: kept anywhere, it would be the link back to
-// payroll that this exists to remove.
-function newEmployeeKey() {
-  // The same shape an employee added in the app is given
-  // (employeeLocations.js), from a cryptographic source.
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  return `emp-${Array.from({ length: 8 }, () => alphabet[randomInt(alphabet.length)]).join('')}`
-}
-
-export async function handleRekey(store, session, body, { roster = employees, accessStore = null } = {}) {
-  if (!hasLizAdminAccess(session)) {
-    return jsonResponse({ error: 'Only Liz administrator access can re-key employee records.' }, 403)
-  }
-  if (!rosterIsRekeyed(roster)) {
-    return jsonResponse({ error: 'The roster with the new employee keys is not live yet. Nothing was changed.' }, 409)
-  }
-  const run = body.confirm === true
-  if (run && String(body.confirmation || '') !== REKEY_CONFIRMATION) {
-    return jsonResponse({ error: 'Type REKEY to confirm.' }, 400)
-  }
-
-  const current = await loadEntries(store)
-  const { map, sources } = buildRekeyMap({ roster, entries: current, generateKey: newEmployeeKey })
-  const moved = rekeyEntries(current, map)
-  const profiles = accessStore ? await accessStore.listProfiles() : []
-  const relinks = profiles.filter(profile => profile?.employee_id && map.has(String(profile.employee_id)))
-  // People something still names by number. The roster lists everybody's
-  // previous key until it is cleaned up, so the map alone over-counts once
-  // the move has been made.
-  const inUse = new Set([
-    ...payrollKeysInEntries(current),
-    ...relinks.map(profile => String(profile.employee_id)),
-  ])
-  const nothingToDo = moved.changedKeys.length === 0 && moved.removedKeys.length === 0 && relinks.length === 0
-
-  const summary = {
-    people: inUse.size,
-    fromRoster: Math.max(0, inUse.size - sources.custom - sources.orphan),
-    addedInApp: sources.custom,
-    notOnAnyRoster: sources.orphan,
-    sectionsRenamed: moved.report.renamedSections,
-    sectionsMerged: moved.report.mergedSections,
-    sectionsChanged: moved.report.changedSections,
-    loginsToRelink: relinks.length,
-    loginsChecked: Boolean(accessStore),
-  }
-
-  const leftovers = sectionsStillNamingOldKeys(moved.entries, map)
-  if (leftovers.length) {
-    return jsonResponse({
-      error: `Stopped before changing anything: ${leftovers.length} section(s) would still name an old employee number.`,
-      sections: leftovers,
-      summary,
-    }, 409)
-  }
-  try {
-    for (const key of moved.changedKeys) {
-      validateMutation(key, createStateMutation(key, current[key] ?? null, moved.entries[key]), {
-        allowEmployeeNoteRemovals: true,
-      })
-    }
-  } catch {
-    return jsonResponse({ error: 'Stopped before changing anything: the moved records did not pass validation.', summary }, 400)
-  }
-
-  if (!run || nothingToDo) {
-    return jsonResponse({ ok: true, preview: !run, nothingToDo, summary })
-  }
-
-  const actor = String(session.displayName || 'Liz administrator').slice(0, 200)
-  await store.setJSON(PRE_RESTORE_BACKUP_KEY, createBackupPayload(current, session), actor)
-  for (const key of moved.changedKeys) await store.setJSON(key, moved.entries[key], actor)
-  for (const key of moved.removedKeys) await store.delete(key, actor)
-
-  let loginsRelinked = 0
-  for (const profile of relinks) {
-    await accessStore.updateProfile(profile.id, { employeeId: map.get(String(profile.employee_id)) }, { actor })
-    loginsRelinked += 1
-  }
-
-  // Checked against what is stored now, not against what was meant to be.
-  await store.reload?.()
-  const after = await loadEntries(store)
-  const stillNamed = sectionsStillNamingOldKeys(after, map)
-  const oldRowsLeft = moved.removedKeys.filter(key => Object.hasOwn(after, key))
-  const refreshedProfiles = accessStore ? await accessStore.listProfiles() : []
-  const loginsStillOld = refreshedProfiles.filter(profile => profile?.employee_id && map.has(String(profile.employee_id))).length
-  const verified = stillNamed.length === 0 && oldRowsLeft.length === 0 && loginsStillOld === 0
-
-  return jsonResponse({
-    ok: verified,
-    ...(verified ? {} : {
-      error: 'The move ran, but the check afterwards still found old employee numbers. Nothing was lost — a full copy was saved first. Do not run it again; contact Jon.',
-    }),
-    summary: { ...summary, loginsRelinked },
-    verified,
-    check: { sectionsStillNamingOldKeys: stillNamed, oldRowsLeft, loginsStillOld },
-  }, verified ? 200 : 500)
-}
-
-export async function handleStateRequest(request, { stateStore, sessionStore, accessStore } = {}) {
+export async function handleStateRequest(request, { stateStore, sessionStore } = {}) {
   const session = await validatedSessionFromRequest(request, Date.now(), sessionStore)
   if (!session) return jsonResponse({ error: 'Authentication required.' }, 401)
 
@@ -1067,11 +948,6 @@ export async function handleStateRequest(request, { stateStore, sessionStore, ac
     const body = parsedBody && typeof parsedBody === 'object' && !Array.isArray(parsedBody) ? parsedBody : {}
     if (body.action === 'mutate') return handleMutate(store, session, body)
     if (body.action === 'restore-backup') return handleBackupRestore(store, session, body)
-    if (body.action === 'rekey') {
-      return handleRekey(store, session, body, {
-        accessStore: accessStore || (tableAuthEnabled() ? getAccessStore() : null),
-      })
-    }
     return jsonResponse({ error: 'Unsupported state action.' }, 400)
   }
 

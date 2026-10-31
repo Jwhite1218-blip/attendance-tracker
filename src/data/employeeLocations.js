@@ -179,12 +179,12 @@ export function setEmployeeActive(empId, active) {
 
 // The identifier every attendance row, star and note hangs from.
 //
-// Historic records are keyed on the district's payroll number because that
-// is what the original roster carried. Nobody types one any more: an
-// employee added from 2026-10-20 gets an opaque identifier that means
-// nothing outside this application and cannot be matched against a payroll
-// system. Existing records keep their key until the re-key migration, which
-// is a separate, backed-up job.
+// An opaque identifier that means nothing outside this application and
+// cannot be matched against a payroll system. Employees added from
+// 2026-10-20 have been given one here; everybody in the original roster was
+// moved onto one on 2026-10-30, when the payroll number came out of the
+// records entirely (see payrollKeys.js). The field is still called kronos_id;
+// the name is historical.
 function newEmployeeIdentifier(existing) {
   const taken = new Set(existing.map(employee => String(employee.kronos_id || employee.id)))
   for (let attempt = 0; attempt < 50; attempt++) {

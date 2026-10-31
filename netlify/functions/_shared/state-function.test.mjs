@@ -4,7 +4,7 @@ import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
-import { handleBackupRestore, handleMutate, handleRekey, handleStateRequest, schoolRecognitionView } from '../state.mjs'
+import { handleBackupRestore, handleMutate, handleStateRequest, schoolRecognitionView } from '../state.mjs'
 import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
 // Liz, 2026-10-20: termination date, last day worked and reason were
@@ -1394,12 +1394,11 @@ test('only a district administrator can remove an Employee of the Month', async 
   assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [])
 })
 
-// Jon, 2026-10-30: the re-key. Every record moves off the district's payroll
-// number onto the opaque key the roster now gives each person. Synthetic
-// people and numbers throughout; none is anybody's.
+// Jon, 2026-10-30: the payroll number came out of the records that evening,
+// and stays out. Synthetic people and numbers throughout; none is anybody's.
 const REKEYED_ROSTER = [
-  { id: 1, kronos_id: 'emp-aaaa1111', previous_key: '30000001', first_name: 'Ana', last_name: 'One', location: 'CrestonMS', position: 'Cook' },
-  { id: 2, kronos_id: 'emp-bbbb2222', previous_key: '30000002', first_name: 'Ben', last_name: 'Two', location: 'CrestonMS', position: 'Cook' },
+  { id: 1, kronos_id: 'emp-aaaa1111', first_name: 'Ana', last_name: 'One', location: 'CrestonMS', position: 'Cook' },
+  { id: 2, kronos_id: 'emp-bbbb2222', first_name: 'Ben', last_name: 'Two', location: 'CrestonMS', position: 'Cook' },
 ]
 const LIZ_SESSION = {
   role: 'admin',
@@ -1429,101 +1428,6 @@ function rekeyStore(entries) {
     },
   }
 }
-
-function rekeyLogins(rows) {
-  const profiles = rows.map(row => ({ ...row }))
-  return {
-    profiles,
-    async listProfiles() { return profiles.map(row => ({ ...row })) },
-    async updateProfile(id, patch) {
-      const row = profiles.find(profile => profile.id === id)
-      if (patch.employeeId !== undefined) row.employee_id = patch.employeeId
-      return row
-    },
-  }
-}
-
-function payrollEra() {
-  return {
-    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
-    'att-emp-30000001-2026': { '2026-09-01': { date: '2026-09-01', code: 'UNEX', note: '' } },
-    'att-emp-30000002-2026': { '2026-09-02': { date: '2026-09-02', code: 'UNEX', note: 'Called in' } },
-    'employee-record-overrides': { 30000001: { position: 'Cook' } },
-    'all-star-recognition-v1': {
-      'star-1': {
-        id: 'star-1',
-        employeeId: '30000002',
-        locationId: 'CrestonMS',
-        type: 'star-of-day',
-        date: '2026-09-03',
-        monthKey: null,
-        criteria: ['Service'],
-        note: 'Covered the line',
-        sourceName: '',
-        recognizedBy: 'Manager',
-        createdAt: '2026-09-03T12:00:00.000Z',
-      },
-    },
-  }
-}
-
-test('the re-key previews without changing anything', async () => {
-  const store = rekeyStore(payrollEra())
-  const logins = rekeyLogins([{ id: 'p1', employee_id: '30000001' }, { id: 'p2', employee_id: null }])
-  const before = JSON.stringify([...store.values])
-
-  const response = await handleRekey(store, LIZ_SESSION, {}, { roster: REKEYED_ROSTER, accessStore: logins })
-  const body = await response.json()
-
-  assert.equal(response.status, 200)
-  assert.equal(body.preview, true)
-  assert.equal(body.summary.people, 2)
-  assert.equal(body.summary.fromRoster, 2)
-  assert.equal(body.summary.sectionsRenamed, 2)
-  assert.equal(body.summary.loginsToRelink, 1)
-  assert.equal(JSON.stringify([...store.values]), before, 'nothing written')
-  assert.equal(logins.profiles[0].employee_id, '30000001', 'no login touched')
-  // The old-to-new list is never handed back.
-  assert.equal(JSON.stringify(body).includes('emp-aaaa1111'), false)
-  assert.equal(JSON.stringify(body).includes('30000001'), false)
-})
-
-test('the re-key moves every record, deletes the old rows, re-links logins and checks its work', async () => {
-  const store = rekeyStore(payrollEra())
-  const logins = rekeyLogins([{ id: 'p1', employee_id: '30000001' }, { id: 'p2', employee_id: 'emp-already1' }])
-  const run = { confirm: true, confirmation: 'REKEY' }
-
-  const response = await handleRekey(store, LIZ_SESSION, run, { roster: REKEYED_ROSTER, accessStore: logins })
-  const body = await response.json()
-
-  assert.equal(response.status, 200)
-  assert.equal(body.verified, true)
-  assert.equal(body.summary.loginsRelinked, 1)
-  assert.deepEqual(store.deleted.sort(), ['att-emp-30000001-2026', 'att-emp-30000002-2026'])
-  assert.deepEqual(store.values.get('att-emp-emp-aaaa1111-2026'), payrollEra()['att-emp-30000001-2026'])
-  assert.deepEqual(store.values.get('employee-record-overrides'), { 'emp-aaaa1111': { position: 'Cook' } })
-  assert.equal(store.values.get('all-star-recognition-v1')['star-1'].employeeId, 'emp-bbbb2222')
-  assert.equal(logins.profiles[0].employee_id, 'emp-aaaa1111')
-  assert.equal(logins.profiles[1].employee_id, 'emp-already1')
-  // A full copy of how things stood is kept first, for recovery.
-  assert.ok(store.values.get('__state_backup_before_restore__'))
-
-  const live = Object.fromEntries([...store.values].filter(([key]) => !key.startsWith('__')))
-  assert.equal(/(?<![0-9A-Za-z])3000000[12](?![0-9A-Za-z])/.test(JSON.stringify(live)), false)
-
-  const again = await (await handleRekey(store, LIZ_SESSION, run, { roster: REKEYED_ROSTER, accessStore: logins })).json()
-  assert.equal(again.nothingToDo, true)
-})
-
-test('the re-key waits for the new roster, and for Liz', async () => {
-  const store = rekeyStore(payrollEra())
-  const run = { confirm: true, confirmation: 'REKEY' }
-  const notYet = await handleRekey(store, LIZ_SESSION, run, { roster: [{ id: 1, kronos_id: '30000001' }] })
-  assert.equal(notYet.status, 409)
-  assert.equal((await handleRekey(store, drawingAdmin, {}, { roster: REKEYED_ROSTER })).status, 403)
-  assert.equal((await handleRekey(store, LIZ_SESSION, { confirm: true, confirmation: 'nope' }, { roster: REKEYED_ROSTER })).status, 400)
-  assert.equal(store.deleted.length, 0)
-})
 
 test('once the roster is re-keyed, an old number cannot be written or restored back', async () => {
   const store = rekeyStore({ __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' } })
