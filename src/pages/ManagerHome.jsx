@@ -20,8 +20,8 @@ import { useAuth } from '../components/PinGate.jsx'
 import { useLanguage } from '../components/LanguageProvider.jsx'
 import { LOCATION_MAP } from '../data/locations.js'
 import { getRosterForLocation } from '../data/employeeLocations.js'
-import { getAttendanceCode, getEmployeeYearAttendance, readFutureAttendance } from '../data/attendanceStore.js'
-import { buildSchoolInsights, collectMonthExceptions } from '../data/dashboardInsights.js'
+import { getAttendanceRecord, readFutureAttendance } from '../data/attendanceStore.js'
+import { buildSchoolInsights, peopleMarkedOn } from '../data/dashboardInsights.js'
 import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import YourRecognition from '../components/YourRecognition.jsx'
@@ -50,12 +50,11 @@ export default function ManagerHome() {
     [locationId, dataVersion]
   )
 
-  // "Marked today" counts exceptions recorded, not people present: a blank day
-  // is the normal case for someone who turned up, so this is a count of what
-  // the manager has entered rather than a completeness score. Labeling it as
-  // progress would imply nineteen entries were expected every morning.
+  // Who has an attendance mark today. A blank day is someone who turned up
+  // and was not entered, so the list is exceptions, not a headcount of who
+  // came in.
   const markedToday = useMemo(
-    () => roster.filter(employee => getAttendanceCode(employee.kronos_id || employee.id, today)).length,
+    () => peopleMarkedOn(roster, today, getAttendanceRecord),
     [roster, today, dataVersion]
   )
 
@@ -85,10 +84,6 @@ export default function ManagerHome() {
     () => buildSchoolInsights(roster, readFutureAttendance),
     [roster, dataVersion]
   )
-  const monthExceptions = useMemo(
-    () => collectMonthExceptions(roster, today.slice(0, 7), getEmployeeYearAttendance),
-    [roster, today, dataVersion]
-  )
 
   // One building's worth of the district's recognition row. The scope is
   // this kitchen, which is the whole difference between the two pages.
@@ -101,19 +96,21 @@ export default function ManagerHome() {
     navigate(`/employee/${encodeURIComponent(employee.kronos_id || employee.id)}`)
   }
 
-  // Stars moved to the recognition row below, beside the other three
-  // programme figures.
-  const tiles = [
-    { label: t('managerHome.onRoster'), value: roster.length },
-    { label: t('managerHome.markedToday'), value: markedToday },
-  ]
-
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-8">
       <RecognitionNotifications
         employeeId={employeeId}
         locationId={locationId}
         canPrint={canEditRecognition}
+        dataVersion={dataVersion}
+      />
+
+      <YourRecognition employeeId={employeeId} />
+
+      <YourKitchens
+        locationIds={locationIds}
+        activeId={locationId}
+        onChoose={onLocationChange}
         dataVersion={dataVersion}
       />
 
@@ -139,33 +136,13 @@ export default function ManagerHome() {
           </div>
           <img src={goldStar} alt="" className="h-16 w-16 flex-none sm:h-20 sm:w-20" />
         </div>
-
-        <dl className="grid grid-cols-2 gap-px border-t border-[#e8c65c]/25 bg-[#e8c65c]/15">
-          {tiles.map(tile => (
-            <div key={tile.label} className="bg-[#14110c]/80 px-5 py-4">
-              <dd className="all-star-display text-3xl text-[#ffd75c]">{tile.value}</dd>
-              <dt className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100/70 sm:text-xs">
-                {tile.label}
-              </dt>
-            </div>
-          ))}
-        </dl>
       </header>
-
-      <YourKitchens
-        locationIds={locationIds}
-        activeId={locationId}
-        onChoose={onLocationChange}
-        dataVersion={dataVersion}
-      />
-
-      <YourRecognition employeeId={employeeId} />
 
       <SchoolDashboardInsights
         activeInsight={activeInsight}
         onInsightChange={setActiveInsight}
         onEmployeeSelect={openEmployeeRecord}
-        monthExceptions={monthExceptions}
+        markedToday={markedToday}
         {...schoolInsights}
       />
 

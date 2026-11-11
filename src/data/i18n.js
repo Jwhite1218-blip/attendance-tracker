@@ -94,6 +94,11 @@ const UI_STRINGS = {
     'managerHome.workingIn': 'Working in {name}',
     'managerHome.chooseSchool': 'Choose a school',
     'managerHome.rosterCount': 'The number is how many people are on that roster. Everything on this page follows your choice.',
+    'managerHome.birthdaysTitle': '{month} Birthdays',
+    'managerHome.birthdaysEmpty': 'No birthdays this month.',
+    'managerHome.markedTodayTitle': 'Who\'s marked today',
+    'managerHome.markedTodayEmpty': 'No one is marked yet today.',
+    'managerHome.markedTodayHint': 'People with an attendance mark for today.',
 
     'notices.youWereRecognized': 'You were recognized',
     'notices.new': 'New',
@@ -195,6 +200,11 @@ const UI_STRINGS = {
     'managerHome.workingIn': 'Trabajando en {name}',
     'managerHome.chooseSchool': 'Elija una escuela',
     'managerHome.rosterCount': 'El número es cuántas personas hay en esa nómina. Todo en esta página sigue su elección.',
+    'managerHome.birthdaysTitle': 'Cumpleaños de {month}',
+    'managerHome.birthdaysEmpty': 'No hay cumpleaños este mes.',
+    'managerHome.markedTodayTitle': 'Quién está registrado hoy',
+    'managerHome.markedTodayEmpty': 'Todavía no hay nadie registrado hoy.',
+    'managerHome.markedTodayHint': 'Personas con una marca de asistencia para hoy.',
 
     'notices.youWereRecognized': 'Le reconocieron',
     'notices.new': 'Nuevo',

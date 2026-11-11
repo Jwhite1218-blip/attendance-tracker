@@ -62,6 +62,40 @@ export function buildSchoolInsights(roster, readAttendanceForEmployee, reference
   }
 }
 
+// People with an attendance mark on one day. A blank day is not stored: the
+// tracker only records exceptions, so this is who was marked, not who came in.
+//
+// readRecord is injected, same as the other collectors, so the test does not
+// need the browser store. It receives (employeeId, dateKey) and returns the
+// stored record or nothing.
+export function peopleMarkedOn(roster, dateKey, readRecord) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ''))) return []
+  return (roster || [])
+    .flatMap(employee => {
+      const record = readRecord?.(employee.kronos_id || employee.id, dateKey)
+      const code = String(record?.code || '').trim()
+      if (!code) return []
+      return [{
+        employee,
+        code,
+        note: typeof record?.note === 'string' ? record.note.trim() : '',
+      }]
+    })
+    .sort((left, right) => {
+      const last = String(left.employee?.last_name || '').localeCompare(
+        String(right.employee?.last_name || ''),
+        undefined,
+        { sensitivity: 'base' },
+      )
+      if (last) return last
+      return String(left.employee?.first_name || '').localeCompare(
+        String(right.employee?.first_name || ''),
+        undefined,
+        { sensitivity: 'base' },
+      )
+    })
+}
+
 // Every marked exception in one calendar month, oldest first.
 //
 // Liz, 2026-10-26, merging the two dashboards: the district page counted a
