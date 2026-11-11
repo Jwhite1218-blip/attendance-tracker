@@ -10,6 +10,7 @@ import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { LOCATION_MAP } from '../data/locations.js'
 import { openStarCardWindow, starCardFromRecognition } from '../lib/starCardPrinting.js'
+import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
@@ -133,7 +134,13 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
     const card = starCardFromRecognition(openRecognition, cardName)
     if (!openStarCardWindow([card])) {
       setPrintError('Your browser blocked the print window. Allow pop-ups for this site, then try again.')
+      return
     }
+    const groupId = String(openRecognition.groupId || '').trim()
+    const related = groupId
+      ? getAllRecognitions().filter(record => record.type === 'star-of-day' && String(record.groupId || '') === groupId)
+      : [openRecognition]
+    rememberStarCardsPrinted(related)
   }
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)

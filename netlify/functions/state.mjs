@@ -24,6 +24,7 @@ import {
   PROGRAM_SETTINGS_KEY,
   LOCATION_OVERRIDES_KEY,
   RECOGNITION_KEY,
+  STAR_CARD_PRINTS_KEY,
   RECORD_OVERRIDES_KEY,
   TRAINING_KEY,
   attendanceEmployeeId,
@@ -336,6 +337,17 @@ function filterEntriesForSession(entries, session) {
       recipientNames(entries)
     )
   }
+  // Which cards this kitchen has already printed. Other kitchens' marks stay
+  // on the server; sending them would tell this login that a card in another
+  // building had been printed, which is nothing they need.
+  if (entries[STAR_CARD_PRINTS_KEY]) {
+    filtered[STAR_CARD_PRINTS_KEY] = schoolStarCardPrintView(
+      entries[STAR_CARD_PRINTS_KEY],
+      entries[RECOGNITION_KEY] || {},
+      allowedEmployeeIds,
+      schoolLocationsOf(session),
+    )
+  }
 
   Object.entries(entries).forEach(([key, value]) => {
     const attendanceId = attendanceEmployeeId(key)
@@ -425,6 +437,83 @@ function validRedrawHistory(redraw) {
     && typeof entry.setAsideBy === 'string'
     && entry.setAsideBy.length <= 200
   ))
+}
+
+function validStarCardPrintMark(printKey, mark) {
+  if (typeof printKey !== 'string' || !printKey.trim() || printKey.length > 200) return false
+  if (!mark || typeof mark !== 'object' || Array.isArray(mark)) return false
+  if (typeof mark.printedAt !== 'string' || Number.isNaN(Date.parse(mark.printedAt))) return false
+  if (!Array.isArray(mark.recognitionIds) || mark.recognitionIds.length < 1 || mark.recognitionIds.length > 40) return false
+  const ids = mark.recognitionIds.map(id => String(id || ''))
+  if (ids.some(id => !id.trim() || id.length > 200)) return false
+  if (new Set(ids).size !== ids.length) return false
+  return true
+}
+
+function kitchenMayMarkStarCard(record, session, allowedEmployeeIds) {
+  if (!record || record.type !== 'star-of-day') return false
+  if (session?.role !== 'school') return true
+  if (allowedEmployeeIds?.has(String(record.employeeId))) return true
+  return schoolLocationsOf(session).map(String).includes(String(record.locationId || ''))
+}
+
+// A printed mark is shared, but a building may only file one for a Star of
+// the Day that is actually theirs. Anything else is dropped, the same way a
+// recognition for another kitchen is dropped, rather than rejecting the
+// whole save. Removals are an administrator's correction; a kitchen cannot
+// un-print a card out from under the rest of the building.
+export function starCardPrintMutationForSession(mutation, session, recognitionMap, allowedEmployeeIds) {
+  if (mutation?.type !== 'object-patch') return mutation
+  const school = session?.role === 'school'
+  const set = {}
+  for (const [printKey, mark] of Object.entries(mutation.set || {})) {
+    if (!validStarCardPrintMark(printKey, mark)) continue
+    const ids = mark.recognitionIds.map(String)
+    const records = []
+    let accepted = true
+    for (const id of ids) {
+      const record = recognitionMap?.[id]
+      if (!record || (record.id && String(record.id) !== id) || !kitchenMayMarkStarCard(record, session, allowedEmployeeIds)) {
+        accepted = false
+        break
+      }
+      records.push(record)
+    }
+    if (!accepted) continue
+    const groupIds = [...new Set(records.map(record => String(record.groupId || '').trim()).filter(Boolean))]
+    if (groupIds.length > 1) continue
+    const groupId = groupIds[0] || ''
+    if (groupId) {
+      if (printKey !== `group:${groupId}`) continue
+      if (records.some(record => String(record.groupId || '').trim() !== groupId)) continue
+    } else if (ids.length !== 1 || printKey !== ids[0]) {
+      continue
+    }
+    set[printKey] = {
+      printedAt: mark.printedAt,
+      recognitionIds: ids,
+      printedBy: String(session?.displayName || 'Authenticated manager').slice(0, 200),
+    }
+  }
+  const remove = (Array.isArray(mutation.remove) ? mutation.remove : [])
+    .map(String)
+    .filter(id => id.trim() && id.length <= 200)
+  return { type: 'object-patch', set, remove: school ? [] : remove }
+}
+
+export function schoolStarCardPrintView(printMap, recognitionMap, allowedEmployeeIds, locationIds = []) {
+  const locations = new Set((Array.isArray(locationIds) ? locationIds : []).map(String))
+  const visible = record => {
+    if (!record || typeof record !== 'object') return false
+    if (allowedEmployeeIds?.has(String(record.employeeId))) return true
+    return locations.has(String(record.locationId || ''))
+  }
+  return Object.fromEntries(
+    Object.entries(printMap || {}).filter(([, mark]) => {
+      const ids = Array.isArray(mark?.recognitionIds) ? mark.recognitionIds : []
+      return ids.length > 0 && ids.every(id => visible(recognitionMap?.[id]))
+    })
+  )
 }
 
 export function schoolRecognitionView(recognitionMap, allowedEmployeeIds, names = new Map()) {
@@ -691,6 +780,18 @@ function validateMutation(key, mutation, { allowEmployeeNoteRemovals = false } =
     }
     return
   }
+  if (key === STAR_CARD_PRINTS_KEY) {
+    if (mutation.type !== 'object-patch') throw new Error('Star card print changes must be an object patch.')
+    for (const [printKey, mark] of Object.entries(mutation.set || {})) {
+      if (!validStarCardPrintMark(printKey, mark)) {
+        throw new Error('Star card print changes contain an invalid mark.')
+      }
+    }
+    if ((mutation.remove || []).some(value => !String(value || '').trim() || String(value).length > 200)) {
+      throw new Error('Star card print changes contain an invalid removal.')
+    }
+    return
+  }
   if (!attendanceEmployeeId(key)) return
   if (mutation.type !== 'object-patch') throw new Error('Attendance changes must be an object patch.')
 
@@ -840,6 +941,11 @@ export async function handleMutate(store, session, body, { roster = employees } 
       aceEligibleIds(rosterForRules)
     )
   }
+  let printRecognitionMap = null
+  if (key === STAR_CARD_PRINTS_KEY) {
+    printRecognitionMap = (await store.get(RECOGNITION_KEY, { type: 'json' })) || {}
+    mutation = starCardPrintMutationForSession(mutation, session, printRecognitionMap, allowedEmployeeIds)
+  }
   try {
     validateMutation(key, mutation)
   } catch {
@@ -906,6 +1012,14 @@ export async function handleMutate(store, session, body, { roster = employees } 
     )
   } else if (key === RECOGNITION_KEY && !canSeeRedrawHistory(session)) {
     publicValue = withoutRedrawHistory(value)
+  }
+  if (session.role === 'school' && key === STAR_CARD_PRINTS_KEY) {
+    publicValue = schoolStarCardPrintView(
+      value,
+      printRecognitionMap || {},
+      allowedEmployeeIds,
+      schoolLocationsOf(session),
+    )
   }
   if (!hasLizAdminAccess(session) && key === RECORD_OVERRIDES_KEY) {
     publicValue = redactRecordOverrides(publicValue)

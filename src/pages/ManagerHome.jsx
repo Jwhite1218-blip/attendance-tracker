@@ -10,6 +10,10 @@
 // Everything here is scoped to the manager's own building. The district
 // Dashboard is a different page and stays administrator-only — a manager must
 // never see another school's staff.
+//
+// Recognition news is first. A star recorded hours later is easy to miss if
+// it only shows up in the history, so a personal celebration and this
+// kitchen's unprinted Star of the Day cards sit above the rest of the page.
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
@@ -21,18 +25,11 @@ import { buildSchoolInsights, collectMonthExceptions } from '../data/dashboardIn
 import SchoolDashboardInsights from '../components/SchoolDashboardInsights.jsx'
 import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import YourRecognition from '../components/YourRecognition.jsx'
+import RecognitionNotifications from '../components/RecognitionNotifications.jsx'
 import RecognitionMetrics, { recognitionTilesFor } from '../components/RecognitionMetrics.jsx'
 import { attendanceSeverityOf, getAllFlaggedEmployees, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
-import {
-  RECOGNITION_TYPE_MAP,
-  getAceBuckCount,
-  getAllRecognitions,
-  getDailyStarCount,
-  getNextStarLevel,
-  getStarLevel,
-  isRecognitionInSchoolYear,
-  schoolYearStartFor,
-} from '../data/recognitionStore.js'
+import confetti from '../assets/allstars/confetti.jpg'
+import goldStar from '../assets/allstars/star-3d.png'
 
 
 function todayKey() {
@@ -112,21 +109,42 @@ export default function ManagerHome() {
   ]
 
   return (
-    <div className="space-y-5">
-      <header className="rounded-xl border border-gray-200 bg-white p-5">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">
-          {t('managerHome.eyebrow')}
-        </p>
-        <h1 className="mt-1 text-xl font-bold text-gray-900 sm:text-2xl">
-          {school?.name || t('managerHome.yourSchool')}
-        </h1>
-        <p className="mt-1 text-xs text-gray-500">{formatDate(today, { dateStyle: 'full' })}</p>
+    <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-8">
+      <RecognitionNotifications
+        employeeId={employeeId}
+        locationId={locationId}
+        canPrint={canEditRecognition}
+        dataVersion={dataVersion}
+      />
 
-        <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
+      <header
+        className="relative overflow-hidden rounded-2xl border border-[#e8c65c]/45 text-white"
+        style={{
+          backgroundColor: '#14110c',
+          backgroundImage: `linear-gradient(115deg, rgba(12,10,8,0.94), rgba(12,10,8,0.78)), url(${confetti})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }}
+      >
+        <div className="flex items-start gap-4 p-5 sm:p-6">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8c65c]">
+              {t('managerHome.eyebrow')}
+            </p>
+            <h1 className="all-star-display mt-1 text-3xl uppercase leading-none tracking-wide sm:text-4xl">
+              {school?.name || t('managerHome.yourSchool')}
+            </h1>
+            <p className="all-star-script mt-2 text-2xl text-[#f4d87d]">{t('managerHome.tagline')}</p>
+            <p className="mt-1 text-xs text-amber-100/75">{formatDate(today, { dateStyle: 'full' })}</p>
+          </div>
+          <img src={goldStar} alt="" className="h-16 w-16 flex-none sm:h-20 sm:w-20" />
+        </div>
+
+        <dl className="grid grid-cols-2 gap-px border-t border-[#e8c65c]/25 bg-[#e8c65c]/15">
           {tiles.map(tile => (
-            <div key={tile.label}>
-              <dd className="text-2xl font-black text-gray-900">{tile.value}</dd>
-              <dt className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:text-xs">
+            <div key={tile.label} className="bg-[#14110c]/80 px-5 py-4">
+              <dd className="all-star-display text-3xl text-[#ffd75c]">{tile.value}</dd>
+              <dt className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-100/70 sm:text-xs">
                 {tile.label}
               </dt>
             </div>
@@ -189,14 +207,14 @@ function TrackerButton({ to, glyph, title, description }) {
   return (
     <Link
       to={to}
-      className="flex items-start gap-3 rounded-xl border border-gray-200 bg-white p-4 transition-colors hover:border-brand-300 hover:bg-brand-50"
+      className="flex items-start gap-3 rounded-2xl border border-[#e8c65c]/35 bg-gradient-to-br from-[#2a2218] to-[#14110c] p-4 text-white shadow-sm transition hover:border-[#e8c65c]"
     >
-      <span className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-brand-100 text-lg text-brand-700" aria-hidden="true">
+      <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border border-[#e8c65c]/40 bg-[#e8c65c]/15 text-xl text-[#ffd75c]" aria-hidden="true">
         {glyph}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-bold text-gray-900">{title}</span>
-        <span className="mt-0.5 block text-xs text-gray-500">{description}</span>
+        <span className="block text-sm font-bold text-[#f8e7b0]">{title}</span>
+        <span className="mt-0.5 block text-xs text-amber-100/70">{description}</span>
       </span>
     </Link>
   )
@@ -213,6 +231,7 @@ function TrackerButton({ to, glyph, title, description }) {
 // away, so the numbers above change under them and it is obvious which
 // kitchen they are now in. The Attendance tracker tile below then opens it.
 function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
+  const { t } = useLanguage()
   const kitchens = useMemo(
     () => (Array.isArray(locationIds) ? locationIds : [])
       .map(id => ({
@@ -229,15 +248,15 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
   const current = kitchens.find(kitchen => kitchen.id === activeId)
 
   return (
-    <section className="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+    <section className="rounded-2xl border border-[#e8c65c]/35 bg-[#1c1812] p-4 text-white sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-600">Your schools</p>
-        <p className="text-xs text-gray-500">
-          You cover {kitchens.length} kitchens · tap one to switch
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#e8c65c]">{t('managerHome.yourSchools')}</p>
+        <p className="text-xs text-amber-100/70">
+          {t('managerHome.kitchenCount', { count: kitchens.length })}
         </p>
       </div>
-      <h2 className="mt-1 text-lg font-bold text-gray-900">
-        {current ? `Working in ${current.name}` : 'Choose a school'}
+      <h2 className="mt-1 text-lg font-bold text-[#f8e7b0]">
+        {current ? t('managerHome.workingIn', { name: current.name }) : t('managerHome.chooseSchool')}
       </h2>
 
       {/* One row of pills rather than a card each. Liz, 2026-10-26: a card
@@ -255,13 +274,13 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
               aria-current={active ? 'true' : undefined}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                 active
-                  ? 'border-brand-600 bg-brand-600 text-white'
-                  : 'border-gray-200 bg-white text-gray-600 hover:border-brand-300 hover:bg-brand-50'
+                  ? 'border-[#e8c65c] bg-[#e8c65c] text-[#241703]'
+                  : 'border-[#e8c65c]/30 bg-transparent text-amber-50 hover:border-[#e8c65c] hover:bg-[#e8c65c]/10'
               }`}
             >
               {kitchen.name}
               <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
-                active ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+                active ? 'bg-[#241703]/15 text-[#241703]' : 'bg-white/10 text-amber-100'
               }`}>
                 {kitchen.staff}
               </span>
@@ -269,9 +288,8 @@ function YourKitchens({ locationIds, activeId, onChoose, dataVersion }) {
           )
         })}
       </div>
-      <p className="mt-2 text-[11px] text-gray-400">
-        The number is how many people are on that roster. Everything on this page, the attendance tracker and
-        the All-Star board follow your choice.
+      <p className="mt-2 text-[11px] text-amber-100/55">
+        {t('managerHome.rosterCount')}
       </p>
     </section>
   )

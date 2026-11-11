@@ -5,6 +5,7 @@ import { useAuth } from '../components/PinGate.jsx'
 import AllStarBanner from '../components/AllStarBanner.jsx'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { openStarCardWindow, starCardPreviewHtml } from '../lib/starCardPrinting.js'
+import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import {
   ANNUAL_AWARD_CATEGORIES,
@@ -496,7 +497,9 @@ export default function RecognitionProgram() {
     }
     if (!openStarCardWindow(cards, { pad: true })) {
       setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
+      return
     }
+    rememberStarCardsPrinted(visibleRecords)
   }
 
   const handlePrintCard = surface => {
@@ -507,7 +510,10 @@ export default function RecognitionProgram() {
         type: 'error',
         message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print star card again.',
       })
+      return
     }
+    const ids = new Set(card.recognitionIds || [])
+    if (ids.size) rememberStarCardsPrinted(getAllRecognitions().filter(record => ids.has(record.id)))
   }
 
   // flushPendingWrites drops a write the server refuses outright and reports
@@ -585,6 +591,7 @@ export default function RecognitionProgram() {
           otherReason: record.otherReason,
           message: record.note,
           recognizedBy: record.recognizedBy,
+          recognitionIds: records.map(saved => saved.id),
         }
         : null
       await confirmRecognitionSaved()

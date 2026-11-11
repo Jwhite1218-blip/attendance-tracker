@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { accessForPin, normalizeAccessProfile, normalizeSchoolLocationId } from './auth.mjs'
 import { LOCATIONS } from '../../../src/data/locations.js'
-import { EMPLOYEE_NOTES_KEY, RECOGNITION_KEY, canWriteStateKey } from './permissions.mjs'
+import { EMPLOYEE_NOTES_KEY, RECOGNITION_KEY, STAR_CARD_PRINTS_KEY, canWriteStateKey } from './permissions.mjs'
 
 const liz = {
   role: 'admin',
@@ -279,6 +279,10 @@ test('school managers can only write attendance for employees in their school', 
   // Recognition is theirs to write; the rows are narrowed to their own roster
   // in handleMutate rather than by this key check.
   assert.equal(canWriteStateKey(schoolManager, RECOGNITION_KEY, allowedEmployeeIds), true)
+  assert.equal(canWriteStateKey(schoolManager, STAR_CARD_PRINTS_KEY, allowedEmployeeIds), true)
+  assert.equal(canWriteStateKey({ role: 'school', canEditRecognition: false }, STAR_CARD_PRINTS_KEY, allowedEmployeeIds), false)
+  assert.equal(canWriteStateKey({ role: 'admin', canEditRecognition: true }, STAR_CARD_PRINTS_KEY), true)
+  assert.equal(canWriteStateKey({ role: 'admin', canEditRecognition: false }, STAR_CARD_PRINTS_KEY), false)
   assert.equal(canWriteStateKey(schoolManager, EMPLOYEE_NOTES_KEY, allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, 'attendance-blackout-dates', allowedEmployeeIds), false)
   assert.equal(canWriteStateKey(schoolManager, 'employee-location-overrides', allowedEmployeeIds), false)
