@@ -150,7 +150,16 @@ const PAGES = [
     limited: ['School Overview'],
     manager: ['School Overview'],
   }, '/location/:id'],
-  ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
+  // Jon, 2026-11-11: no leaderboards. The district sees every building's
+  // team, a building sees its own, and Coach Bucks show progress rather
+  // than standings. If a ranking reappears, one of these comes back.
+  ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER], {
+    admin: ['The feed', '>Teams<', 'Coach progress'],
+    manager: ['The feed', 'Your team'],
+  }, {
+    admin: ['Leaderboard', 'Who is giving stars', 'ACE Coach standings', 'Back to the top 10'],
+    manager: ['Leaderboard', 'Who is giving stars', 'Coach progress'],
+  }],
   ['Training', Training, '/training', [LIZ, MANAGER]],
   ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER], {
     admin: ['Star milestones', 'ACE Coach milestones'],

@@ -213,12 +213,6 @@
   fill: #e8c65c;
 }
 
-.allstar-board__pin em {
-  font-style: normal;
-  color: rgba(251, 241, 216, 0.55);
-  font-weight: 500;
-}
-
 .allstar-board__empty {
   font-size: 11px;
   color: rgba(251, 241, 216, 0.6);

@@ -273,19 +273,6 @@ export function submitterLocationLabel(record, locationMap = {}) {
   return locationMap[id]?.name || id
 }
 
-// Who is handing out recognition, grouped by the building that submitted it.
-export function getSubmissionCountsByLocation(records) {
-  const counts = new Map()
-  ;(records || []).forEach(record => {
-    if (!earnsDailyStar(record)) return
-    const id = String(record?.recognizedByLocationId || '').trim() || 'unknown'
-    counts.set(id, (counts.get(id) || 0) + 1)
-  })
-  return [...counts.entries()]
-    .map(([locationId, count]) => ({ locationId, count }))
-    .sort((left, right) => right.count - left.count || left.locationId.localeCompare(right.locationId))
-}
-
 export function addRecognition(input, options = {}) {
   const record = createRecognitionRecord(input, options)
   const records = readRecognitionMap()
@@ -688,17 +675,49 @@ export function removeEmployeeOfMonth(record) {
   return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
 }
 
-// Liz asked for the school-year leaderboard condensed to a top ten. Ties that
-// straddle the cut are kept: two people on the same star count are the same
-// standing, and dropping one of them because of an alphabetical tiebreak reads
-// as the board being wrong.
-export function topLeaderboardEntries(entries, limit = 10) {
-  const list = Array.isArray(entries) ? entries : []
-  if (list.length <= limit || limit < 1) return list
-  const cutoff = list[limit - 1]?.count
-  let end = limit
-  while (end < list.length && list[end]?.count === cutoff) end += 1
-  return list.slice(0, end)
+// Recognition somebody chose to give. A monthly drawing and Employee of the
+// Month are outcomes of recognition rather than recognition given, so on
+// their own they do not count as anybody having been noticed.
+const NOTICED_TYPES = new Set(['star-of-day', 'star-shout-out', 'shooting-star', 'ace-buck'])
+
+// Who on a team has been recognized this month, and who has not yet.
+//
+// Jon, 2026-11-11: the leaderboards came out. Ranking people by star count
+// had made recognition a contest — in October more than half the stars were
+// dated in the drawing week, a few people held most of them, and about a
+// third of staff had never had one. This answers the question worth a
+// manager's attention instead: who on my team has nobody noticed lately.
+//
+// Everybody passed in comes back, recognized or not, so nobody is ranked and
+// nobody is missing. Each person carries their own distance to their next
+// star level — a goal they work toward, not a place on a list. The order is
+// the caller's, because only the caller knows how names are shown.
+export function teamRecognitionCoverage(records, employees, { monthKey, startYear }) {
+  const lastNoticed = new Map()
+  const noticedThisMonth = new Set()
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!NOTICED_TYPES.has(record?.type)) continue
+    if (!isRecognitionInSchoolYear(record, startYear)) continue
+    const employeeId = String(record.employeeId)
+    const date = String(record.date || '')
+    if (date > (lastNoticed.get(employeeId) || '')) lastNoticed.set(employeeId, date)
+    if (date.startsWith(`${monthKey}-`)) noticedThisMonth.add(employeeId)
+  }
+
+  return (Array.isArray(employees) ? employees : []).map(employee => {
+    const employeeId = String(employee?.kronos_id || employee?.id || '')
+    const stars = getDailyStarCount(records, employeeId, startYear)
+    const nextLevel = getNextStarLevel(stars)
+    return {
+      employee,
+      employeeId,
+      recognizedThisMonth: noticedThisMonth.has(employeeId),
+      lastRecognized: lastNoticed.get(employeeId) || null,
+      level: getStarLevel(stars),
+      nextLevel,
+      toNextLevel: nextLevel ? nextLevel.minimum - stars : 0,
+    }
+  })
 }
 
 // Earned stars per building, by month and for the school year. Deliberately
@@ -974,19 +993,6 @@ export function drawManagerAllStar(records, monthKey, managerIds, randomValue = 
     entryCount: entries.filter(entry => entry.employeeId === winningEntry.employeeId).length,
     totalEntries: entries.length,
   }
-}
-
-// Splits any leaderboard into the two pools, so each board only ranks people
-// against others doing the same job.
-export function splitLeaderboardByGrade(entries, managerIds) {
-  const managers = []
-  const staff = []
-  for (const entry of Array.isArray(entries) ? entries : []) {
-    const id = String(entry?.employee?.kronos_id || entry?.employee?.id || '')
-    if (managerIds && managerIds.has(id)) managers.push(entry)
-    else staff.push(entry)
-  }
-  return { managers, staff }
 }
 
 // Who actually got the stars in a building, month by month.

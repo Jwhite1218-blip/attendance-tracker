@@ -11,7 +11,6 @@ import {
   schoolYearStartFor,
   requiresStarMessage,
   submitterLocationLabel,
-  getSubmissionCountsByLocation,
   earnsDailyStar,
   getDailyStarCount,
   getAceBuckCount,
@@ -411,21 +410,6 @@ test('submitting building is recorded so the district can see who is giving star
   assert.equal(submitterLocationLabel(record, locationMap), 'Warren Central HS')
   assert.equal(submitterLocationLabel({ recognizedByLocationId: 'district' }), 'District admin')
   assert.equal(submitterLocationLabel({}), 'Not recorded')
-})
-
-test('submission counts group earned stars by the building that gave them', () => {
-  const records = [
-    { type: 'star-of-day', recognizedByLocationId: 'A' },
-    { type: 'star-of-day', recognizedByLocationId: 'A' },
-    { type: 'star-of-day', recognizedByLocationId: 'B' },
-    // Nominations are not earned stars, so they do not count here.
-    { type: 'shooting-star', recognizedByLocationId: 'B' },
-  ]
-
-  assert.deepEqual(getSubmissionCountsByLocation(records), [
-    { locationId: 'A', count: 2 },
-    { locationId: 'B', count: 1 },
-  ])
 })
 
 test('a Star of the Day given for Other has to say what the other reason was', () => {

@@ -511,6 +511,62 @@ payroll numbers were typed into this repository during the work — two as
 test examples, one in a commit message quoting a screenshot — and had to be
 rewritten out with the rest. Hence the first rule above.
 
+## Built 2026-11-11 — no leaderboards (not yet deployed)
+
+Jon's decision, after looking at how stars were being given. From the
+2026-10-30 backup (315 Stars of the Day, Aug 30 – Oct 31): in October 82 of
+141 stars (58%) were dated in the last seven days of the month — the week
+the building drawing opens — against 23% in September. Per member of staff,
+Lowell had 6.6 and Liberty Park 5.6 against Stony Brook 0.5 and Raymond
+Park 0.7, and about a third of staff had never had a star. There was no
+sign of district admins trading stars back and forth. The incentive was the
+counting, so the rankings came out:
+
+- **All-Stars page.** The Leaderboard tab (staff top ten and the blue
+  manager board) is now **Your team** for a building and **Teams** for the
+  district: everybody in the view, in name order, split into "Not yet this
+  month" and "Recognized this month", each with their own distance to their
+  next level ("2 more to Bronze Star") and no totals. Across all buildings
+  it is one line per building — "X of Y recognized", in name order —
+  expanding to the people. `teamRecognitionCoverage` in recognitionStore.
+  Recognized means a Star of the Day, Shout-Out, Shooting Star nomination or
+  Coach Buck this month; a drawing or Employee of the Month alone does not.
+- **"Who is giving stars" is gone** — it ranked buildings by stars handed
+  out. "Stars by month" stays, with buildings and the who-earned-them names
+  in name order and no "×3".
+- **Banner pins** are one per person, in name order, with no count.
+- **Coach Bucks:** "ACE Coach standings" is now **Coach progress** — every
+  kitchen manager in name order, with their milestone and the way to go.
+- **Public school pages** (`/school-stars/:token`, the NFC tags): no rank
+  and no number. The API returns `thisMonth` and `earlier`, each a list of
+  `{ name, awards: [type…] }` in name order, and sends `leaders` empty for
+  pages still open on the old script. The month is the district's
+  (Indianapolis), not UTC. `npm run test:recognition:remote` checks the new
+  shape, so it fails against production until this is deployed.
+- **The levels band** reads Settings (`starLevels()`) rather than the
+  shipped defaults, so a renamed milestone matches the progress line above.
+- Removed with their tests: `topLeaderboardEntries`,
+  `splitLeaderboardByGrade`, `getSubmissionCountsByLocation`. 507 tests
+  (508 − 6 + 5); 34 page renders clean, and the old labels are now forbidden
+  on the All-Stars page. Driven in a browser through the harness, desktop
+  and phone.
+
+**This settles open item 3** (ACE standings for managers): there are no
+standings for anybody. The backup also holds four Coach Bucks, so item 4's
+first real award has happened.
+
+**Proposed to Liz, not built:**
+- One drawing entry per person per month, however many stars — removes the
+  reason to stack stars in drawing week.
+- A gentle warning on a third star from the same giver to the same person
+  in one week.
+- No star dated more than a week back without a note.
+- Kitchen managers recognized with Coach Bucks only: their past Stars of the
+  Day changed to Shout-Outs and the Star list no longer offering
+  manager-grade staff. Managers would lose their star levels and past
+  building totals would drop; past drawings are unaffected. A dry-run list
+  of every record that would change goes to Liz before anything is touched.
+
 ## Decided by Liz, 2026-10-19
 
 Answered by Liz directly, so these are settled unless she reopens them.
@@ -549,7 +605,8 @@ Answered by Liz directly, so these are settled unless she reopens them.
 2. **Approval workflow — built, not yet exercised.** No real request has
    been made or decided. The first one is worth watching end to end.
 
-3. **ACE Coach standings for managers — a decision, not a task.** Today a
+3. **ACE Coach standings for managers — settled 2026-11-11 by removing
+   standings altogether; see "Built 2026-11-11".** Kept for the reasoning. Today a
    manager sees their own Coach Buck count and next milestone on their own
    record, and nothing about anyone else. Two reasons: the section is
    admin-only, and a building login is only sent recognition for its own
