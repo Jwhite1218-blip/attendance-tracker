@@ -37,9 +37,9 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `2dd1dbeae6694efd0379b164f4c5ecbfee799073`
-- Test suite: 526 passing (`npm test`)
-- Page render check: 35 clean (`npm run verify:pages`)
+- Verified production commit: `1627da8d76f109b2887df6f1a1bf3751fb05a7ac`
+- Test suite: 529 passing (`npm test`)
+- Page render check: 36 clean (`npm run verify:pages`)
 - Confirmed live: `/version.json` returns that commit, 2026-11-11, about 20
   seconds after the push; `npm run test:recognition:remote` passes for all
   15 school pages and `npm run test:production:public` passes
@@ -700,7 +700,7 @@ select pg_get_functiondef('public.mutate_legacy_state_entry(bigint, text, jsonb,
 Then merge, check `/version.json`, and print or mark a card on a real
 manager login, refresh, and check another login for the same kitchen.
 
-## Built 2026-11-11 (late night) — print Shout-Outs anywhere; admins' own notice (not yet deployed)
+## Shipped 2026-11-11 (late night) — print Shout-Outs anywhere; admins' own notice
 
 Jon, after trying it live: an administrator should get the "You were
 recognized" notice on their dashboard with their card to print; recording
@@ -735,6 +735,38 @@ window captured: the admin's own Shout-Out printed as the certificate with
 "From …" and was marked printed; a newly recorded Shout-Out offered and
 printed its card; the feed sheet printed stars and certificates together;
 one row printed one card.
+
+## Built 2026-11-12 — the main administrator can delete any recognition (not yet deployed)
+
+Jon: "as main administrator i need the ability to delete any recognition
+given by anyone … an x next to recognitions with a prompt confirming." And
+the Star Coach Buck box moved up.
+
+- **The × in the feed**, on every recognition, for the main administrator
+  only — `hasLizAdminAccess`, the tier that opens Settings — and not for a
+  review-only or recognition-only login. Pressing it opens a prompt in the
+  row naming the award and the person and saying it cannot be undone; for
+  a group award it adds that only that person's part goes and the others
+  on the card keep theirs. Delete or Cancel. `removeRecognition` in
+  recognitionStore, saved and confirmed the way a winner is removed, so a
+  refusal puts back what the server holds.
+- **The server now checks every recognition removal**, not only Employee of
+  the Month. Until this, any login that could write recognition — a
+  building's included — could have removed anybody's star by calling the
+  state function directly; no screen offered it and nothing stopped it.
+  Now: an ordinary recognition (Star of the Day, Shout-Out, Shooting Star,
+  Coach Buck) only by the main administrator; a building drawing's winner
+  by any administrator, because a redraw is a removal; Employee of the
+  Month as before.
+- **Star Coach Bucks** now sits in the right-hand column directly under
+  Bonus recognition, one column inside (the form, then Coach progress),
+  instead of below the drawing and the nominations.
+
+531 tests (2 new on the server), 36 page renders clean. Driven in a browser
+through the harness: the main administrator's × and prompt, a deletion
+removing the record, Cancel keeping it, the group wording, no × for a
+limited administrator or a building, and the Coach Buck box under Bonus at
+the same width.
 
 ## Decided by Liz, 2026-10-19
 

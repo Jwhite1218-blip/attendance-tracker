@@ -42,6 +42,7 @@ import {
   redrawExcludedEmployeeIds,
   removeEmployeeOfMonth,
   removeMonthlyWinner,
+  removeRecognition,
   replaceMonthlyWinner,
   setAsideEntries,
   requiresStarMessage,
@@ -56,6 +57,7 @@ import {
   recognitionTypeAllowedForRole,
 } from '../data/recognitionRules.js'
 import { coachMilestones, starLevels } from '../data/programSettings.js'
+import { hasLizAdminAccess } from '../data/futureTools.js'
 import { flushPendingWrites, loadSharedState } from '../data/sharedStore.js'
 
 function localDateKey(date = new Date()) {
@@ -781,6 +783,16 @@ export default function RecognitionProgram() {
     message: `${formatMonth(String(award.date).slice(0, 7))} no longer has an Employee of the Month recorded.`,
   }))
 
+  // Jon, 2026-11-11: "as main administrator i need the ability to delete any
+  // recognition given by anyone." The × in the feed, for the tier that can
+  // open Settings; the server refuses it from anybody else. Saved the same
+  // way a winner is removed, so a refusal puts back what the server holds.
+  const canDeleteRecognition = hasLizAdminAccess(access) && canEditRecognition && recognitionOnly !== true
+  const handleDeleteRecognition = record => saveWinnerChange(() => ({
+    save: () => removeRecognition(record),
+    message: `Deleted the ${RECOGNITION_TYPE_MAP[record.type]?.label || 'recognition'} for ${recognitionName(nameMap, record.employeeId)}.`,
+  }))
+
   // Who may be chosen when a winner is edited by hand: the building's own
   // roster, less the manager pool once the split applies — the same people
   // the drawing itself would consider. Their entry count for that month is
@@ -974,6 +986,8 @@ export default function RecognitionProgram() {
                   onTypeChange={setHistoryType}
                   onPrintSheet={handlePrintSheet}
                   onPrintRecord={handlePrintRecord}
+                  onDelete={canDeleteRecognition ? handleDeleteRecognition : null}
+                  deleting={savingWinner}
                 />
               }
               teamLabel={scopeLocation === 'all' ? 'Teams' : 'Your team'}
@@ -1012,6 +1026,30 @@ export default function RecognitionProgram() {
                 onSubmit={event => beginSubmit('bonus', bonusForm, event)}
                 onRetry={() => handleRetryConfirmation('bonus')}
                 onPrintCard={() => handlePrintCard('bonus')}
+              />
+            )}
+
+            {/* Jon, 2026-11-11: up here under Bonus recognition, beside the
+                feed, rather than below the drawing and the nominations — it
+                is somewhere the district comes to give something, and it
+                was the last thing on the page. */}
+            {role === 'admin' && (
+              <AceBucksSection
+                coaches={coachProgress}
+                schoolYearStart={schoolYearStart}
+                coachLevels={coachLevels}
+                form={aceForm}
+                employees={scopedEmployees}
+                peerManagers={peerManagers}
+                managerIds={managerIds}
+                aceEligibleIds={aceEligibleIds}
+                canEdit={canEditRecognition}
+                isSubmitting={submittingSurface === 'ace'}
+                confirmation={confirmations.ace}
+                onFieldChange={setFormValue}
+                onToggleCriterion={toggleCriterion}
+                onSubmit={event => beginSubmit('ace', aceForm, event)}
+                onRetry={() => submitRecognition('ace', aceForm)}
               />
             )}
           </div>
@@ -1069,26 +1107,6 @@ export default function RecognitionProgram() {
             quarterLabel={nominationQuarter.label}
           />
         </div>
-
-        {role === 'admin' && (
-          <AceBucksSection
-            coaches={coachProgress}
-            schoolYearStart={schoolYearStart}
-            coachLevels={coachLevels}
-            form={aceForm}
-            employees={scopedEmployees}
-            peerManagers={peerManagers}
-            managerIds={managerIds}
-            aceEligibleIds={aceEligibleIds}
-            canEdit={canEditRecognition}
-            isSubmitting={submittingSurface === 'ace'}
-            confirmation={confirmations.ace}
-            onFieldChange={setFormValue}
-            onToggleCriterion={toggleCriterion}
-            onSubmit={event => beginSubmit('ace', aceForm, event)}
-            onRetry={() => submitRecognition('ace', aceForm)}
-          />
-        )}
 
         <StarActivity
           summary={buildingCounts}
@@ -2362,7 +2380,7 @@ function AceBucksSection({
   onRetry,
 }) {
   return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-emerald-300 bg-white shadow-sm">
+    <section className="overflow-hidden rounded-2xl border border-emerald-300 bg-white shadow-sm">
       <div className="border-b border-emerald-200 bg-gradient-to-r from-[#0f3d2e] to-[#15583f] px-5 py-5 text-white sm:px-6">
         <div className="flex items-start gap-3">
           <span
@@ -2381,7 +2399,10 @@ function AceBucksSection({
         </div>
       </div>
 
-      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
+      {/* One column: since 2026-11-11 this sits in the half-width column
+          under Bonus recognition, too narrow for the form and the progress
+          list side by side. */}
+      <div className="grid gap-5 p-5 sm:p-6">
         <div>
           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Star Coach Buck</h3>
           <div className="mt-3">
@@ -2465,9 +2486,12 @@ function AceBucksSection({
   )
 }
 
-function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChange, onPrintSheet, onPrintRecord }) {
+function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChange, onPrintSheet, onPrintRecord, onDelete, deleting = false }) {
   const term = useProgramTerms()
   const [visibleCount, setVisibleCount] = useState(10)
+  // The row whose × was pressed. Deleting is never one click: the row asks
+  // first, saying whose recognition it is and that it cannot be undone.
+  const [confirmingId, setConfirmingId] = useState(null)
   const filtered = records.filter(record => type === 'all' || record.type === type)
   const recent = filtered.slice(0, visibleCount)
   // Counts the whole filtered set, not just what is on screen: the sheet
@@ -2553,8 +2577,52 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
                           {!accent.earns && <span className="font-medium opacity-70">· no star</span>}
                         </span>
                       </div>
-                      <span className="flex-none text-[11px] text-gray-400">{formatDate(record.date)}</span>
+                      <span className="flex flex-none items-center gap-2">
+                        <span className="text-[11px] text-gray-400">{formatDate(record.date)}</span>
+                        {onDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingId(current => (current === record.id ? null : record.id))}
+                            aria-label={`Delete this ${type?.label || 'recognition'} for ${name}`}
+                            title="Delete"
+                            className="flex h-6 w-6 items-center justify-center rounded-full text-base leading-none text-gray-400 hover:bg-red-50 hover:text-red-600 print:hidden"
+                          >
+                            ×
+                          </button>
+                        )}
+                      </span>
                     </div>
+                    {onDelete && confirmingId === record.id && (
+                      <div role="alertdialog" aria-label="Confirm delete" className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                        <p className="text-xs font-semibold text-red-800">
+                          Delete this {term.recognitionLabel(record.type, type?.label || record.type)} for {name}?
+                        </p>
+                        <p className="mt-0.5 text-[11px] leading-relaxed text-red-700">
+                          It comes off the feed, the boards and {name}&apos;s record for everyone. This can&apos;t be undone.
+                          {record.groupId ? ` Only ${name}'s part is deleted; the others on the same card keep theirs.` : ''}
+                        </p>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={async () => {
+                              await onDelete(record)
+                              setConfirmingId(null)
+                            }}
+                            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                          >
+                            {deleting ? 'Deleting…' : 'Delete'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingId(null)}
+                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {record.criteria?.length > 0 && <p className="mt-1.5 text-xs text-gray-500">{record.criteria.map(value => criterionLabel(value).name).join(' · ')}</p>}
                     {record.note && <p className="mt-1 text-xs italic text-gray-600">“{record.note}”</p>}
                     <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">

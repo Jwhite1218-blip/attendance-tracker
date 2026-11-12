@@ -980,6 +980,26 @@ export async function handleMutate(store, session, body, { roster = employees } 
       if (!canRecordAward && removals.some(id => current[id]?.type === EMPLOYEE_OF_MONTH_TYPE)) {
         return jsonResponse({ error: 'Only a district administrator can remove Warren Food Services Employee of the Month.' }, 403)
       }
+      // Jon, 2026-11-11: the main administrator can delete any recognition,
+      // from an × in the feed. Until then only Employee of the Month was
+      // checked here, so any login that could write recognition — a
+      // building's included — could have removed anybody's star by calling
+      // this directly; no screen offered it, and nothing stopped it.
+      //
+      // Now: a building drawing's winner by an administrator (the redraw and
+      // the remove button are theirs, and a redraw is a removal), Employee of
+      // the Month as above, and everything else by the main administrator
+      // only — the tier that can open Settings.
+      const removed = removals.map(id => current[id]).filter(Boolean)
+      if (removed.some(record => record.type === 'all-star-of-month') && session.role !== 'admin') {
+        return jsonResponse({ error: 'Only a district administrator can remove a building All-Star of the Month.' }, 403)
+      }
+      const ordinary = removed.some(record => (
+        record.type !== 'all-star-of-month' && record.type !== EMPLOYEE_OF_MONTH_TYPE
+      ))
+      if (ordinary && !hasLizAdminAccess(session)) {
+        return jsonResponse({ error: 'Only the main administrator can delete a recognition.' }, 403)
+      }
       if (awards.length) {
         const next = applyStateMutation(key, current, mutation)
         const crowded = [...new Set(awards.map(recognitionMonth))]

@@ -678,6 +678,17 @@ export function editEmployeeOfMonth(record, changes, { updatedBy = '', updatedAt
   return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => updated)
 }
 
+// Jon, 2026-11-11: the main administrator can delete any recognition, given
+// by anybody, from an × in the feed. Who may is held by the server
+// (state.mjs); this only writes it, and waits to hear that it was accepted.
+export function removeRecognition(record) {
+  if (!record?.id) throw new Error('There is no recognition to delete.')
+  const records = readRecognitionMap()
+  if (!records[record.id]) throw new Error('That recognition is no longer recorded.')
+  delete records[record.id]
+  return Promise.resolve(writeSharedStorageConfirmed(RECOGNITION_STORAGE_KEY, records)).then(() => record)
+}
+
 export function removeEmployeeOfMonth(record) {
   if (!record?.id || record.type !== EMPLOYEE_OF_MONTH_TYPE) {
     throw new Error('There is no Employee of the Month to remove.')

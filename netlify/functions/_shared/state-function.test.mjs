@@ -1601,3 +1601,55 @@ test('a kitchen read shows printed cards for its own stars only', async () => {
     else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
   }
 })
+
+// Jon, 2026-11-11: the main administrator can delete any recognition, and
+// nobody else can delete an ordinary one — not another administrator, not a
+// building. Until then only Employee of the Month removals were checked.
+test('only the main administrator can delete a recognition', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const star = {
+    id: 'star-to-delete',
+    employeeId: String(employee.kronos_id || employee.id),
+    locationId: employee.location,
+    type: 'star-of-day',
+    date: '2026-11-05',
+    monthKey: null,
+    criteria: ['Teamwork'],
+    note: 'Covered the line.',
+    sourceName: '',
+    recognizedBy: 'Someone',
+    createdAt: '2026-11-05T15:00:00.000Z',
+  }
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': { [star.id]: star },
+  })
+  const removal = { key: 'all-star-recognition-v1', mutation: { type: 'object-patch', set: {}, remove: [star.id] } }
+
+  const building = { role: 'school', locationId: employee.location, canEditAttendance: true, canEditRecognition: true }
+  for (const session of [building, drawingAdmin]) {
+    const refused = await handleMutate(store, session, removal)
+    assert.equal(refused.status, 403)
+    assert.match((await refused.json()).error, /main administrator/)
+    assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [star.id])
+  }
+
+  const mainAdministrator = { ...drawingAdmin, canManageRoster: true, canManageBlackouts: true }
+  assert.equal((await handleMutate(store, mainAdministrator, removal)).status, 200)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [])
+})
+
+test('a building cannot remove a drawing winner, and an administrator still can', async () => {
+  const employee = employees.find(row => row.location !== 'Admin')
+  const winner = { ...redrawnWinner(employee), id: 'winner-to-remove' }
+  const store = stateStore({
+    __state_meta__: { initializedAt: '2026-08-21T00:00:00Z' },
+    'all-star-recognition-v1': { [winner.id]: winner },
+  })
+  const removal = { key: 'all-star-recognition-v1', mutation: { type: 'object-patch', set: {}, remove: [winner.id] } }
+
+  const building = { role: 'school', locationId: employee.location, canEditAttendance: true, canEditRecognition: true }
+  assert.equal((await handleMutate(store, building, removal)).status, 403)
+  assert.equal((await handleMutate(store, drawingAdmin, removal)).status, 200)
+  assert.deepEqual(Object.keys(await store.get('all-star-recognition-v1')), [])
+})
