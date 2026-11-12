@@ -48,6 +48,12 @@ const LIZ = {
   dataVersion: 1,
 }
 
+// Liz with her login linked to her own employee card, which is what puts
+// "You were recognized" and Your Recognition on the district dashboard
+// (2026-11-11). Without a linked double those never render here at all.
+// The key is the opaque roster key, not a payroll number.
+const LIZ_LINKED = { ...LIZ, employeeId: 'emp-pwsfc85t' }
+
 // An administrator who is not Liz. Since 2026-10-19 this tier proposes
 // roster changes rather than making them, which is a whole code path with
 // its own buttons and confirmations — worth rendering, not just reasoning
@@ -134,7 +140,7 @@ const PAGES = [
     // No attendance, so only the reports that are not about attendance.
     recognition: ['Custom report', 'All-Star recognition report'],
   }],
-  ['Dashboard', Dashboard, '/', [LIZ]],
+  ['Dashboard', Dashboard, '/', [LIZ, LIZ_LINKED]],
   ['ManagerHome', ManagerHome, '/', [MANAGER]],
   // Liz, 2026-10-26: the building tracker opens the way the Attendance tab
   // does, and the school overview that duplicated the dashboard is gone.

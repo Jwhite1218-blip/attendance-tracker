@@ -700,6 +700,42 @@ select pg_get_functiondef('public.mutate_legacy_state_entry(bigint, text, jsonb,
 Then merge, check `/version.json`, and print or mark a card on a real
 manager login, refresh, and check another login for the same kitchen.
 
+## Built 2026-11-11 (late night) — print Shout-Outs anywhere; admins' own notice (not yet deployed)
+
+Jon, after trying it live: an administrator should get the "You were
+recognized" notice on their dashboard with their card to print; recording
+a Shout-Out offered no print; nor did the feed.
+
+The cause was one gap repeated: PR #23 made the Shout-Out printable, but
+only the manager dashboard's "Cards to print" knew it. The feed's sheet,
+the confirmation after saving and the employee record all still built Star
+of the Day cards only. `printableCards` / `printableCardFor` in
+recognitionNotices.js now build every card — Star of the Day as a star, the
+Shout-Out as its teal certificate, a group award as one card — and each of
+those places uses them:
+
+- **District dashboard:** for a login linked to an employee, the "You were
+  recognized" notice above Your Recognition. No kitchen is passed, so no
+  "Cards to print" queue there.
+- **"Print my card"** on that notice — wherever it shows, manager or admin —
+  for a Star of the Day or Shout-Out. It marks the card printed the way the
+  queue does, and still prints for a login that cannot save the mark.
+- **After saving a Shout-Out:** "Print Shout-Out card" beside the
+  confirmation, as Star of the Day has "Print star card".
+- **The feed:** "Print N cards · six per page" counts and prints Shout-Outs
+  too, and each Star of the Day or Shout-Out row has its own "Print card".
+- **Employee record:** "Print Shout-Out card" for a Shout-Out. A group Star
+  of the Day reprinted from one person's record now prints the group's one
+  card with every name, as the queue does, rather than that person alone.
+
+529 tests (3 new, for the shared card builder), 36 page renders clean — the
+render check now has Liz linked to her own card, so the dashboard notice is
+actually rendered. Driven in a browser through the harness with the print
+window captured: the admin's own Shout-Out printed as the certificate with
+"From …" and was marked printed; a newly recorded Shout-Out offered and
+printed its card; the feed sheet printed stars and certificates together;
+one row printed one card.
+
 ## Decided by Liz, 2026-10-19
 
 Answered by Liz directly, so these are settled unless she reopens them.

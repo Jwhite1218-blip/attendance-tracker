@@ -7,6 +7,7 @@ import ManagerTabs from '../components/ManagerTabs.jsx'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { openStarCardWindow, starCardPreviewHtml } from '../lib/starCardPrinting.js'
 import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
+import { PRINTABLE_CARD_TYPES, printableCardFor, printableCards } from '../data/recognitionNotices.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import {
   ANNUAL_AWARD_CATEGORIES,
@@ -18,7 +19,6 @@ import {
   recognitionAccent,
   gradeAccent,
   teamRecognitionCoverage,
-  toStarCardEntries,
   buildingRecognitionSummary,
   buildingMonthlyRecipients,
   schoolYearMonthKeys,
@@ -406,9 +406,6 @@ export default function RecognitionProgram() {
     }))
   }
 
-  // Prints every Star of the Day currently in view as a cut-and-pin sheet.
-  // Nominations and shout-outs are skipped: the board is a Star of the Day
-  // board, and toStarCardEntries drops them.
   // Liz asked to see the card before it is recorded. Validation runs first,
   // so a preview can never show a card that then fails to save — the point
   // is to approve exactly what gets written and printed.
@@ -467,17 +464,32 @@ export default function RecognitionProgram() {
     await submitRecognition(surface, forms[surface])
   }
 
+  // Prints every card currently in view as a cut-and-pin sheet: Stars of the
+  // Day and, since 2026-11-11, Shout-Outs as their certificate. Nominations,
+  // Coach Bucks and drawings have no card and are skipped.
   const handlePrintSheet = visibleRecords => {
-    const cards = toStarCardEntries(visibleRecords, id => recognitionName(nameMap, id))
+    const cards = printableCards(visibleRecords, id => recognitionName(nameMap, id))
     if (!cards.length) {
-      setFeedback({ type: 'error', message: 'There are no Star of the Day cards to print in this view.' })
+      setFeedback({ type: 'error', message: 'There are no Star of the Day or Shout-Out cards to print in this view.' })
       return
     }
-    if (!openStarCardWindow(cards, { pad: true })) {
+    if (!openStarCardWindow(cards.map(entry => entry.card), { pad: true })) {
       setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
       return
     }
     rememberStarCardsPrinted(visibleRecords)
+  }
+
+  // One card from the feed — the whole card, every name on it, when the
+  // record was part of a group award.
+  const handlePrintRecord = record => {
+    const printable = printableCardFor(record, records, id => recognitionName(nameMap, id))
+    if (!printable) return
+    if (!openStarCardWindow([printable.card])) {
+      setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
+      return
+    }
+    rememberStarCardsPrinted(printable.members)
   }
 
   const handlePrintCard = surface => {
@@ -486,7 +498,7 @@ export default function RecognitionProgram() {
     if (!openStarCardWindow([card])) {
       setFeedback({
         type: 'error',
-        message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print star card again.',
+        message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print card again.',
       })
       return
     }
@@ -558,8 +570,8 @@ export default function RecognitionProgram() {
           : record.type === 'ace-buck'
             ? `${chosen.length} Star Coach Bucks recorded, one each for ${who}.`
             : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
-      // Only the daily star has a printable card: the physical board is a Star
-      // of the Day board, and a nomination is not an award yet.
+      // Star of the Day and the Shout-Out have a card; a nomination is not an
+      // award yet, and a Coach Buck is celebrated, not printed, for now.
       card = record.type === 'star-of-day'
         ? {
           name: chosen.map(employeeName).join(', '),
@@ -571,7 +583,7 @@ export default function RecognitionProgram() {
           recognizedBy: record.recognizedBy,
           recognitionIds: records.map(saved => saved.id),
         }
-        : null
+        : printableCards(records, id => recognitionName(nameMap, id))[0]?.card || null
       await confirmRecognitionSaved()
       finishConfirmedSubmission(surface, confirmationMessage, card)
     } catch (error) {
@@ -934,6 +946,7 @@ export default function RecognitionProgram() {
               onToggleCriterion={toggleCriterion}
               onSubmit={event => beginSubmit('shout', shoutForm, event)}
               onRetry={() => handleRetryConfirmation('shout')}
+              onPrintCard={() => handlePrintCard('shout')}
             />
           )}
         </div>
@@ -960,6 +973,7 @@ export default function RecognitionProgram() {
                   type={historyType}
                   onTypeChange={setHistoryType}
                   onPrintSheet={handlePrintSheet}
+                  onPrintRecord={handlePrintRecord}
                 />
               }
               teamLabel={scopeLocation === 'all' ? 'Teams' : 'Your team'}
@@ -1524,13 +1538,15 @@ function RecognitionEntryForm({
                   )}
                   {/* Offered only once the shared record is confirmed: a printed
                       card handed to someone should mean the star is recorded. */}
-                  {confirmation.type === 'saved' && confirmation.card && (
+                  {confirmation.type === 'saved' && confirmation.card && onPrintCard && (
                     <button
                       type="button"
                       onClick={onPrintCard}
                       className="flex-none rounded-lg border border-emerald-400 bg-white px-3 py-2 text-xs font-black uppercase tracking-wide text-emerald-900 hover:bg-emerald-100"
                     >
-                      <span className="mr-1.5" aria-hidden="true">★</span>Print star card
+                      {confirmation.card.kind === 'star-shout-out'
+                        ? <><span className="mr-1.5" aria-hidden="true">❝</span>Print Shout-Out card</>
+                        : <><span className="mr-1.5" aria-hidden="true">★</span>Print star card</>}
                     </button>
                   )}
                 </div>
@@ -2449,7 +2465,7 @@ function AceBucksSection({
   )
 }
 
-function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChange, onPrintSheet }) {
+function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChange, onPrintSheet, onPrintRecord }) {
   const term = useProgramTerms()
   const [visibleCount, setVisibleCount] = useState(10)
   const filtered = records.filter(record => type === 'all' || record.type === type)
@@ -2457,13 +2473,11 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
   // Counts the whole filtered set, not just what is on screen: the sheet
   // prints everything listed, so the button must not promise fewer.
   //
-  // Counts CARDS rather than stars, because since 2026-10-27 a group award
+  // Counts CARDS rather than records, because since 2026-10-27 a group award
   // is several stars on one card. Counting the records made the button
-  // offer "3 star cards" for a sheet that prints one.
-  const printableCount = toStarCardEntries(
-    filtered.filter(record => record.type === 'star-of-day'),
-    () => '',
-  ).length
+  // offer "3 star cards" for a sheet that prints one. Shout-Outs count since
+  // 2026-11-11, when they began printing from the feed.
+  const printableCount = printableCards(filtered).length
   return (
     <div>
       {/* No heading of its own: the tab above says what this is, and a second
@@ -2498,7 +2512,7 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
             onClick={() => onPrintSheet?.(filtered)}
             className="rounded-lg border border-[#d7b44b] bg-[#fdf7e8] px-3 py-1.5 text-xs font-bold text-[#7a4b12] hover:bg-[#f7ecd2] print:hidden"
           >
-            Print {printableCount} star card{printableCount === 1 ? '' : 's'} · six per page
+            Print {printableCount} card{printableCount === 1 ? '' : 's'} · six per page
           </button>
         )}
       </div>
@@ -2543,11 +2557,24 @@ function RecentRecognition({ records, employeeMap, managerIds, type, onTypeChang
                     </div>
                     {record.criteria?.length > 0 && <p className="mt-1.5 text-xs text-gray-500">{record.criteria.map(value => criterionLabel(value).name).join(' · ')}</p>}
                     {record.note && <p className="mt-1 text-xs italic text-gray-600">“{record.note}”</p>}
-                    <p className="mt-1.5 text-[10px] text-gray-400">
-                      {LOCATION_MAP[record.locationId]?.name || record.locationId}
-                      {record.sourceName ? ` - Submitted by ${record.sourceName}` : ''}
-                      {record.recognizedBy ? ` - Recorded by ${record.recognizedBy}` : ''}
-                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-[10px] text-gray-400">
+                        {LOCATION_MAP[record.locationId]?.name || record.locationId}
+                        {record.sourceName ? ` - Submitted by ${record.sourceName}` : ''}
+                        {record.recognizedBy ? ` - Recorded by ${record.recognizedBy}` : ''}
+                      </p>
+                      {/* One card, straight from the feed. A group award prints
+                          as its one card with every name on it. */}
+                      {onPrintRecord && PRINTABLE_CARD_TYPES.has(record.type) && (
+                        <button
+                          type="button"
+                          onClick={() => onPrintRecord(record)}
+                          className="flex-none rounded-md border border-gray-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-600 hover:border-[#c28b24] hover:text-[#7a4b12] print:hidden"
+                        >
+                          Print card
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

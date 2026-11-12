@@ -99,6 +99,47 @@ export function printKeyFor(record) {
   return String(record?.id || '')
 }
 
+// Every card the given records make, one per physical card — a group award
+// is one card naming everybody on it — in the order the records came.
+// Star of the Day and the Shout-Out only.
+//
+// Jon, 2026-11-11: a Shout-Out could be printed from the kitchen queue and
+// nowhere else. The feed, the confirmation after saving and the employee
+// record all built Star of the Day cards only, so the Shout-Out had no print
+// button there at all. Every one of them uses this now, so a Shout-Out prints
+// as its certificate wherever a card prints, and never as a star.
+export function printableCards(records, resolveName = id => String(id || '')) {
+  const groups = new Map()
+  for (const record of Array.isArray(records) ? records : []) {
+    if (!PRINTABLE_CARD_TYPES.has(record?.type)) continue
+    const key = printKeyFor(record)
+    if (!key) continue
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(record)
+  }
+  const cards = []
+  for (const [printKey, members] of groups) {
+    if (new Set(members.map(record => record.type)).size !== 1) continue
+    const card = printableCard(members, resolveName)
+    if (!card) continue
+    cards.push({
+      printKey,
+      members,
+      card: { ...card, recognitionIds: members.map(record => String(record.id)) },
+    })
+  }
+  return cards
+}
+
+// The card one recognition belongs to, with everybody else on it when it was
+// a group award. Null for a type that does not print.
+export function printableCardFor(record, allRecords, resolveName) {
+  if (!PRINTABLE_CARD_TYPES.has(record?.type)) return null
+  const key = printKeyFor(record)
+  const members = (Array.isArray(allRecords) ? allRecords : []).filter(other => printKeyFor(other) === key)
+  return printableCards(members.length ? members : [record], resolveName)[0] || null
+}
+
 export function withRecognitionSeen(seenMap, employeeId, recognitionId, at) {
   const person = String(employeeId || '').trim()
   const recognition = String(recognitionId || '').trim()

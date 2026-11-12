@@ -10,6 +10,7 @@ import { collectMonthExceptions, getCurrentMonthBirthdays, getUpcomingRequestedT
 import { canAccessRecognitionProgram, canSeeLizFutureTools, canViewReports, hasLizAdminAccess } from '../data/futureTools.js'
 import { backupReminder } from '../data/backupReminder.js'
 import YourRecognition from '../components/YourRecognition.jsx'
+import RecognitionNotifications from '../components/RecognitionNotifications.jsx'
 import { lastBackupExport } from '../data/programSettings.js'
 import InsightDrilldown from '../components/InsightDrilldown.jsx'
 import MetricTile from '../components/MetricTile.jsx'
@@ -226,9 +227,19 @@ export default function Dashboard() {
           Nothing renders unless this login is linked to an employee card,
           so a shared office login shows no panel rather than an empty one.
           Deliberately outside the school pills: this is about the person
-          signed in, not about whichever buildings they are looking at. */}
+          signed in, not about whichever buildings they are looking at.
+
+          Jon, 2026-11-11: the "You were recognized" notice too, as the
+          managers have it, with their own card to print. No kitchen is
+          passed, so the district dashboard gets no "Cards to print" queue —
+          an administrator prints their own card from the notice. */}
       {access.employeeId && (
-        <div className="mb-4">
+        <div className="mb-4 space-y-4">
+          <RecognitionNotifications
+            employeeId={access.employeeId}
+            canPrint={access.canEditRecognition === true}
+            dataVersion={access.dataVersion}
+          />
           <YourRecognition employeeId={access.employeeId} />
         </div>
       )}

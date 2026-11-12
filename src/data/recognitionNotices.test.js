@@ -14,6 +14,8 @@ import {
   personalRecognitions,
   printKeyFor,
   printMarksFor,
+  printableCardFor,
+  printableCards,
   recognitionRecordedLater,
   seenIdsFor,
   withRecognitionSeen,
@@ -188,4 +190,50 @@ test('seen stays on this device for that login, and printed is the shared key', 
   assert.equal(localStorage.getItem(STAR_CARD_PRINTS_KEY), null)
   assert.deepEqual(seenIdsForEmployee('emp-lead'), ['mine-star'])
   assert.equal(localStorage.getItem(RECOGNITION_SEEN_STORAGE_KEY) !== null, true)
+})
+
+// --- printing from anywhere (Jon, 2026-11-11) -------------------------------
+
+const NAMES = { 'emp-lead': 'Dana Reyes', 'emp-cook': 'Sam Ortiz', 'emp-mgr': 'Pat Lane' }
+const nameOf = id => NAMES[id] || id
+
+test('a Shout-Out prints as its certificate, a star as a star, and nothing else prints', () => {
+  const records = [
+    record({ id: 'shout-1', type: 'star-shout-out', sourceName: 'Ms. Alvarez', note: 'Patient with every student.' }),
+    record({ id: 'star-9', type: 'star-of-day' }),
+    record({ id: 'buck-1', type: 'ace-buck', employeeId: 'emp-mgr' }),
+    record({ id: 'nom-1', type: 'shooting-star' }),
+    record({ id: 'draw-1', type: 'all-star-of-month' }),
+  ]
+  const cards = printableCards(records, nameOf)
+  assert.deepEqual(cards.map(entry => entry.card.kind), ['star-shout-out', 'star-of-day'])
+  const shout = cards[0].card
+  assert.equal(shout.name, 'Dana Reyes')
+  assert.equal(shout.sourceName, 'Ms. Alvarez')
+  assert.equal(shout.message, 'Patient with every student.')
+  assert.deepEqual(shout.recognitionIds, ['shout-1'])
+})
+
+test('a group award is one card naming everybody, and every record on it is marked', () => {
+  const records = [
+    record({ id: 'g1', groupId: 'group-7', employeeId: 'emp-lead' }),
+    record({ id: 'g2', groupId: 'group-7', employeeId: 'emp-cook' }),
+  ]
+  const cards = printableCards(records, nameOf)
+  assert.equal(cards.length, 1)
+  assert.deepEqual(cards[0].card.names, ['Dana Reyes', 'Sam Ortiz'])
+  assert.deepEqual(cards[0].card.recognitionIds, ['g1', 'g2'])
+  assert.equal(cards[0].printKey, 'group:group-7')
+})
+
+test('the card for one record brings the rest of its group with it', () => {
+  const all = [
+    record({ id: 'g1', groupId: 'group-7', employeeId: 'emp-lead' }),
+    record({ id: 'g2', groupId: 'group-7', employeeId: 'emp-cook' }),
+    record({ id: 'solo', employeeId: 'emp-lead' }),
+  ]
+  const printable = printableCardFor(all[1], all, nameOf)
+  assert.deepEqual(printable.members.map(member => member.id), ['g1', 'g2'])
+  assert.equal(printableCardFor(all[2], all, nameOf).card.name, 'Dana Reyes')
+  assert.equal(printableCardFor(record({ type: 'ace-buck' }), all, nameOf), null)
 })

@@ -1,10 +1,14 @@
 // The first thing on a manager's dashboard when recognition happened and
-// nobody at the kitchen has dealt with it yet.
+// nobody at the kitchen has dealt with it yet. On the district dashboard too
+// since 2026-11-11, for an administrator whose login is linked to their own
+// employee card — personal news only there, no kitchen queue.
 //
 // Personal news is a celebration and stays until that person opens it or
 // says they've seen it. A shared building login has no person attached, so
-// that celebration is not shown. Cards to print are the kitchen's job and
-// stay until the Star of the Day card is printed or marked printed.
+// that celebration is not shown. A Star of the Day or Shout-Out in it can be
+// printed from right there — an administrator has no kitchen queue to print
+// their own card from. Cards to print are the kitchen's job and stay until
+// the card is printed or marked printed.
 
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -12,11 +16,12 @@ import { useLanguage } from './LanguageProvider.jsx'
 import { useProgramTerms } from './useProgramTerms.js'
 import { getEmployeeByKey } from '../data/employeeLocations.js'
 import { RECOGNITION_TYPE_MAP, getAllRecognitions } from '../data/recognitionStore.js'
-import { cardsToPrint, personalRecognitions } from '../data/recognitionNotices.js'
+import { PRINTABLE_CARD_TYPES, cardsToPrint, personalRecognitions, printableCardFor } from '../data/recognitionNotices.js'
 import {
   markRecognitionSeen,
   markStarCardsPrinted,
   printedStarCardKeys,
+  rememberStarCardsPrinted,
   seenIdsForEmployee,
 } from '../data/recognitionNoticeStore.js'
 import { openStarCardWindow } from '../lib/starCardPrinting.js'
@@ -77,6 +82,23 @@ export default function RecognitionNotifications({ employeeId, locationId, canPr
     }
   }
 
+  // The person's own card, group and all. Marked printed the same way the
+  // kitchen queue marks it, so it does not then wait there to be printed
+  // again — but a login that cannot save that mark still gets its card.
+  const printMine = item => {
+    setPrintError('')
+    const records = getAllRecognitions()
+    const record = records.find(entry => String(entry.id) === item.id)
+    const printable = record && printableCardFor(record, records, personName)
+    if (!printable) return
+    if (!openStarCardWindow([printable.card])) {
+      setPrintError(t('notices.popupBlocked'))
+      return
+    }
+    rememberStarCardsPrinted(printable.members)
+    refresh()
+  }
+
   return (
     <div className="space-y-4 print:hidden" aria-live="polite">
       {personal.length > 0 && (
@@ -89,10 +111,16 @@ export default function RecognitionNotifications({ employeeId, locationId, canPr
               term={term}
               t={t}
               onSeen={() => markSeen(item.id)}
+              onPrint={PRINTABLE_CARD_TYPES.has(item.type) ? () => printMine(item) : null}
               employeeId={employeeId}
             />
           ))}
         </div>
+      )}
+      {printError && !cards.length && (
+        <p role="alert" className="rounded-xl border border-red-400/30 bg-red-950/80 px-4 py-3 text-xs font-semibold text-red-100">
+          {printError}
+        </p>
       )}
 
       {cards.length > 0 && (
@@ -173,7 +201,7 @@ export default function RecognitionNotifications({ employeeId, locationId, canPr
   )
 }
 
-function PersonalRecognition({ item, formatDate, term, t, onSeen, employeeId }) {
+function PersonalRecognition({ item, formatDate, term, t, onSeen, onPrint, employeeId }) {
   const typeLabel = term.recognitionLabel(item.type, RECOGNITION_TYPE_MAP[item.type]?.label || item.type)
   const reasons = item.criteria.map(reason => term.reason(reason, reason))
   if (item.otherReason) reasons.push(item.otherReason)
@@ -232,6 +260,15 @@ function PersonalRecognition({ item, formatDate, term, t, onSeen, employeeId }) 
             >
               {t('notices.seen')}
             </button>
+            {onPrint && (
+              <button
+                type="button"
+                onClick={onPrint}
+                className="rounded-lg border border-[#e8c65c]/60 bg-[#e8c65c]/15 px-3 py-2 text-xs font-black uppercase tracking-wide text-[#f8e7b0] hover:bg-[#e8c65c]/25"
+              >
+                {t('notices.printMyCard')}
+              </button>
+            )}
             <Link
               to={`/employee/${encodeURIComponent(employeeId)}`}
               onClick={onSeen}

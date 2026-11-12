@@ -9,8 +9,9 @@ import { submitRequest } from '../data/approvalStore.js'
 import { getDateAvailability } from '../data/blackoutDates.js'
 import { getCalendarYearMonths, getFiscalYearMonths, formatYearLabel, readCalendarMode, writeCalendarMode } from '../data/fiscalCalendar.js'
 import { LOCATION_MAP } from '../data/locations.js'
-import { openStarCardWindow, starCardFromRecognition } from '../lib/starCardPrinting.js'
+import { openStarCardWindow } from '../lib/starCardPrinting.js'
 import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
+import { PRINTABLE_CARD_TYPES, printableCardFor } from '../data/recognitionNotices.js'
 import { useAuth } from '../components/PinGate.jsx'
 import AttendancePickerModal from '../components/AttendancePickerModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
@@ -126,21 +127,24 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
   )
   const openRecognition = recognitionRecords.find(record => record.id === openRecognitionId) || null
   // Reprinting from the record itself, so a card can be replaced long after
-  // the day it was given without re-entering anything.
+  // the day it was given without re-entering anything. Since 2026-11-11 a
+  // Shout-Out prints here too, as its certificate, and a group award prints
+  // as its one card with every name on it — the same card the kitchen queue
+  // and the feed print.
   const handlePrintRecognition = () => {
     if (!openRecognition) return
     setPrintError(null)
-    const cardName = `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
-    const card = starCardFromRecognition(openRecognition, cardName)
-    if (!openStarCardWindow([card])) {
+    const nameFor = id => {
+      const person = String(id) === String(empKey) ? employee : getEmployeeByKey(id)
+      return `${person?.first_name || ''} ${person?.last_name || ''}`.trim()
+    }
+    const printable = printableCardFor(openRecognition, getAllRecognitions(), nameFor)
+    if (!printable) return
+    if (!openStarCardWindow([printable.card])) {
       setPrintError('Your browser blocked the print window. Allow pop-ups for this site, then try again.')
       return
     }
-    const groupId = String(openRecognition.groupId || '').trim()
-    const related = groupId
-      ? getAllRecognitions().filter(record => record.type === 'star-of-day' && String(record.groupId || '') === groupId)
-      : [openRecognition]
-    rememberStarCardsPrinted(related)
+    rememberStarCardsPrinted(printable.members)
   }
   const recognitionSchoolYear = schoolYearStartFor(new Date())
   const starCount = getEmployeeStarCount(recognitionRecords, empKey, recognitionSchoolYear)
@@ -561,15 +565,16 @@ export default function EmployeeDetail({ employee, onStatusChange, onEmployeeUpd
                       RECOGNITION_TYPE_MAP[openRecognition.type]?.label || openRecognition.type
                     )} · {openRecognition.date}
                   </p>
-                  {/* Only the daily star has a card — the physical board is a
-                      Star of the Day board, and a nomination is not an award. */}
-                  {openRecognition.type === 'star-of-day' && (
+                  {/* Star of the Day and the Shout-Out have a card; a
+                      nomination is not an award, and a Coach Buck is not
+                      printed for now. */}
+                  {PRINTABLE_CARD_TYPES.has(openRecognition.type) && (
                     <button
                       type="button"
                       onClick={handlePrintRecognition}
                       className="flex-none rounded-lg border border-[#e8c65c]/50 bg-[#e8c65c]/10 px-3 py-1.5 text-xs font-bold text-[#f4d87d] hover:bg-[#e8c65c]/20 print:hidden"
                     >
-                      Print star card
+                      {openRecognition.type === 'star-shout-out' ? 'Print Shout-Out card' : 'Print star card'}
                     </button>
                   )}
                 </div>
