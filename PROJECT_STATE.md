@@ -4,7 +4,9 @@ Last verified: 2026-11-11
 
 **2026-11-11: no leaderboards.** Nothing on the recognition screens or the
 school pages ranks people by how many stars they have. See "Shipped
-2026-11-11" below.
+2026-11-11" below. Later the same night: counts and rankings in the report
+for district administrators, the Shout-Out beside Star of the Day, and PR
+#23's manager recognition notices and cards to print.
 
 **2026-10-30: the district payroll number is gone — from the records, the
 database, every Netlify copy and the repository's history.** See "Shipped
@@ -35,8 +37,8 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `da2d6be789b3e4606e8032b0cf075fe3533e4d65`
-- Test suite: 514 passing (`npm test`)
+- Verified production commit: `2dd1dbeae6694efd0379b164f4c5ecbfee799073`
+- Test suite: 526 passing (`npm test`)
 - Page render check: 35 clean (`npm run verify:pages`)
 - Confirmed live: `/version.json` returns that commit, 2026-11-11, about 20
   seconds after the push; `npm run test:recognition:remote` passes for all
@@ -629,7 +631,13 @@ Driven in a browser through the harness: a cross-building Shout-Out from a
 building login was recorded with the right type, recipient, reason and
 source.
 
-## Combined 2026-11-11 (night) — PR #23, manager recognition notices (not yet deployed)
+## Shipped 2026-11-11 (night) — PR #23, manager recognition notices
+
+Live at `2dd1dbe` (merge of PR #23). `star-card-prints-v1` went onto the
+production allowlist first: Jon ran the migration in the Supabase SQL editor
+for `gbjikeytzdlzjulrnjvo`, after a check that it would drop no existing key,
+and both verification columns came back true. The printing smoke test on a
+real manager login is Jon's — nobody here signs in with real accounts.
 
 Built with Liz through a separate agent and handed over to go live
 (`attendance-tracker-pr23-go-live-handoff.md`, Jon's Downloads). Branch
