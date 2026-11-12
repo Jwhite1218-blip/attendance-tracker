@@ -37,8 +37,8 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `1627da8d76f109b2887df6f1a1bf3751fb05a7ac`
-- Test suite: 529 passing (`npm test`)
+- Verified production commit: `821d0cfafe26a31c9a109960ad0d442658f5cef8`
+- Test suite: 531 passing (`npm test`)
 - Page render check: 36 clean (`npm run verify:pages`)
 - Confirmed live: `/version.json` returns that commit, 2026-11-11, about 20
   seconds after the push; `npm run test:recognition:remote` passes for all
@@ -736,7 +736,7 @@ window captured: the admin's own Shout-Out printed as the certificate with
 printed its card; the feed sheet printed stars and certificates together;
 one row printed one card.
 
-## Built 2026-11-12 — the main administrator can delete any recognition (not yet deployed)
+## Shipped 2026-11-12 — the main administrator can delete any recognition
 
 Jon: "as main administrator i need the ability to delete any recognition
 given by anyone … an x next to recognitions with a prompt confirming." And
