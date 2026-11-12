@@ -114,6 +114,9 @@ export default function RecognitionNotifications({ employeeId, locationId, canPr
             {cards.map(item => (
               <li key={item.printKey} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
                 <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#e8c65c]">
+                    {t(`managerHome.cardType.${item.type}`)}
+                  </p>
                   <p className="text-sm font-bold text-white">{item.name}</p>
                   <p className="mt-0.5 text-xs text-amber-100/75">
                     {t('notices.recordedBy', { name: item.recognizedBy || t('notices.notRecorded') })}

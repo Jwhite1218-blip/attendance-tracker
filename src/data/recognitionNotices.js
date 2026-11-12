@@ -7,9 +7,9 @@
 //     one is that person's own memory (see recognitionNoticeStore.js) and does
 //     not clear it for anyone else.
 //
-//   * "Cards to print" is a kitchen task. Only a Star of the Day has a card
-//     for the physical board — a nomination, a shout-out, a drawing and a
-//     Coach Buck do not. A group award is one card. The card stays until the
+//   * "Cards to print" is a kitchen task. Star of the Day, Star Coach Buck,
+//     and Warren Star Shout-Out each have a card for the board. A Shooting
+//     Star is a nomination and does not. A group award is one card. The card stays until the
 //     kitchen prints it or marks it printed, and that mark is shared, so the
 //     kitchen computer and a manager's phone agree.
 //
@@ -37,6 +37,7 @@ export const WARREN_TIME_ZONE = 'America/Indiana/Indianapolis'
 export const STAR_CARD_TRACKING_SINCE = '2026-11-11T00:00:00.000Z'
 
 export const STAR_OF_THE_DAY = 'star-of-day'
+export const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'ace-buck', 'star-shout-out'])
 
 export function calendarDateInZone(value, timeZone = WARREN_TIME_ZONE) {
   const date = value instanceof Date ? value : new Date(value)
@@ -68,6 +69,27 @@ export function recognitionRecordedLater(record, timeZone = WARREN_TIME_ZONE) {
   const shined = String(record?.date || '')
   const recorded = calendarDateInZone(record?.createdAt, timeZone)
   return Boolean(shined && recorded && shined !== recorded)
+}
+
+function printableCard(members, resolveName) {
+  const type = members[0]?.type
+  if (type === STAR_OF_THE_DAY) {
+    const card = toStarCardEntries(members, resolveName)[0]
+    return card ? { ...card, kind: STAR_OF_THE_DAY } : null
+  }
+  const names = members.map(record => resolveName(record.employeeId) || String(record.employeeId || ''))
+  const first = members[0]
+  return {
+    kind: type,
+    name: names.join(', '),
+    ...(names.length > 1 ? { names } : {}),
+    date: first.date,
+    criteria: first.criteria || [],
+    otherReason: first.otherReason || '',
+    message: first.note || '',
+    recognizedBy: first.recognizedBy || '',
+    sourceName: first.sourceName || '',
+  }
 }
 
 export function printKeyFor(record) {
@@ -162,7 +184,7 @@ export function cardsToPrint(records, {
   if (!kitchen) return []
   const printed = new Set((printedKeys || []).map(String))
   const stars = (Array.isArray(records) ? records : []).filter(record => (
-    record?.type === STAR_OF_THE_DAY && isNoticeEligible(record, since)
+    PRINTABLE_CARD_TYPES.has(record?.type) && isNoticeEligible(record, since)
   ))
   const groups = new Map()
   for (const record of stars) {
@@ -175,13 +197,15 @@ export function cardsToPrint(records, {
   const cards = []
   for (const [printKey, members] of groups) {
     if (!members.some(record => String(record.locationId) === kitchen)) continue
-    const card = toStarCardEntries(members, resolveName)[0]
+    if (new Set(members.map(record => record.type)).size !== 1) continue
+    const card = printableCard(members, resolveName)
     if (!card) continue
     const latest = [...members].sort((left, right) => (
       String(right.createdAt || '').localeCompare(String(left.createdAt || ''))
     ))[0]
     cards.push({
       printKey,
+      type: members[0].type,
       recognitionIds: members.map(record => String(record.id)),
       name: card.name,
       recognizedBy: String(members.find(record => String(record.recognizedBy || '').trim())?.recognizedBy || '').trim(),
@@ -203,7 +227,7 @@ export function printMarksFor(records, { printedAt } = {}) {
   const at = printedAt || new Date().toISOString()
   const groups = new Map()
   for (const record of (Array.isArray(records) ? records : [])) {
-    if (record?.type !== STAR_OF_THE_DAY || !record.id) continue
+    if (!PRINTABLE_CARD_TYPES.has(record?.type) || !record.id) continue
     const key = printKeyFor(record)
     if (!key) continue
     if (!groups.has(key)) groups.set(key, [])

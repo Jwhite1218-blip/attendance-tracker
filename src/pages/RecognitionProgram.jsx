@@ -579,7 +579,7 @@ export default function RecognitionProgram() {
         : chosen.length === 1
           ? `${who} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
           : record.type === 'ace-buck'
-            ? `${chosen.length} ACE Coach Bucks recorded, one each for ${who}.`
+            ? `${chosen.length} Star Coach Bucks recorded, one each for ${who}.`
             : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
       // Only the daily star has a printable card: the physical board is a Star
       // of the Day board, and a nomination is not an award yet.
@@ -883,7 +883,7 @@ export default function RecognitionProgram() {
                   value={compilation.shoutOuts}
                 />
               </a>
-              <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
+              <SecondaryCount label="Shooting Stars" value={compilation.shootingNominations} />
               <SecondaryCount label="Building All-Stars" value={compilation.buildingAllStars} />
               {canManageRecognitionAwards && (
                 <SecondaryCount label="Employee of the Month" value={compilation.employeeOfMonth} />
@@ -963,7 +963,7 @@ export default function RecognitionProgram() {
                 selectableTypes={bonusTypes}
                 compact
                 title="Bonus recognition"
-                subtitle="Shooting Star nominations, Warren Star Shout-Outs, and Employee of the Month. Coach Bucks have their own section below."
+                subtitle="Shooting Stars, Warren Star Shout-Outs, and Employee of the Month. Star Coach Bucks have their own section below."
                 employees={scopedEmployees}
                 peerManagers={peerManagers}
                 managerIds={managerIds}
@@ -1301,8 +1301,8 @@ function RecognitionEntryForm({
                     ? 'Nobody chosen yet.'
                     : isAceBuck
                       ? chosenIds.length === 1
-                        ? 'One Coach Buck.'
-                        : `${chosenIds.length} Coach Bucks — one each, counting toward their own ACE Coach milestones.`
+                        ? 'One Star Coach Buck.'
+                        : `${chosenIds.length} Star Coach Bucks — one each, counting toward their own milestones.`
                       : chosenIds.length === 1
                         ? 'One star, one card.'
                         : `${chosenIds.length} stars — one each, counting toward their own milestones and the monthly drawing. One card, naming all ${chosenIds.length}.`}
@@ -1464,7 +1464,7 @@ function RecognitionEntryForm({
                     : confirmation?.type === 'pending'
                       ? 'Awaiting confirmation'
                       : isAceBuck && chosenIds.length > 1
-                        ? `Award ${chosenIds.length} ACE Coach Bucks`
+                        ? `Award ${chosenIds.length} Star Coach Bucks`
                         : (currentType?.actionLabel || 'Add to the All-Star board')}
               </button>
               {confirmation && (
@@ -2276,7 +2276,7 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sky-100 text-xl" aria-hidden="true">☄️</span>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-700">Quarterly review · {quarterLabel}</p>
-          <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Shooting Star Nominations</h2>
+          <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Shooting Stars</h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">Nominations put employees in the running for quarterly review. They do not add an earned star or monthly drawing entry.</p>
         </div>
       </div>
@@ -2297,7 +2297,7 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
           {records.length > 6 && <p className="py-2 text-center text-[10px] font-bold uppercase tracking-wide text-sky-700">+ {records.length - 6} more nominations this quarter</p>}
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-3 py-5 text-center text-xs text-sky-800">No Shooting Star nominations have been submitted for this quarter.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-3 py-5 text-center text-xs text-sky-800">No Shooting Stars have been submitted for this quarter.</p>
       )}
     </section>
   )
@@ -2348,10 +2348,10 @@ function AceBucksSection({
           >◆</span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Manager program</p>
-            <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Coach Bucks</h2>
+            <h2 className="all-star-display mt-1 text-2xl uppercase">Star Coach Bucks</h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-100/80">
               The leadership side of the All-Star program. Kitchen managers already earn Stars for what
-              they do; Coach Bucks are for how they lead, awarded by the district office to the fifteen
+              they do; Star Coach Bucks are for how they lead, awarded by the district office to the fifteen
               people running kitchens.
             </p>
           </div>
@@ -2360,13 +2360,13 @@ function AceBucksSection({
 
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Coach Buck</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Star Coach Buck</h3>
           <div className="mt-3">
             <RecognitionEntryForm
               surface="ace"
               form={form}
               compact
-              title="ACE Coach Buck"
+              title="Star Coach Buck"
               subtitle="District recognition for a kitchen manager."
               employees={employees}
               peerManagers={peerManagers}
@@ -2393,7 +2393,7 @@ function AceBucksSection({
 
           {leaderboard.length === 0 ? (
             <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center text-sm text-emerald-900">
-              No Coach Bucks awarded yet. The first one starts this board.
+              No Star Coach Bucks awarded yet. The first one starts this board.
             </p>
           ) : (
             <>

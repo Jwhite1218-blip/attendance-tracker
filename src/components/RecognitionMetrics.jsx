@@ -48,7 +48,7 @@ export function recognitionTilesFor({ locationIds = [], today = new Date(), star
   return [
     {
       id: 'stars',
-      label: starsForYear ? 'Stars' : `Stars in ${monthName}`,
+      label: starsForYear ? 'Stars of the Day' : `Stars in ${monthName}`,
       labelKey: starsForYear ? 'managerHome.starsThisYear' : null,
       period: starsForYear ? schoolYearLabel : `${monthName} ${today.getFullYear()}`,
       records: starsForYear
@@ -57,13 +57,15 @@ export function recognitionTilesFor({ locationIds = [], today = new Date(), star
     },
     {
       id: 'ace-buck',
-      label: 'ACE Bucks',
+      label: 'Star Coach Bucks',
+      labelKey: 'managerHome.starCoachBucks',
       period: schoolYearLabel,
       records: aceBucksInSchoolYear(records, startYear, locationIds),
     },
     {
       id: 'shooting-star',
-      label: 'Shooting Star Nominations',
+      label: 'Shooting Stars',
+      labelKey: 'managerHome.shootingStars',
       period: schoolYearLabel,
       records: recognitionsOfTypeInSchoolYear(records, 'shooting-star', startYear, locationIds),
     },

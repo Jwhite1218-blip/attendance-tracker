@@ -3,7 +3,7 @@ import test from 'node:test'
 import { ALL_STAR_REASON_OPTIONS } from './recognitionStore.js'
 import { CARDS_PER_PAGE, buildStarCardHtml, formatCardDate } from './starCard.js'
 
-const CARD_PATTERN = /class="card"/g
+const CARD_PATTERN = /class="card[\s"]/g
 // Matched on the attribute, not the bare class name: the stylesheet in the same
 // document also contains ".reason-on", which a looser pattern counts as a hit.
 const MARKED_REASON_PATTERN = /class="reason reason-on"/g
@@ -65,6 +65,36 @@ test('a malformed date is passed through rather than guessed at', () => {
   assert.equal(formatCardDate('2026-09-01'), '9/1/2026')
   assert.equal(formatCardDate(''), '')
   assert.equal(formatCardDate('not-a-date'), 'not-a-date')
+})
+
+test('a Star Coach Buck card and a Shout-Out card are distinct and the same size family', () => {
+  const html = buildStarCardHtml([
+    {
+      kind: 'ace-buck',
+      name: 'Ulonda Lewis',
+      date: '2026-11-09',
+      criteria: ['People & Culture'],
+      message: 'Steadied the line.',
+      recognizedBy: 'Elizabeth Schmitt',
+    },
+    {
+      kind: 'star-shout-out',
+      name: 'Melvina Anderson',
+      date: '2026-11-10',
+      criteria: ['Showing patience or kindness when helping students'],
+      message: 'A student said thank you.',
+      recognizedBy: 'Elizabeth Schmitt',
+      sourceName: 'Ms. Alvarez',
+    },
+  ], { pad: false })
+  assert.equal(cardCount(html), 2)
+  assert.match(html, /card-buck/)
+  assert.match(html, /card-shout/)
+  assert.match(html, /Star Coach Buck/)
+  assert.match(html, /Warren Star Shout-Out/)
+  assert.match(html, /From Ms\. Alvarez/)
+  assert.match(html, /People &amp; Culture/)
+  assert.equal(html.includes('emp-'), false)
 })
 
 test('the card carries both languages so one card serves everybody', () => {

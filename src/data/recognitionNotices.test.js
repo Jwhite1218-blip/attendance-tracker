@@ -123,37 +123,44 @@ test('only unprinted Star of the Day cards for this kitchen are queued', () => {
     resolveName: id => names[id] || id,
   })
 
-  assert.deepEqual(cards.map(card => card.printKey), ['group:lunch', 'team', 'lead'])
+  assert.deepEqual(cards.map(card => card.printKey), ['group:lunch', 'team', 'shout', 'lead', 'buck'])
+  assert.deepEqual(cards.map(card => card.type), ['star-of-day', 'star-of-day', 'star-shout-out', 'star-of-day', 'ace-buck'])
+  assert.equal(cards.some(card => card.type === 'shooting-star'), false)
   assert.equal(cards[0].group, true)
   assert.equal(cards[0].name, 'Ana Ruiz, Jose Garcia')
   assert.equal(cards[1].name, 'Melvina Anderson')
   assert.equal(cards[1].recordedLater, true)
   assert.equal(cards[1].recognizedBy, 'Elizabeth Schmitt')
-  assert.equal(cards[2].recordedLater, true)
+  assert.equal(cards.find(card => card.printKey === 'lead').recordedLater, true)
+  assert.equal(cards.find(card => card.printKey === 'buck').type, 'ace-buck')
 
   const afterPrint = cardsToPrint(records, {
     locationId: 'HawthorneE',
     printedKeys: ['team', 'group:lunch'],
     resolveName: id => names[id] || id,
   })
-  assert.deepEqual(afterPrint.map(card => card.printKey), ['lead'])
+  assert.deepEqual(afterPrint.map(card => card.printKey), ['shout', 'lead', 'buck'])
 
   assert.deepEqual(cardsToPrint(records, { locationId: 'CrestonMS', printedKeys: [] }).map(card => card.printKey), ['elsewhere'])
   assert.equal(printKeyFor(records.find(item => item.id === 'group-a')), 'group:lunch')
   assert.equal(printKeyFor(records.find(item => item.id === 'team')), 'team')
 })
 
-test('a printed mark names the records on that card and ignores anything that is not a daily star', () => {
+test('a printed mark covers a star, a coach buck, and a shout-out, and skips a nomination', () => {
   const marks = printMarksFor([
     record({ id: 'group-a', groupId: 'lunch' }),
     record({ id: 'group-b', groupId: 'lunch' }),
     record({ id: 'solo' }),
     record({ id: 'shout', type: 'star-shout-out' }),
+    record({ id: 'buck', type: 'ace-buck' }),
+    record({ id: 'nomination', type: 'shooting-star' }),
   ], { printedAt: AFTER })
 
   assert.deepEqual(marks, {
     'group:lunch': { printedAt: AFTER, recognitionIds: ['group-a', 'group-b'] },
     solo: { printedAt: AFTER, recognitionIds: ['solo'] },
+    shout: { printedAt: AFTER, recognitionIds: ['shout'] },
+    buck: { printedAt: AFTER, recognitionIds: ['buck'] },
   })
 })
 

@@ -4,7 +4,7 @@ import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
-import { handleBackupRestore, handleMutate, handleStateRequest, schoolRecognitionView, schoolStarCardPrintView } from '../state.mjs'
+import { handleBackupRestore, handleMutate, handleStateRequest, schoolRecognitionView, schoolStarCardPrintView, starCardPrintMutationForSession } from '../state.mjs'
 import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
 // Liz, 2026-10-20: termination date, last day worked and reason were
@@ -1474,7 +1474,7 @@ test('a kitchen marks its own star card printed and cannot clear another kitchen
   const groupA = star('group-a', mine[0], { groupId: 'lunch' })
   const groupB = star('group-b', mine[1], { groupId: 'lunch' })
   const otherStar = star('other-star', other)
-  const shout = { ...star('shout', mine[0]), type: 'star-shout-out' }
+  const shout = { ...star('shout', mine[0]), type: 'shooting-star' }
   const printedAt = '2026-11-11T18:00:00.000Z'
   const mark = recognitionIds => ({ printedAt, recognitionIds })
   const store = stateStore({
@@ -1528,6 +1528,27 @@ test('a kitchen marks its own star card printed and cannot clear another kitchen
   })
   assert.equal(replaced.status, 400)
   assert.ok((await store.get('star-card-prints-v1'))['own-star'])
+})
+
+test('printed cards include a coach buck and a shout-out, and not a nomination', () => {
+  const printedAt = '2026-11-11T18:00:00.000Z'
+  const mark = ids => ({ printedAt, recognitionIds: ids })
+  const next = starCardPrintMutationForSession({
+    type: 'object-patch',
+    set: {
+      buck: mark(['buck']),
+      shout: mark(['shout']),
+      nom: mark(['nom']),
+    },
+    remove: [],
+  }, { role: 'admin', displayName: 'District' }, {
+    buck: { id: 'buck', employeeId: 'emp-lead', locationId: 'HawthorneE', type: 'ace-buck' },
+    shout: { id: 'shout', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'star-shout-out' },
+    nom: { id: 'nom', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'shooting-star' },
+  }, new Set())
+  assert.ok(next.set.buck)
+  assert.ok(next.set.shout)
+  assert.equal(next.set.nom, undefined)
 })
 
 test('a kitchen read shows printed cards for its own stars only', async () => {

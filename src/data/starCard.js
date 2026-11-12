@@ -57,7 +57,54 @@ export function formatCardDate(value) {
   return `${Number(month)}/${Number(day)}/${year}`
 }
 
+function awardChips(criteria) {
+  return (Array.isArray(criteria) ? criteria : [])
+    .filter(Boolean)
+    .slice(0, 6)
+    .map(name => `<span class="chip">${escapeHtml(name)}</span>`)
+    .join('')
+}
+
+function renderAwardCard(entry) {
+  const buck = entry.kind === 'ace-buck'
+  const groupSize = Array.isArray(entry.names) ? entry.names.length : 1
+  const written = [String(entry.otherReason || '').trim(), String(entry.message || '').trim()].filter(Boolean)
+  const slots = written.map(line => `<p class="msg">${escapeHtml(line)}</p>`)
+  while (slots.length < 2) slots.push('<span class="ruled"></span>')
+  const from = !buck && String(entry.sourceName || '').trim()
+    ? `<p class="fromline">From ${escapeHtml(entry.sourceName)}</p>`
+    : ''
+  const title = buck
+    ? ['Star Coach Buck', 'Reconocimiento de liderazgo']
+    : ['Warren Star Shout-Out', 'Un reconocimiento especial']
+
+  return `<article class="card ${buck ? 'card-buck' : 'card-shout'}">
+  <div class="frame">
+    <header class="head">
+      <div>
+        <p class="award-kicker">Warren Student Nutrition</p>
+        <h2 class="award-title">${title[0]}</h2>
+        <p class="award-sub">${title[1]}</p>
+      </div>
+      <span class="brand"></span>
+    </header>
+    <div class="namezone">
+      <span class="nameline${groupSize > 1 ? ` group group-${Math.min(groupSize, 6)}` : ''}">${escapeHtml(entry.name || '')}</span>
+      ${from}
+    </div>
+    <p class="why">${CARD_LABELS.why[0]}<span class="why-es">${CARD_LABELS.why[1]}</span></p>
+    <p class="chips">${awardChips(entry.criteria)}</p>
+    <div class="message">${slots.join('')}</div>
+    <div class="footrow">
+      <div class="field"><span class="lbl">${CARD_LABELS.date[0]}<span class="lbl-es">${CARD_LABELS.date[1]}</span></span><span class="line">${formatCardDate(entry.date)}</span></div>
+      <div class="field"><span class="lbl">${CARD_LABELS.by[0]}<span class="lbl-es">${CARD_LABELS.by[1]}</span></span><span class="line">${escapeHtml(entry.recognizedBy || '')}</span></div>
+    </div>
+  </div>
+</article>`
+}
+
 function renderCard(entry) {
+  if (entry?.kind === 'ace-buck' || entry?.kind === 'star-shout-out') return renderAwardCard(entry)
   const filled = Boolean(entry)
   const chosen = new Set(entry?.criteria || [])
   const reasons = ALL_STAR_REASON_OPTIONS
@@ -215,6 +262,31 @@ const STYLES = `
   .line { flex: 1; border-bottom: 1px solid var(--ink); min-height: 13px; font-size: 9.5px;
           font-weight: 600; padding: 0 2px 1px; min-width: 0;
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Star Coach Buck and Warren Star Shout-Out use the same 4in x 3.5in
+     frame. The accent and the display title are what tell them apart from
+     the script Star of the Day card. */
+  .card-buck .frame { border: 2px solid #1a4f9c; background: linear-gradient(180deg, #e8f1ff 0%, #fff 46%); }
+  .card-shout .frame { border: 2px solid #0f766e; background: linear-gradient(180deg, #e5f6f2 0%, #fff 46%); }
+  .award-sub { margin: 3px 0 0; font-size: 9px; font-style: italic; color: #6b7280; }
+  .award-kicker { margin: 0; font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
+                  font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--gold); }
+  .award-title { margin: 2px 0 0; font-family: CardDisplay, "Arial Narrow", Impact, sans-serif;
+                 font-size: 22px; line-height: .95; letter-spacing: .03em; text-transform: uppercase; }
+  .card-buck .award-title { color: #123a78; }
+  .card-shout .award-title { color: #0f766e; font-size: 20px; }
+  .card-buck .nameline { border-bottom-color: #1a4f9c; }
+  .card-shout .nameline { border-bottom-color: #0f766e; }
+  .card-buck .namezone, .card-shout .namezone { margin-top: 0.28in; }
+  .fromline { margin: 4px 0 0; text-align: center; font-size: 11px; font-weight: 700; color: #0f766e; }
+  .chips { margin: 6px 0 0; position: relative; z-index: 2; }
+  .chip { display: inline-block; margin: 0 4px 3px 0; padding: 1px 5px;
+          border: 1px solid currentColor; border-radius: 3px;
+          font-family: CardLabel, "Arial Narrow", Impact, sans-serif;
+          font-size: 9px; letter-spacing: .04em; text-transform: uppercase; }
+  .card-buck .chip { color: #123a78; }
+  .card-shout .chip { color: #0f766e; text-transform: none; letter-spacing: 0; font-family: "Segoe UI", system-ui, sans-serif; }
+  .card-buck .why, .card-shout .why { margin-top: 6px; }
 
   @media print {
     body { background: #fff; }

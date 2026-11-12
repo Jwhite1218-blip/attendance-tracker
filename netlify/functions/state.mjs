@@ -450,8 +450,10 @@ function validStarCardPrintMark(printKey, mark) {
   return true
 }
 
+const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'ace-buck', 'star-shout-out'])
+
 function kitchenMayMarkStarCard(record, session, allowedEmployeeIds) {
-  if (!record || record.type !== 'star-of-day') return false
+  if (!record || !PRINTABLE_CARD_TYPES.has(record.type)) return false
   if (session?.role !== 'school') return true
   if (allowedEmployeeIds?.has(String(record.employeeId))) return true
   return schoolLocationsOf(session).map(String).includes(String(record.locationId || ''))
@@ -480,6 +482,7 @@ export function starCardPrintMutationForSession(mutation, session, recognitionMa
       records.push(record)
     }
     if (!accepted) continue
+    if (new Set(records.map(record => record.type)).size !== 1) continue
     const groupIds = [...new Set(records.map(record => String(record.groupId || '').trim()).filter(Boolean))]
     if (groupIds.length > 1) continue
     const groupId = groupIds[0] || ''

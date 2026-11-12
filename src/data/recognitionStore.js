@@ -18,11 +18,11 @@ export const RECOGNITION_TYPES = [
   },
   {
     id: 'shooting-star',
-    label: 'Shooting Star Nomination',
-    shortLabel: 'Shooting Star nomination',
+    label: 'Shooting Star',
+    shortLabel: 'Shooting Star',
     description: 'Nominate someone for quarterly review. A nomination does not add an earned star or drawing entry.',
     earnsStar: false,
-    actionLabel: 'Submit Shooting Star nomination',
+    actionLabel: 'Submit a Shooting Star',
   },
   {
     id: 'star-shout-out',
@@ -59,11 +59,11 @@ export const RECOGNITION_TYPES = [
     // roster in recognitionMutationForSession. Peer awarding would have meant
     // widening that, and it does not.
     id: 'ace-buck',
-    label: 'ACE Coach Buck',
-    shortLabel: 'Coach Buck',
+    label: 'Star Coach Buck',
+    shortLabel: 'Star Coach Buck',
     description: 'District recognition for a kitchen manager. Counts toward ACE Coach milestones.',
     earnsStar: true,
-    actionLabel: 'Award an ACE Coach Buck',
+    actionLabel: 'Award a Star Coach Buck',
     districtOnly: true,
     managerGradeOnly: true,
   },
