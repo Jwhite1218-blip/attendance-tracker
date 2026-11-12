@@ -35,12 +35,12 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `7a66e34052eea8b3a67e778dfdfc98319c099ae2`
-- Test suite: 507 passing (`npm test`)
-- Page render check: 34 clean (`npm run verify:pages`)
+- Verified production commit: `da2d6be789b3e4606e8032b0cf075fe3533e4d65`
+- Test suite: 514 passing (`npm test`)
+- Page render check: 35 clean (`npm run verify:pages`)
 - Confirmed live: `/version.json` returns that commit, 2026-11-11, about 20
   seconds after the push; `npm run test:recognition:remote` passes for all
-  15 school pages
+  15 school pages and `npm run test:production:public` passes
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
@@ -571,8 +571,11 @@ first real award has happened.
   manager-grade staff. Managers would lose their star levels and past
   building totals would drop; past drawings are unaffected. A dry-run list
   of every record that would change goes to Liz before anything is touched.
+  Jon is leaning towards it (2026-11-11) but is talking to his team first;
+  the Shout-Out was made as visible as Star of the Day the same evening so
+  the destination is ready if they agree.
 
-## Built 2026-11-11 (later) — counts and rankings, in the report (not yet deployed)
+## Shipped 2026-11-11 (later) — counts and rankings, in the report
 
 Jon, the same day: the numbers are still wanted, just not on the screens
 people work from. The All-Star recognition report (Reports → All-Star
@@ -599,6 +602,95 @@ receives these records, and the flat list names who gave each one.
 
 514 tests, 35 page renders clean; driven in a browser through the harness
 as a district administrator and as a limited one.
+
+## Built 2026-11-11 (evening) — the Shout-Out beside Star of the Day (ships with PR #23)
+
+Jon: "make the 'warren star shout out' just as visible as the star of the
+day submission." It was one choice inside the folded Bonus box. Folded into
+pull request #23 rather than shipped on its own; see the next section.
+
+- **Its own box**, the same size as Star of the Day and side by side with
+  it on a wide screen, first thing under the command centre. Teal with ❝,
+  the Shout-Out's colour and mark in the feed, so the two never read as
+  the same award. Same recipients as before: the building's own team plus
+  every other building's managers.
+- **On a phone** the two stack, Star of the Day first; two buttons above
+  them ("★ Star of the Day", "❝ Shout-Out") jump to each, because the Star
+  form is long enough to bury the Shout-Out below it.
+- **Bonus recognition** is now Shooting Stars and, for the district,
+  Employee of the Month.
+- The message box is "Star card message" on Star of the Day, "Card message"
+  on the Shout-Out — both print, the Shout-Out as PR #23's teal certificate
+  — and "Message" everywhere else.
+
+No data changes: managers can still receive Stars of the Day. The render
+check expects the Shout-Out box for both a district and a building login.
+Driven in a browser through the harness: a cross-building Shout-Out from a
+building login was recorded with the right type, recipient, reason and
+source.
+
+## Combined 2026-11-11 (night) — PR #23, manager recognition notices (not yet deployed)
+
+Built with Liz through a separate agent and handed over to go live
+(`attendance-tracker-pr23-go-live-handoff.md`, Jon's Downloads). Branch
+`cursor/manager-recognition-notices-00db`, based on `e3594d7` — before
+everything above that is dated 2026-11-11. `main` was merged into it rather
+than the branch rebased, so its review history stays as Liz saw it.
+
+What it does, as Liz locked it:
+- **Manager dashboard:** a tab bar (Dashboard, Attendance, All-Stars,
+  Employee Cards) in place of the big buttons; the gold school header with
+  no counts; School Overview with names rather than counts (birthdays this
+  month, upcoming RTOs, who is marked today) and school-year tiles (Stars of
+  the Day, Star Coach Bucks, Shooting Stars, Warren Star Shout-Outs). The
+  district dashboard still counts the month's stars; only the manager
+  overview uses the school year.
+- **You were recognized** — for a login linked to one employee only: each
+  Star of the Day, Star Coach Buck, Shooting Star or Shout-Out with who
+  recorded it, the day they shined and the day it was recorded when those
+  differ, until "I've seen this". Seen is per person per device
+  (`recognition-seen-by-login-v1`, localStorage), never shared.
+- **Cards to print** — Star of the Day and Shout-Out only; a group award is
+  one card; stays until printed or marked printed. Printed is shared kitchen
+  state, the new key **`star-card-prints-v1`**, narrowed to the kitchen for a
+  building session. Records created before `STAR_CARD_TRACKING_SINCE`
+  (2026-11-11T00:00Z) count as already on the board.
+- **Labels only, stored keys unchanged:** ACE / Coach Bucks → Star Coach
+  Bucks; Shooting Star Nominations → Shooting Stars. Program names stay in
+  English in the Spanish screens.
+- **Shout-Out card:** the teal certificate, "From [name]", reason, note,
+  bilingual date and recognized-by. Star of the Day card unchanged.
+- **Removed at Liz's request — do not bring back:** a printable Star Coach
+  Buck card, and the megaphone with a large gold star on the Shout-Out card.
+  Email notifications were never in the plan.
+
+Combining it with today's work: two wording conflicts on the All-Stars page
+(the Bonus subtitle and the Coach progress empty state), resolved to
+today's structure in Liz's wording. Her labels were carried onto what today
+added — the ranking report's columns, the report description, the public
+school pages' "Shooting Star" chip — and the Shout-Out's message box became
+"Card message" now that it prints. The building home-screen button wording
+from the evening was dropped: PR #23 replaces those buttons with the tab
+bar. 526 tests, 35 page renders clean; the manager dashboard and the
+All-Stars page driven in a browser through the harness.
+
+**Go-live order — the database first.** `star-card-prints-v1` has to be on
+the production allowlist (`supabase/migrations/20261111120000_star_card_prints_key.sql`,
+run in the Supabase SQL editor for `gbjikeytzdlzjulrnjvo`) before PR #23 is
+merged. Otherwise a printed mark saves in the browser, the server refuses it
+with "Unsupported state key.", and the card comes back on the next sign-in.
+Confirmed 2026-11-11 that Netlify's production `SUPABASE_URL` is that
+project. The Supabase connector here is signed in to a different
+organization and was refused ("You do not have permission"), so the SQL is
+run in the dashboard. Verify there:
+
+```sql
+select pg_get_functiondef('public.mutate_legacy_state_entry(bigint, text, jsonb, text)'::regprocedure)
+  like '%star-card-prints-v1%' as applied;
+```
+
+Then merge, check `/version.json`, and print or mark a card on a real
+manager login, refresh, and check another login for the same kitchen.
 
 ## Decided by Liz, 2026-10-19
 

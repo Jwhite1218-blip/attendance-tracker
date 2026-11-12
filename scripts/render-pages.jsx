@@ -153,9 +153,12 @@ const PAGES = [
   // Jon, 2026-11-11: no leaderboards. The district sees every building's
   // team, a building sees its own, and Coach Bucks show progress rather
   // than standings. If a ranking reappears, one of these comes back.
+  //
+  // Also 2026-11-11: the Shout-Out has its own box beside Star of the Day
+  // for both, rather than a choice inside the folded Bonus box.
   ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER], {
-    admin: ['The feed', '>Teams<', 'Coach progress'],
-    manager: ['The feed', 'Your team'],
+    admin: ['The feed', '>Teams<', 'Coach progress', 'Pass on a thank-you from a student'],
+    manager: ['The feed', 'Your team', 'Pass on a thank-you from a student'],
   }, {
     admin: ['Leaderboard', 'Who is giving stars', 'ACE Coach standings', 'Back to the top 10'],
     manager: ['Leaderboard', 'Who is giving stars', 'Coach progress'],

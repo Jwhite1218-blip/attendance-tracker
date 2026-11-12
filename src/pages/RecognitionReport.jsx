@@ -195,7 +195,7 @@ export default function RecognitionReport() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <h2 id="recognition-report-types" className="text-sm font-semibold text-gray-800">Award types</h2>
-              <p className="text-xs text-gray-400 mt-1">Stars, nominations, shout-outs, Coach Bucks.</p>
+              <p className="text-xs text-gray-400 mt-1">Stars of the Day, Shooting Stars, Shout-Outs, Star Coach Bucks.</p>
             </div>
             <span className="text-xs font-semibold text-brand-700">{selectedTypes.length} selected</span>
           </div>

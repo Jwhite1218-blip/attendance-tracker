@@ -142,11 +142,11 @@ export const RECOGNITION_COUNT_VIEWS = [
 // column of totals.
 const COUNT_LABELS = {
   'star-of-day': 'Stars of the Day',
-  'shooting-star': 'Shooting Star nominations',
+  'shooting-star': 'Shooting Stars',
   'star-shout-out': 'Shout-Outs',
   'warren-employee-month': 'Employee of the Month',
   'all-star-of-month': 'Building All-Star',
-  'ace-buck': 'Coach Bucks',
+  'ace-buck': 'Star Coach Bucks',
 }
 
 function countColumns(types) {
