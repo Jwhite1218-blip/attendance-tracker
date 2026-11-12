@@ -450,7 +450,7 @@ function validStarCardPrintMark(printKey, mark) {
   return true
 }
 
-const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'ace-buck', 'star-shout-out'])
+const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'star-shout-out'])
 
 function kitchenMayMarkStarCard(record, session, allowedEmployeeIds) {
   if (!record || !PRINTABLE_CARD_TYPES.has(record.type)) return false

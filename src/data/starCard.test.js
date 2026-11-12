@@ -67,7 +67,7 @@ test('a malformed date is passed through rather than guessed at', () => {
   assert.equal(formatCardDate('not-a-date'), 'not-a-date')
 })
 
-test('a Star Coach Buck card and a Shout-Out card are distinct and the same size family', () => {
+test('a shout-out card carries the megaphone and a coach buck does not print', () => {
   const html = buildStarCardHtml([
     {
       kind: 'ace-buck',
@@ -86,14 +86,15 @@ test('a Star Coach Buck card and a Shout-Out card are distinct and the same size
       recognizedBy: 'Elizabeth Schmitt',
       sourceName: 'Ms. Alvarez',
     },
-  ], { pad: false })
-  assert.equal(cardCount(html), 2)
-  assert.match(html, /card-buck/)
+  ], { pad: false, assets: { megaphone: '/shout-megaphone.svg' } })
+  assert.equal(cardCount(html), 1)
+  assert.equal(html.includes('card-buck'), false)
+  assert.equal(html.includes('Star Coach Buck'), false)
   assert.match(html, /card-shout/)
-  assert.match(html, /Star Coach Buck/)
+  assert.match(html, /megastar/)
+  assert.match(html, /shout-megaphone\.svg/)
   assert.match(html, /Warren Star Shout-Out/)
   assert.match(html, /From Ms\. Alvarez/)
-  assert.match(html, /People &amp; Culture/)
   assert.equal(html.includes('emp-'), false)
 })
 

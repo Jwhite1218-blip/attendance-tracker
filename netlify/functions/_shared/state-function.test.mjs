@@ -1530,7 +1530,7 @@ test('a kitchen marks its own star card printed and cannot clear another kitchen
   assert.ok((await store.get('star-card-prints-v1'))['own-star'])
 })
 
-test('printed cards include a coach buck and a shout-out, and not a nomination', () => {
+test('printed cards include a shout-out, and not a coach buck or a nomination', () => {
   const printedAt = '2026-11-11T18:00:00.000Z'
   const mark = ids => ({ printedAt, recognitionIds: ids })
   const next = starCardPrintMutationForSession({
@@ -1546,7 +1546,7 @@ test('printed cards include a coach buck and a shout-out, and not a nomination',
     shout: { id: 'shout', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'star-shout-out' },
     nom: { id: 'nom', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'shooting-star' },
   }, new Set())
-  assert.ok(next.set.buck)
+  assert.equal(next.set.buck, undefined)
   assert.ok(next.set.shout)
   assert.equal(next.set.nom, undefined)
 })

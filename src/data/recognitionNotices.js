@@ -7,9 +7,10 @@
 //     one is that person's own memory (see recognitionNoticeStore.js) and does
 //     not clear it for anyone else.
 //
-//   * "Cards to print" is a kitchen task. Star of the Day, Star Coach Buck,
-//     and Warren Star Shout-Out each have a card for the board. A Shooting
-//     Star is a nomination and does not. A group award is one card. The card stays until the
+//   * "Cards to print" is a kitchen task. Star of the Day and Warren Star
+//     Shout-Out each have a card for the board. A Star Coach Buck is
+//     celebrated, not printed, for now. A Shooting Star is a nomination and
+//     does not print either. A group award is one card. The card stays until the
 //     kitchen prints it or marks it printed, and that mark is shared, so the
 //     kitchen computer and a manager's phone agree.
 //
@@ -37,7 +38,7 @@ export const WARREN_TIME_ZONE = 'America/Indiana/Indianapolis'
 export const STAR_CARD_TRACKING_SINCE = '2026-11-11T00:00:00.000Z'
 
 export const STAR_OF_THE_DAY = 'star-of-day'
-export const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'ace-buck', 'star-shout-out'])
+export const PRINTABLE_CARD_TYPES = new Set(['star-of-day', 'star-shout-out'])
 
 export function calendarDateInZone(value, timeZone = WARREN_TIME_ZONE) {
   const date = value instanceof Date ? value : new Date(value)

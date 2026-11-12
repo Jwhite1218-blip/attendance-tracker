@@ -8,6 +8,7 @@
 import { buildStarCardHtml } from '../data/starCard.js'
 import aramarkMark from '../assets/aramark-mark.png'
 import starOutline from '../assets/star-outline.png'
+import shoutMegaphone from '../assets/shout-megaphone.svg'
 import cardScriptFont from '../assets/fonts/sacramento.woff2'
 import cardLabelFont from '../assets/fonts/bebas-neue.woff2'
 import cardDisplayFont from '../assets/fonts/antonio-bold.woff2'
@@ -30,6 +31,7 @@ export function cardAssets() {
       display: new URL(cardDisplayFont, origin).href,
       logo: new URL(aramarkMark, origin).href,
       star: new URL(starOutline, origin).href,
+      megaphone: new URL(shoutMegaphone, origin).href,
     }
   }
   return cached
