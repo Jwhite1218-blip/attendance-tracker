@@ -15,10 +15,9 @@ import {
   criterionLabel,
   RECOGNITION_TYPE_MAP,
   RECOGNITION_TYPES,
-  STAR_LEVELS,
   recognitionAccent,
   gradeAccent,
-  topLeaderboardEntries,
+  teamRecognitionCoverage,
   toStarCardEntries,
   buildingRecognitionSummary,
   buildingMonthlyRecipients,
@@ -32,10 +31,7 @@ import {
   existingMonthlyWinner,
   getAllRecognitions,
   getAceBuckCount,
-  getDailyStarCount,
   getMonthlyDrawingEntries,
-  getNextStarLevel,
-  getStarLevel,
   earnsDailyStar,
   EMPLOYEE_OF_MONTH_TYPE,
   RECOGNITION_STORAGE_KEY,
@@ -50,8 +46,6 @@ import {
   setAsideEntries,
   requiresStarMessage,
   schoolYearStartFor,
-  submitterLocationLabel,
-  getSubmissionCountsByLocation,
   DISTRICT_SUBMITTER_ID,
   OTHER_REASON,
 } from '../data/recognitionStore.js'
@@ -61,7 +55,7 @@ import {
   recognitionRecipients,
   recognitionTypeAllowedForRole,
 } from '../data/recognitionRules.js'
-import { coachMilestones } from '../data/programSettings.js'
+import { coachMilestones, starLevels } from '../data/programSettings.js'
 import { flushPendingWrites, loadSharedState } from '../data/sharedStore.js'
 
 function localDateKey(date = new Date()) {
@@ -95,7 +89,7 @@ function recognitionName(nameMap, employeeId, fallback = '') {
 
 // The picker is a lookup list, so it reads "Last, First" like the Employee
 // Records ledger — that is what makes its alphabetical order visible on screen.
-// Star cards, the leaderboard and confirmations stay on employeeName's
+// Star cards, the team list and confirmations stay on employeeName's
 // "First Last" so the recognition copy still reads like a person's name.
 function employeeListName(employee) {
   const lastName = String(employee?.last_name || '').trim()
@@ -223,8 +217,8 @@ export default function RecognitionProgram() {
   // their own pool without a single live record being rewritten.
   const managerIds = useMemo(() => managerEmployeeIds(employees), [employees])
   // Who may receive an ACE Coach Buck: the fifteen running kitchens. The
-  // district office is manager-grade and stays on the manager leaderboard,
-  // but does not collect the currency it hands out.
+  // district office is manager-grade, but does not collect the currency it
+  // hands out.
   const aceEligibleIds = useMemo(() => kitchenManagerIds(employees), [employees])
   const availableLocations = useMemo(() => {
     const ids = new Set(employees.map(employee => employee.location).filter(Boolean))
@@ -264,18 +258,15 @@ export default function RecognitionProgram() {
   const thisMonth = localDateKey().slice(0, 7)
   const thisMonthStars = earnedStars.filter(record => record.date.startsWith(`${thisMonth}-`))
   // Everyone caught shining this month, pinned to the banner the way their
-  // paper cards go up on the board. Someone caught twice keeps one pin and
-  // carries the count, so a single strong week cannot crowd the board out.
+  // paper cards go up on the board. One pin each, in name order: since
+  // 2026-11-11 the board shows who was noticed, not who was noticed most.
   const pinnedStars = useMemo(() => {
     const byEmployee = new Map()
     for (const record of thisMonthStars) {
       const id = String(record.employeeId)
-      const existing = byEmployee.get(id)
-      if (existing) existing.count += 1
-      else byEmployee.set(id, { id, name: recognitionName(nameMap, id), count: 1 })
+      if (!byEmployee.has(id)) byEmployee.set(id, { id, name: recognitionName(nameMap, id) })
     }
-    return [...byEmployee.values()]
-      .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+    return [...byEmployee.values()].sort((left, right) => left.name.localeCompare(right.name))
   }, [thisMonthStars, nameMap])
   const recognizedPeople = new Set(earnedStars.map(record => record.employeeId)).size
   const compilation = {
@@ -286,56 +277,38 @@ export default function RecognitionProgram() {
     buildingAllStars: schoolYearRecords.filter(record => record.type === 'all-star-of-month').length,
   }
 
-  // Employees are ranked on Daily Stars; managers on Daily Stars too. The two
-  // are separate currencies against separate milestones, so they are counted
-  // separately rather than split out of one list — a manager who collected
-  // Daily Stars before the Leadership Track existed keeps them as Daily
-  // Stars and they do not become Bucks.
-  const byCount = (left, right) =>
-    right.count - left.count || employeeName(left.employee).localeCompare(employeeName(right.employee))
-
-  const staffLeaderboard = scopedEmployees
-    .filter(employee => !managerIds.has(employeeKey(employee)))
-    .map(employee => {
-      const count = getDailyStarCount(records, employeeKey(employee), schoolYearStart)
-      return { employee, count, level: getStarLevel(count), nextLevel: getNextStarLevel(count) }
-    })
-    .filter(entry => entry.count > 0)
-    .sort(byCount)
-
-  // Managers keep their Daily Stars on the blue board beside the staff one,
-  // counted and named exactly as the staff board counts and names them.
-  // Those stars were earned as Daily Stars and stay Daily Stars — the ACE
-  // Bucks board below is a different currency, not a replacement.
-  const managerLeaderboard = scopedEmployees
-    .filter(employee => managerIds.has(employeeKey(employee)))
-    .map(employee => {
-      const count = getDailyStarCount(records, employeeKey(employee), schoolYearStart)
-      return { employee, count, level: getStarLevel(count), nextLevel: getNextStarLevel(count) }
-    })
-    .filter(entry => entry.count > 0)
-    .sort(byCount)
+  // Jon, 2026-11-11: no leaderboards. The staff and manager boards ranked
+  // people by star count, and recognition had started to read as a contest.
+  // In their place, everybody in the current view in name order: who has
+  // been recognized this month, who has not yet, and how far each person is
+  // from their own next level.
+  const byName = (left, right) => employeeName(left.employee).localeCompare(employeeName(right.employee))
+  const teamCoverage = teamRecognitionCoverage(records, scopedEmployees, {
+    monthKey: thisMonth,
+    startYear: schoolYearStart,
+  }).sort(byName)
 
   // The Leadership Track, counted in ACE Coach Bucks against the coach
   // milestones. District-only for now, so it is built but not handed to the
-  // page unless the session is an administrator.
+  // page unless the session is an administrator. Every eligible manager is
+  // listed, in name order, including those with none yet — the same rule as
+  // the team list, so this is progress, not standings.
   const coachLevels = coachMilestones()
-  const aceLeaderboard = employees
+  const coachProgress = employees
     .filter(employee => aceEligibleIds.has(employeeKey(employee)))
     .map(employee => {
       const count = getAceBuckCount(records, employeeKey(employee), schoolYearStart)
+      const nextLevel = coachLevels.find(level => count < level.minimum) || null
       return {
         employee,
-        count,
         level: [...coachLevels].reverse().find(level => count >= level.minimum) || null,
-        nextLevel: coachLevels.find(level => count < level.minimum) || null,
+        nextLevel,
+        toNextLevel: nextLevel ? nextLevel.minimum - count : 0,
       }
     })
-    .filter(entry => entry.count > 0)
-    .sort(byCount)
+    .sort(byName)
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
-  const starSubmissionsByLocation = getSubmissionCountsByLocation(schoolYearRecords)
   // Buildings in the current view, named even when they have recognized
   // nobody — an empty row is the signal worth seeing.
   const buildingCounts = buildingRecognitionSummary(
@@ -925,11 +898,14 @@ export default function RecognitionProgram() {
                   onPrintSheet={handlePrintSheet}
                 />
               }
-              leaderboard={
-                <LeaderboardPanel
-                  staff={staffLeaderboard}
-                  managers={managerLeaderboard}
-                  schoolYearStart={schoolYearStart}
+              teamLabel={scopeLocation === 'all' ? 'Teams' : 'Your team'}
+              team={
+                <TeamCoverage
+                  key={scopeLocation}
+                  entries={teamCoverage}
+                  locations={scopeLocation === 'all' ? availableLocations : null}
+                  managerIds={managerIds}
+                  monthLabel={formatMonth(thisMonth)}
                 />
               }
             />
@@ -1036,7 +1012,7 @@ export default function RecognitionProgram() {
 
         {role === 'admin' && (
           <AceBucksSection
-            leaderboard={aceLeaderboard}
+            coaches={coachProgress}
             schoolYearStart={schoolYearStart}
             coachLevels={coachLevels}
             form={aceForm}
@@ -1060,7 +1036,6 @@ export default function RecognitionProgram() {
           schoolYearStart={schoolYearStart}
           records={schoolYearRecords}
           employeeMap={nameMap}
-          submissions={starSubmissionsByLocation}
         />
         <div className="mt-6">
           <AnnualCelebration />
@@ -1509,25 +1484,20 @@ function RecognitionEntryForm({
   )
 }
 
-// Sits directly under Star of the Day: the board only ever counts earned stars,
-// so the number a manager sees here always matches the award they just gave.
-// Both boards in one panel, sized for the side column.
-//
-// Two full-width leaderboards stacked in the main column left a tall band of
-// dead space beside the shorter side column. As a single tabbed panel in the
-// rail they fill that space instead, and the two pools sit next to each other
-// where they can be compared rather than scrolled between.
 // Liz, 2026-10-19: one window for the two things you read rather than do.
-// The feed and the leaderboard answer different questions about the same
-// board, and neither needs to be on screen while you are looking at the
-// other.
+// The feed and the team answer different questions about the same people,
+// and neither needs to be on screen while you are looking at the other.
+//
+// The second tab was the leaderboard until 2026-11-11, when Jon took the
+// boards out: ranking people by star count had made recognition a contest.
+// It is now the whole team in name order — see TeamCoverage.
 //
 // The tab lives in the page, not here, because the command centre links
 // straight to the feed and that link has to open the tab it points at.
-function BoardPanel({ tab, onTabChange, feed, leaderboard }) {
+function BoardPanel({ tab, onTabChange, feed, team, teamLabel }) {
   const tabs = [
     { id: 'feed', label: 'The feed' },
-    { id: 'leaderboard', label: 'Leaderboard' },
+    { id: 'team', label: teamLabel },
   ]
   const active = tabs.some(item => item.id === tab) ? tab : 'feed'
 
@@ -1550,204 +1520,179 @@ function BoardPanel({ tab, onTabChange, feed, leaderboard }) {
           </button>
         ))}
       </div>
-      <div className="p-5 sm:p-6">{active === 'feed' ? feed : leaderboard}</div>
+      <div className="p-5 sm:p-6">{active === 'feed' ? feed : team}</div>
       {/* Outside the padding on purpose: the levels band runs to the edge of
           the panel the way it ran to the edge of its own card. */}
-      {active === 'leaderboard' && <StarLevels />}
+      {active === 'team' && <StarLevels />}
     </section>
   )
 }
 
-function LeaderboardPanel({ staff, managers, schoolYearStart }) {
-  const [pool, setPool] = useState('staff')
-  // Condensed to a top ten at Liz's request, but never a dead end: a manager
-  // looking for their own people can open the rest.
-  const [showAll, setShowAll] = useState(false)
+// Who has been recognized this month and who has not yet, for whatever the
+// building view holds. Replaced the staff and manager leaderboards on
+// 2026-11-11.
+//
+// Nobody is ranked. The people not yet recognized this month come first,
+// because they are the ones a manager can do something about, and inside
+// each group the order is by name. No star totals: each person gets their
+// own distance to their next level, the one number that is about them
+// rather than about them against somebody else.
+//
+// Across every building the list would be the whole district, so it opens
+// as one line per building — how many of its team have been recognized —
+// and a building expands to its people. Buildings stay in name order;
+// sorting them by coverage would only make a league table of kitchens.
+function TeamCoverage({ entries, locations, managerIds, monthLabel }) {
+  const [openLocationId, setOpenLocationId] = useState(null)
+  const recognized = entries.filter(entry => entry.recognizedThisMonth).length
 
-  const boards = {
-    staff: {
-      label: 'Staff',
-      entries: staff,
-      empty: 'Record the first Star of the Day to begin this school year.',
-    },
-    managers: {
-      label: 'Managers',
-      entries: managers,
-      empty: 'No manager has been recognized yet this school year.',
-    },
+  if (!entries.length) {
+    return (
+      <p className="rounded-xl border border-dashed border-gray-200 px-4 py-8 text-center text-sm text-gray-400">
+        Nobody is on the roster for this view.
+      </p>
+    )
   }
-  const active = boards[pool]
-  const grade = gradeAccent(pool === 'managers')
-  const shown = showAll ? active.entries : topLeaderboardEntries(active.entries, 10)
-  const hidden = active.entries.length - shown.length
 
-  const selectPool = next => {
-    setPool(next)
-    setShowAll(false)
+  if (!locations) {
+    return (
+      <div>
+        <p className="text-xs text-gray-500">
+          {recognized} of {entries.length} recognized in {monthLabel} so far.
+        </p>
+        <TeamList entries={entries} managerIds={managerIds} />
+      </div>
+    )
   }
+
+  const byLocation = new Map()
+  for (const entry of entries) {
+    const locationId = String(entry.employee?.location || '')
+    if (!byLocation.has(locationId)) byLocation.set(locationId, [])
+    byLocation.get(locationId).push(entry)
+  }
+  const buildings = locations
+    .filter(location => byLocation.has(location.id))
+    .sort((left, right) => left.name.localeCompare(right.name))
 
   return (
     <div>
       <p className="text-xs text-gray-500">
-        Star of the Day only · July {schoolYearStart} – June {schoolYearStart + 1}
+        {recognized} of {entries.length} across these buildings recognized in {monthLabel} so far.
+        Open a building to see its team.
       </p>
-
-      {/* Worker Leads, Managers and the Director are recognized in their own
-          pool, so nobody is ranked against someone they supervise. */}
-      <div className="mt-3 flex rounded-lg border border-amber-200 bg-[#fffaf0] p-0.5" role="tablist">
-        {Object.entries(boards).map(([key, board]) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            aria-selected={pool === key}
-            onClick={() => selectPool(key)}
-            className={`flex-1 rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-              pool === key ? `${gradeAccent(key === 'managers').tab} text-white` : 'text-[#8a5a12] hover:bg-amber-100'
-            }`}
-          >
-            {board.label}
-            <span className={`ml-1.5 font-semibold ${pool === key ? 'text-white/70' : 'text-[#b08a4a]'}`}>
-              {board.entries.length}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {shown.length ? (
-        <ol className="mt-3 space-y-0.5">
-          {shown.map((entry, index) => {
-            const progressTarget = entry.nextLevel?.minimum || entry.count
-            const progress = progressTarget ? Math.min(100, (entry.count / progressTarget) * 100) : 100
-            return (
-              <li key={employeeKey(entry.employee)}>
-                <Link
-                  to={`/employee/${employeeKey(entry.employee)}`}
-                  className="group flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors hover:bg-amber-50"
-                >
-                  <span className={`flex h-7 w-7 flex-none items-center justify-center rounded-full text-xs font-black ${grade.rank}`}>
-                    {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-bold text-gray-900 group-hover:text-[#9a651b]">
-                      {employeeName(entry.employee)}
-                    </span>
-                    <span className="mt-1 block h-1 overflow-hidden rounded-full bg-gray-100">
-                      <span
-                        className={`block h-full rounded-full bg-gradient-to-r ${grade.bar}`}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </span>
-                    <span className="mt-1 block truncate text-[10px] text-gray-400">
-                      {entry.level ? `${entry.level.symbol} ${entry.level.name}` : 'Building toward Bronze Star'}
-                      {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to go` : ''}
-                    </span>
-                  </span>
-                  <span className="flex-none text-right">
-                    <span className={`block text-lg font-black leading-none ${grade.count}`}>{entry.count}</span>
-                    <span className="block text-[9px] font-bold uppercase tracking-wide text-gray-400">stars</span>
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
-        </ol>
-      ) : (
-        <div className="mt-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 px-4 py-6 text-center">
-          <p className="text-xl" aria-hidden="true">☆</p>
-          <p className="mt-1 text-xs text-gray-500">{active.empty}</p>
-        </div>
-      )}
-
-      {hidden > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(true)}
-          className="mt-3 w-full rounded-lg border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-50"
-        >
-          Show all {active.entries.length} · {hidden} more
-        </button>
-      )}
-      {showAll && active.entries.length > 10 && (
-        <button
-          type="button"
-          onClick={() => setShowAll(false)}
-          className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-        >
-          Back to the top 10
-        </button>
-      )}
-    </div>
-  )
-}
-// Where recognition is happening, asked two ways: by the building somebody
-// works in, and by the building that gave the star. They were two boxes
-// stacked down the page; they are one window with tabs.
-function StarActivity({ summary, months, schoolYearStart, records, employeeMap, submissions }) {
-  const [view, setView] = useState('received')
-  const tabs = [
-    { id: 'received', label: 'Stars by month' },
-    { id: 'given', label: 'Who is giving stars' },
-  ]
-  // A tab that would open on nothing is worse than no tab.
-  const available = tabs.filter(tab => tab.id === 'received' ? summary.length : submissions.length)
-  if (!available.length) return null
-  const active = available.some(tab => tab.id === view) ? view : available[0].id
-
-  return (
-    <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-3 sm:px-4">
-        {available.map(tab => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setView(tab.id)}
-            aria-current={active === tab.id ? 'true' : undefined}
-            className={`rounded-t-lg px-4 py-2.5 text-xs font-black uppercase tracking-wide transition-colors ${
-              active === tab.id
-                ? 'border border-b-white border-gray-200 bg-white text-[#9a651b]'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-      <div className="p-5 sm:p-6">
-        {active === 'received'
-          ? <BuildingStarCounts summary={summary} months={months} schoolYearStart={schoolYearStart} records={records} employeeMap={employeeMap} />
-          : <SubmissionsByBuilding counts={submissions} schoolYearStart={schoolYearStart} />}
-      </div>
-    </section>
-  )
-}
-
-function SubmissionsByBuilding({ counts, schoolYearStart }) {
-  if (!counts.length) return null
-  const total = counts.reduce((sum, entry) => sum + entry.count, 0)
-  return (
-    <div>
-      <h2 className="all-star-display text-xl uppercase text-gray-950">Stars submitted by building</h2>
-      <p className="mt-1 text-sm text-gray-500">
-        {total} Star{total === 1 ? '' : 's'} of the Day recorded in {schoolYearStart}-{schoolYearStart + 1}, grouped by the building signed in when it was given.
-      </p>
-      <div className="mt-4 space-y-2">
-        {counts.map(entry => {
-          const share = total ? Math.round((entry.count / total) * 100) : 0
+      <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
+        {buildings.map(location => {
+          const team = byLocation.get(location.id)
+          const done = team.filter(entry => entry.recognizedThisMonth).length
+          const open = openLocationId === location.id
           return (
-            <div key={entry.locationId} className="flex items-center gap-3">
-              <span className="w-44 flex-none truncate text-sm font-semibold text-gray-700">
-                {submitterLocationLabel({ recognizedByLocationId: entry.locationId }, LOCATION_MAP)}
-              </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#ad741e] to-[#f1cd57]" style={{ width: `${share}%` }} />
-              </div>
-              <span className="w-10 flex-none text-right text-sm font-black text-[#ad741e]">{entry.count}</span>
-            </div>
+            <li key={location.id}>
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => setOpenLocationId(open ? null : location.id)}
+                className="flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors hover:bg-amber-50/70"
+              >
+                <span className={`text-[10px] text-[#ad741e] transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true">▶</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800">{location.name}</span>
+                <span className="flex-none text-xs text-gray-500">{done} of {team.length} recognized</span>
+              </button>
+              {open && (
+                <div className="border-t border-gray-100 bg-[#fffdf7] px-3 pb-3">
+                  <TeamList entries={team} managerIds={managerIds} />
+                </div>
+              )}
+            </li>
           )
         })}
-      </div>
+      </ul>
     </div>
+  )
+}
+
+function TeamList({ entries, managerIds }) {
+  const waiting = entries.filter(entry => !entry.recognizedThisMonth)
+  const recognized = entries.filter(entry => entry.recognizedThisMonth)
+  return (
+    <div>
+      {waiting.length > 0 && <TeamGroup title="Not yet this month" entries={waiting} managerIds={managerIds} />}
+      {recognized.length > 0 && <TeamGroup title="Recognized this month" entries={recognized} managerIds={managerIds} />}
+    </div>
+  )
+}
+
+function TeamGroup({ title, entries, managerIds }) {
+  return (
+    <div className="mt-4">
+      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-gray-400">{title} · {entries.length}</p>
+      <ul className="mt-1 space-y-0.5">
+        {entries.map(entry => (
+          <li key={entry.employeeId}>
+            <Link
+              to={`/employee/${entry.employeeId}`}
+              className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-amber-50"
+            >
+              <span
+                className={`flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs ${
+                  entry.recognizedThisMonth
+                    ? 'bg-amber-100 text-[#9a651b]'
+                    : 'border border-dashed border-gray-300 text-gray-300'
+                }`}
+                aria-hidden="true"
+              >
+                {entry.recognizedThisMonth ? '★' : '☆'}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-1.5">
+                  <span className="truncate text-sm font-semibold text-gray-900 group-hover:text-[#9a651b]">
+                    {employeeName(entry.employee)}
+                  </span>
+                  {managerIds?.has(entry.employeeId) && (
+                    <span className={`flex-none rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${gradeAccent(true).chip}`}>
+                      {gradeAccent(true).label}
+                    </span>
+                  )}
+                </span>
+                <span className="block truncate text-[11px] text-gray-500">
+                  {[
+                    entry.recognizedThisMonth
+                      ? ''
+                      : entry.lastRecognized
+                        ? `Last recognized ${formatDate(entry.lastRecognized)}`
+                        : 'Not recognized yet this school year',
+                    levelProgress(entry),
+                  ].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+// "2 more to Bronze Star", or the level reached and the next one. A
+// person's own distance to their own next goal — never a total to set
+// beside somebody else's. Used for Coach Bucks too, which have the same
+// shape against the coach milestones.
+function levelProgress(entry) {
+  const reached = entry.level ? `${entry.level.symbol} ${entry.level.name}` : ''
+  const next = entry.nextLevel ? `${entry.toNextLevel} more to ${entry.nextLevel.name}` : ''
+  return [reached, next].filter(Boolean).join(' · ')
+}
+
+// Stars earned per building, month by month. Until 2026-11-11 this window
+// had a second tab, "Who is giving stars", ranking buildings by how many
+// they had handed out. It came out with the leaderboards: the number of
+// stars given is exactly the number people had started competing on.
+function StarActivity({ summary, months, schoolYearStart, records, employeeMap }) {
+  if (!summary.length) return null
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
+      <BuildingStarCounts summary={summary} months={months} schoolYearStart={schoolYearStart} records={records} employeeMap={employeeMap} />
+    </section>
   )
 }
 
@@ -1770,9 +1715,10 @@ function Metric({ label, value, detail }) {
   )
 }
 
-// The band at the foot of the leaderboard, not a card of its own: what the
-// levels are and who is near them is one question, and it was being asked in
-// two boxes.
+// The band at the foot of the team list: what the levels are, so "2 more to
+// Bronze Star" has something to point at. Read from Settings rather than the
+// shipped defaults, so a milestone Liz renames reads the same here as in the
+// line above it.
 function StarLevels() {
   return (
     <div className="bg-[#15120e] text-white">
@@ -1780,7 +1726,7 @@ function StarLevels() {
         <h3 className="all-star-display text-lg uppercase">Recognition Levels</h3>
       </div>
       <div className="divide-y divide-white/10">
-        {STAR_LEVELS.map(level => (
+        {starLevels().map(level => (
           <div key={level.id} className="flex items-center gap-3 px-5 py-2.5">
             <span className="text-lg" aria-hidden="true">{level.symbol}</span>
             <span className="flex-1 text-sm font-bold">{level.name}</span>
@@ -2303,19 +2249,19 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
   )
 }
 
-// The Leadership Track, in one place: what it is, how to award one, and who
-// is where. Pulled out of the side panel on 2026-10-19 — it had been a card
-// explaining a programme that could not be used, beside a bonus form that
-// could award one without saying so.
+// The Leadership Track, in one place: what it is, how to award one, and how
+// far each manager is from their next milestone. Pulled out of the side
+// panel on 2026-10-19 — it had been a card explaining a programme that could
+// not be used, beside a bonus form that could award one without saying so.
 //
-// Green, because the two boards above it are gold and blue and a third
-// currency reading as either would be worse than no colour at all.
+// Green, so a third currency reads as neither the gold of the stars nor the
+// blue of the managers.
 //
 // District-only while the programme settles. The server refuses an ACE Buck
 // from a school session regardless, so this is about not showing a manager a
-// board they cannot act on.
+// section they cannot act on.
 function AceBucksSection({
-  leaderboard,
+  coaches,
   schoolYearStart,
   coachLevels,
   form,
@@ -2335,9 +2281,6 @@ function AceBucksSection({
   onSubmit,
   onRetry,
 }) {
-  const [showAll, setShowAll] = useState(false)
-  const visible = showAll ? leaderboard : leaderboard.slice(0, 10)
-
   return (
     <section className="mt-6 overflow-hidden rounded-2xl border border-emerald-300 bg-white shadow-sm">
       <div className="border-b border-emerald-200 bg-gradient-to-r from-[#0f3d2e] to-[#15583f] px-5 py-5 text-white sm:px-6">
@@ -2386,54 +2329,43 @@ function AceBucksSection({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">
-              ACE Coach standings
+              Coach progress
             </h3>
             <span className="text-[11px] font-semibold text-gray-500">{schoolYearStart}–{schoolYearStart + 1}</span>
           </div>
+          {/* Standings until 2026-11-11: ranked by Bucks, numbered, top ten.
+              Now every eligible manager in name order with their own way to
+              go, the same rule as the team list above. */}
+          <p className="mt-1 text-[11px] text-gray-500">Every kitchen manager, in name order. Nobody is ranked.</p>
 
-          {leaderboard.length === 0 ? (
+          {coaches.length === 0 ? (
             <p className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-6 text-center text-sm text-emerald-900">
-              No Star Coach Bucks awarded yet. The first one starts this board.
+              No kitchen managers are on the roster.
             </p>
           ) : (
-            <>
-              <ol className="mt-3 divide-y divide-emerald-100 rounded-xl border border-emerald-200">
-                {visible.map((entry, index) => (
-                  <li key={employeeKey(entry.employee)}>
-                    {/* The star leaderboards opened a card from a row; this
-                        one did not. Liz, 2026-10-26. */}
-                    <Link
-                      to={`/employee/${employeeKey(entry.employee)}`}
-                      className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-emerald-50"
-                    >
-                      <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-[#0f3d2e] text-xs font-black text-emerald-200">
-                        {index + 1}
+            <ul className="mt-3 divide-y divide-emerald-100 rounded-xl border border-emerald-200">
+              {coaches.map(entry => (
+                <li key={employeeKey(entry.employee)}>
+                  {/* Each row opens the manager's card. Liz, 2026-10-26. */}
+                  <Link
+                    to={`/employee/${employeeKey(entry.employee)}`}
+                    className="group flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-emerald-50"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-semibold text-gray-900 group-hover:text-[#15583f]">
+                        {employeeName(entry.employee)}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-gray-900 group-hover:text-[#15583f]">
-                          {employeeName(entry.employee)}
-                        </span>
-                        <span className="block text-[11px] text-gray-500">
-                          {LOCATION_MAP[entry.employee.location]?.name || entry.employee.location}
-                          {entry.level ? ` · ${entry.level.symbol} ${entry.level.name}` : ''}
-                          {entry.nextLevel ? ` · ${entry.nextLevel.minimum - entry.count} to ${entry.nextLevel.name}` : ''}
-                        </span>
+                      <span className="block text-[11px] text-gray-500">
+                        {[
+                          LOCATION_MAP[entry.employee.location]?.name || entry.employee.location,
+                          levelProgress(entry),
+                        ].filter(Boolean).join(' · ')}
                       </span>
-                      <span className="flex-none text-base font-black text-[#15583f]">{entry.count}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-              {leaderboard.length > 10 && (
-                <button
-                  type="button"
-                  onClick={() => setShowAll(value => !value)}
-                  className="mt-2 text-xs font-semibold text-[#15583f] hover:underline"
-                >
-                  {showAll ? 'Show top ten' : `Show all ${leaderboard.length}`}
-                </button>
-              )}
-            </>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
           )}
 
           <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3">
@@ -2592,15 +2524,28 @@ function AnnualCelebration() {
 
 // Stars earned per building, month by month, with the school-year total.
 // Counts Star of the Day only, matching every other figure on this page.
-function BuildingStarCounts({ summary, months, schoolYearStart, records, employeeMap }) {
+//
+// Buildings in name order and people in name order, with no "×3" beside
+// anybody. Since 2026-11-11 nothing on this page sorts by how many: the
+// busiest building first was a league table of kitchens, and a count beside
+// each name was the leaderboard again, one month at a time.
+function BuildingStarCounts({ summary: unsorted, months, schoolYearStart, records, employeeMap }) {
   // Clicking a building answers the question the counts prompt: not how
   // many, but who.
   const [openLocationId, setOpenLocationId] = useState(null)
   const breakdown = useMemo(
-    () => (openLocationId ? buildingMonthlyRecipients(records, schoolYearStart, openLocationId) : []),
-    [openLocationId, records, schoolYearStart]
+    () => (openLocationId ? buildingMonthlyRecipients(records, schoolYearStart, openLocationId) : [])
+      .map(month => ({
+        ...month,
+        recipients: [...month.recipients].sort((left, right) => (
+          recognitionName(employeeMap, left.employeeId).localeCompare(recognitionName(employeeMap, right.employeeId))
+        )),
+      })),
+    [openLocationId, records, schoolYearStart, employeeMap]
   )
-  if (!summary.length) return null
+  if (!unsorted.length) return null
+  const buildingName = locationId => LOCATION_MAP[locationId]?.name || locationId
+  const summary = [...unsorted].sort((left, right) => buildingName(left.locationId).localeCompare(buildingName(right.locationId)))
   const districtTotal = summary.reduce((total, entry) => total + entry.total, 0)
 
   return (
@@ -2633,7 +2578,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
           <tbody>
             {summary.map(entry => {
               const open = openLocationId === entry.locationId
-              const buildingName = LOCATION_MAP[entry.locationId]?.name || entry.locationId
+              const name = buildingName(entry.locationId)
               return (
                 <Fragment key={entry.locationId}>
                   <tr
@@ -2650,9 +2595,9 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
                           className="flex items-center gap-1.5 text-left hover:text-[#9a651b]"
                         >
                           <span className={`text-[10px] text-[#ad741e] transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden="true">▶</span>
-                          {buildingName}
+                          {name}
                         </button>
-                      ) : buildingName}
+                      ) : name}
                     </td>
                     {months.map(month => {
                       const count = entry.months[month] || 0
@@ -2676,7 +2621,7 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
                     <tr className="border-b border-gray-100 bg-[#fffaf0]">
                       <td colSpan={months.length + 2} className="px-3 py-3">
                         <p className="text-[10px] font-black uppercase tracking-[0.18em] text-[#9a651b]">
-                          {buildingName} · who earned them
+                          {name} · who earned them
                         </p>
                         <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                           {breakdown.map(month => (
@@ -2687,16 +2632,13 @@ function BuildingStarCounts({ summary, months, schoolYearStart, records, employe
                               </p>
                               <ul className="mt-1.5 space-y-0.5">
                                 {month.recipients.map(person => (
-                                  <li key={person.employeeId} className="flex items-baseline justify-between gap-2 text-xs">
+                                  <li key={person.employeeId} className="text-xs">
                                     <Link
                                       to={`/employee/${person.employeeId}`}
-                                      className="truncate text-gray-700 hover:text-[#9a651b] hover:underline"
+                                      className="block truncate text-gray-700 hover:text-[#9a651b] hover:underline"
                                     >
                                       {recognitionName(employeeMap, person.employeeId)}
                                     </Link>
-                                    <span className="flex-none tabular-nums text-gray-400">
-                                      {person.count > 1 ? `×${person.count}` : ''}
-                                    </span>
                                   </li>
                                 ))}
                               </ul>

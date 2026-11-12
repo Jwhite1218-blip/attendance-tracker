@@ -10,7 +10,7 @@ function memoryStore(entries) {
   }
 }
 
-test('public school leaderboard returns separate minimal recognition counts without private details', async () => {
+test('public school board names who was recognized and for what, with no counts, ranks or private details', async () => {
   const school = PUBLIC_LEADERBOARD_SCHOOLS[0]
   const employee = employees.find(entry => entry.location === school.locationId)
   const separateRecognitionEmployee = employees.find(entry => (
@@ -19,53 +19,57 @@ test('public school leaderboard returns separate minimal recognition counts with
   ))
   const employeeId = String(employee.kronos_id || employee.id)
   const separateEmployeeId = String(separateRecognitionEmployee.kronos_id || separateRecognitionEmployee.id)
-  const recognition = (id, type, recognizedEmployeeId = employeeId) => ({
+  const recognition = (id, type, recognizedEmployeeId = employeeId, date = '2026-11-04') => ({
     id,
     employeeId: recognizedEmployeeId,
     locationId: school.locationId,
     type,
-    date: '2026-08-26',
+    date,
     criteria: ['Private reason'],
     note: 'Private note',
     recognizedBy: 'Private manager',
   })
   const store = memoryStore({
     'all-star-recognition-v1': {
-      daily: recognition('daily', 'star-of-day'),
+      // Three stars this month: on the board that is one name with one
+      // "Star of the Day", exactly as if there were one.
+      daily1: recognition('daily1', 'star-of-day'),
+      daily2: recognition('daily2', 'star-of-day', employeeId, '2026-11-05'),
+      daily3: recognition('daily3', 'star-of-day', employeeId, '2026-11-06'),
       shout: recognition('shout', 'star-shout-out'),
-      nomination: recognition('nomination', 'shooting-star'),
-      monthly: recognition('monthly', 'all-star-of-month'),
-      district: recognition('district', 'warren-employee-month'),
-      separateShout: recognition('separate-shout', 'star-shout-out', separateEmployeeId),
+      nomination: recognition('nomination', 'shooting-star', employeeId, '2026-10-02'),
+      buck: recognition('buck', 'ace-buck'),
+      separateShout: recognition('separate-shout', 'star-shout-out', separateEmployeeId, '2026-09-15'),
+      separateDrawn: recognition('separate-drawn', 'all-star-of-month', separateEmployeeId, '2026-09-30'),
     },
   })
   const response = await handlePublicLeaderboard(
     new Request(`https://example.test/api/public-leaderboard/${school.token}`),
-    { stateStore: store }
+    // Evening of 11 November in Indianapolis is already the 12th in UTC;
+    // either way the board's month is November.
+    { stateStore: store, now: new Date('2026-11-12T01:30:00Z') }
   )
   const body = await response.json()
 
   assert.equal(response.status, 200)
-  assert.deepEqual(body.leaders[0], {
-    rank: 1,
+  assert.equal(body.month, '2026-11')
+  assert.deepEqual(body.thisMonth, [{
     name: `${employee.first_name} ${employee.last_name}`,
-    earnedStars: 1,
-    dailyStars: 1,
-    shoutOuts: 1,
-    shootingNominations: 1,
-    buildingAllStars: 1,
-    employeeOfMonth: 1,
-  })
-  assert.deepEqual(body.leaders[1], {
-    rank: 2,
+    // This month's kinds only; the October nomination is not repeated here,
+    // and a Coach Buck never reaches the public board.
+    awards: ['star-of-day', 'star-shout-out'],
+  }])
+  assert.deepEqual(body.earlier, [{
     name: `${separateRecognitionEmployee.first_name} ${separateRecognitionEmployee.last_name}`,
-    earnedStars: 0,
-    dailyStars: 0,
-    shoutOuts: 1,
-    shootingNominations: 0,
-    buildingAllStars: 0,
-    employeeOfMonth: 0,
-  })
+    awards: ['star-shout-out', 'all-star-of-month'],
+  }])
+  // Kept for pages already open on the old script, and empty.
+  assert.deepEqual(body.leaders, [])
+
+  // No number about anybody leaves the server.
+  const people = [...body.thisMonth, ...body.earlier]
+  for (const entry of people) assert.deepEqual(Object.keys(entry).sort(), ['awards', 'name'])
+  assert.equal(JSON.stringify(people).match(/\d/), null)
   assert.equal(JSON.stringify(body).includes(employeeId), false)
   assert.equal(JSON.stringify(body).includes('Private note'), false)
   assert.equal(JSON.stringify(body).includes('Private reason'), false)

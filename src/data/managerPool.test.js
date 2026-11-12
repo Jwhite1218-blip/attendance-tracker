@@ -9,7 +9,6 @@ import {
   getMonthlyDrawingEntries,
   isManagerGrade,
   managerEmployeeIds,
-  splitLeaderboardByGrade,
   isKitchenManager,
   DISTRICT_OFFICE_LOCATION,
 } from './recognitionStore.js'
@@ -107,18 +106,6 @@ test('a month with no manager stars draws nobody rather than throwing', () => {
   assert.equal(drawManagerAllStar([], '2026-09', new Set(['lead'])), null)
   assert.equal(drawManagerAllStar([star('cook', '2026-09-01', 'X')], '2026-09', new Set(['lead'])), null)
   assert.deepEqual(getManagerDrawingEntries([star('a', '2026-09-01', 'X')], '2026-09', new Set()), [])
-})
-
-test('the leaderboard splits into two boards with nobody lost', () => {
-  const entries = [
-    { employee: { kronos_id: 'lead' }, count: 9 },
-    { employee: { kronos_id: 'cook' }, count: 7 },
-    { employee: { id: 'worker' }, count: 3 },
-  ]
-  const { managers, staff } = splitLeaderboardByGrade(entries, new Set(['lead']))
-  assert.equal(managers.length, 1)
-  assert.equal(staff.length, 2)
-  assert.equal(managers.length + staff.length, entries.length)
 })
 
 test('the building draw itself cannot land on an excluded manager', () => {

@@ -150,7 +150,16 @@ const PAGES = [
     limited: ['School Overview'],
     manager: ['School Overview'],
   }, '/location/:id'],
-  ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER]],
+  // Jon, 2026-11-11: no leaderboards. The district sees every building's
+  // team, a building sees its own, and Coach Bucks show progress rather
+  // than standings. If a ranking reappears, one of these comes back.
+  ['RecognitionProgram', RecognitionProgram, '/recognition', [LIZ, MANAGER], {
+    admin: ['The feed', '>Teams<', 'Coach progress'],
+    manager: ['The feed', 'Your team'],
+  }, {
+    admin: ['Leaderboard', 'Who is giving stars', 'ACE Coach standings', 'Back to the top 10'],
+    manager: ['Leaderboard', 'Who is giving stars', 'Coach progress'],
+  }],
   ['Training', Training, '/training', [LIZ, MANAGER]],
   ['ProgramSettings', ProgramSettings, '/settings', [LIZ, MANAGER], {
     admin: ['Star milestones', 'ACE Coach milestones'],
@@ -175,8 +184,17 @@ const PAGES = [
     manager: ['Employee Records'],
   }],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
-  ['RecognitionReport', RecognitionReport, '/reports/recognition', [LIZ], {
-    admin: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month'],
+  // The count and ranking views are for district administrators only
+  // (Jon, 2026-11-11): another administrator gets the flat list and nothing
+  // that ranks anybody.
+  ['RecognitionReport', RecognitionReport, '/reports/recognition', [LIZ, LIMITED_ADMIN], {
+    // Delimited, because the page's own description begins "Every
+    // recognition given" — the tab is the thing being looked for.
+    admin: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month',
+            '>Every recognition<', '>By person<', '>By building<', '>By who submitted<'],
+    limited: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month'],
+  }, {
+    limited: ['>Every recognition<', '>By person<', '>By building<', '>By who submitted<'],
   }],
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],

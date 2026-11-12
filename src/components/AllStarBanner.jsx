@@ -74,7 +74,6 @@ export default function AllStarBanner({
           <span key={entry.id} className="allstar-board__pin">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d={STAR_GLYPH} /></svg>
             {entry.name}
-            {entry.count > 1 && <em>×{entry.count}</em>}
           </span>
         )) : (
           <span className="allstar-board__empty">{emptyNote}</span>

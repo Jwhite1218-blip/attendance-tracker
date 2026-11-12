@@ -6,7 +6,7 @@ import {
   buildingMonthlyRecipients,
   schoolYearMonthKeys,
   toStarCardEntries,
-  topLeaderboardEntries,
+  teamRecognitionCoverage,
   RECOGNITION_TYPES,
   recognitionAccent,
   RECOGNITION_CRITERIA,
@@ -18,35 +18,68 @@ const star = (employeeId, date, locationId, extra = {}) => ({
   id: `${employeeId}-${date}`, type: 'star-of-day', employeeId, date, locationId, ...extra,
 })
 
-// --- leaderboard cap --------------------------------------------------------
+// --- team coverage (replaced the leaderboards, 2026-11-11) ------------------
 
-test('the leaderboard is cut to ten', () => {
-  const entries = Array.from({ length: 34 }, (_, index) => ({ count: 34 - index }))
-  assert.equal(topLeaderboardEntries(entries).length, 10)
+const person = (kronos_id, location = 'X') => ({ kronos_id, location, first_name: kronos_id, last_name: 'Test' })
+const coverage = (records, people, monthKey = '2026-10') =>
+  teamRecognitionCoverage(records, people, { monthKey, startYear: 2026 })
+
+test('everybody on the team comes back, recognized or not, in the order given', () => {
+  const team = [person('cook'), person('worker'), person('lead')]
+  const result = coverage([star('worker', '2026-10-03', 'X')], team)
+  assert.deepEqual(result.map(entry => entry.employeeId), ['cook', 'worker', 'lead'])
+  assert.deepEqual(result.map(entry => entry.recognizedThisMonth), [false, true, false])
 })
 
-test('a shorter board is left alone', () => {
-  const entries = [{ count: 3 }, { count: 1 }]
-  assert.equal(topLeaderboardEntries(entries).length, 2)
-})
-
-test('people tied at the cut are all kept', () => {
-  // Three people on 5 stars share tenth place. Dropping two of them because of
-  // an alphabetical tiebreak would read as the board being wrong.
-  const entries = [
-    ...Array.from({ length: 9 }, (_, index) => ({ count: 20 - index })),
-    { count: 5 }, { count: 5 }, { count: 5 },
-    { count: 4 },
+test('recognized means somebody chose to recognize them, this month', () => {
+  const team = ['star', 'shout', 'nominee', 'buck', 'drawn', 'eom', 'lastMonth'].map(id => person(id))
+  const records = [
+    star('star', '2026-10-01', 'X'),
+    { id: 's', type: 'star-shout-out', employeeId: 'shout', date: '2026-10-02', locationId: 'X' },
+    { id: 'n', type: 'shooting-star', employeeId: 'nominee', date: '2026-10-03', locationId: 'X' },
+    { id: 'b', type: 'ace-buck', employeeId: 'buck', date: '2026-10-04', locationId: 'X' },
+    // A drawing and Employee of the Month are outcomes of recognition, not
+    // recognition given, so on their own they do not mark anybody.
+    { id: 'd', type: 'all-star-of-month', employeeId: 'drawn', date: '2026-10-31', locationId: 'X' },
+    { id: 'e', type: 'warren-employee-month', employeeId: 'eom', date: '2026-10-31', locationId: 'X' },
+    star('lastMonth', '2026-09-30', 'X'),
   ]
-  const top = topLeaderboardEntries(entries)
-  assert.equal(top.length, 12)
-  assert.equal(top.at(-1).count, 5)
-  assert.ok(!top.some(entry => entry.count === 4))
+  const recognized = Object.fromEntries(coverage(records, team).map(entry => [entry.employeeId, entry.recognizedThisMonth]))
+  assert.deepEqual(recognized, {
+    star: true, shout: true, nominee: true, buck: true, drawn: false, eom: false, lastMonth: false,
+  })
 })
 
-test('a board where everyone is tied is not truncated mid-tie', () => {
-  const entries = Array.from({ length: 15 }, () => ({ count: 1 }))
-  assert.equal(topLeaderboardEntries(entries).length, 15)
+test('last recognized is the latest date this school year, and last year does not count', () => {
+  const team = [person('a'), person('b')]
+  const records = [
+    star('a', '2026-09-12', 'X'),
+    star('a', '2026-08-30', 'X'),
+    star('b', '2026-05-20', 'X'),
+  ]
+  const [a, b] = coverage(records, team)
+  assert.equal(a.lastRecognized, '2026-09-12')
+  assert.equal(b.lastRecognized, null)
+})
+
+test('each person gets their own distance to their next level, and no total', () => {
+  const records = [1, 2, 3].map(day => star('a', `2026-10-0${day}`, 'X'))
+  const [entry] = coverage(records, [person('a')])
+  assert.equal(entry.level, null)
+  assert.equal(entry.nextLevel.name, 'Bronze Star')
+  assert.equal(entry.toNextLevel, 2)
+  // Nothing a page could put in a column and sort by.
+  assert.ok(!('count' in entry) && !('stars' in entry))
+})
+
+test('only stars move somebody toward their next star level', () => {
+  const records = [
+    star('a', '2026-10-01', 'X'),
+    { id: 's', type: 'star-shout-out', employeeId: 'a', date: '2026-10-02', locationId: 'X' },
+    { id: 'b', type: 'ace-buck', employeeId: 'a', date: '2026-10-03', locationId: 'X' },
+  ]
+  const [entry] = coverage(records, [person('a')])
+  assert.equal(entry.toNextLevel, 4)
 })
 
 // --- building counts --------------------------------------------------------

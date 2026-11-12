@@ -5,45 +5,34 @@ import warrenLogo from '../assets/warren-logo.png'
 const TEST_ENVIRONMENT_LABEL = String(import.meta.env.VITE_TEST_ENVIRONMENT_LABEL || '').trim()
 const REFRESH_INTERVAL_MS = 60 * 1000
 
-function LeaderBadge({ label, value, tone = 'amber' }) {
-  const colors = tone === 'sky'
-    ? 'border-sky-200 bg-sky-50 text-sky-900'
-    : tone === 'purple'
-      ? 'border-purple-200 bg-purple-50 text-purple-900'
-      : 'border-amber-200 bg-amber-50 text-amber-950'
-  return (
-    <span className={`rounded-lg border px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide ${colors}`}>
-      {label} <strong className="ml-1 text-sm">{value}</strong>
-    </span>
-  )
+// The kinds of recognition a person has had, never how many of each. Until
+// 2026-11-11 this page ranked the school's staff by star count, first place
+// in gold; the rankings came out of the app that day because recognition
+// had become a contest, and this was the most public place it showed.
+const AWARD_LABELS = {
+  'star-of-day': { label: 'Star of the Day', colors: 'border-amber-200 bg-amber-50 text-amber-950' },
+  'star-shout-out': { label: 'Shout-Out', colors: 'border-purple-200 bg-purple-50 text-purple-900' },
+  'shooting-star': { label: 'Shooting Star nominee', colors: 'border-sky-200 bg-sky-50 text-sky-900' },
+  'all-star-of-month': { label: 'Building All-Star', colors: 'border-amber-300 bg-[#fff5c7] text-amber-950' },
+  'warren-employee-month': { label: 'Employee of the Month', colors: 'border-amber-300 bg-[#fff5c7] text-amber-950' },
 }
 
-function LeaderRow({ leader }) {
-  const topThreeStyles = {
-    1: 'border-[#d8af36] bg-gradient-to-r from-[#fff5c7] via-white to-white shadow-[0_10px_35px_rgba(174,116,30,0.16)]',
-    2: 'border-slate-300 bg-gradient-to-r from-slate-100 to-white',
-    3: 'border-orange-300 bg-gradient-to-r from-orange-50 to-white',
-  }
+function PersonCard({ person }) {
   return (
-    <article className={`rounded-2xl border p-4 sm:p-5 ${topThreeStyles[leader.rank] || 'border-gray-200 bg-white'}`}>
-      <div className="flex items-start gap-4">
-        <span className={`all-star-display flex h-12 w-12 flex-none items-center justify-center rounded-full text-2xl ${leader.rank <= 3 ? 'bg-[#201a11] text-[#ffd75c]' : 'bg-gray-100 text-gray-600'}`}>
-          {leader.rank}
-        </span>
+    <article className="rounded-2xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex-none text-xl leading-none text-[#d5aa3d]" aria-hidden="true">★</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="truncate text-lg font-black text-gray-950 sm:text-xl">{leader.name}</h2>
-            <div className="flex-none text-right">
-              <p className="all-star-display text-4xl leading-none text-[#ad741e]">{leader.earnedStars}</p>
-              <p className="text-[9px] font-black uppercase tracking-[0.16em] text-gray-400">earned stars</p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <LeaderBadge label="Daily" value={leader.dailyStars} />
-            <LeaderBadge label="Shout-outs" value={leader.shoutOuts} tone="purple" />
-            <LeaderBadge label="Shooting nominations" value={leader.shootingNominations} tone="sky" />
-            {leader.buildingAllStars > 0 && <LeaderBadge label="Monthly All-Star" value={leader.buildingAllStars} />}
-            {leader.employeeOfMonth > 0 && <LeaderBadge label="Employee of Month" value={leader.employeeOfMonth} />}
+          <h3 className="truncate text-base font-black text-gray-950">{person.name}</h3>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {person.awards.map(award => (
+              <span
+                key={award}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${AWARD_LABELS[award]?.colors || 'border-gray-200 bg-gray-50 text-gray-700'}`}
+              >
+                {AWARD_LABELS[award]?.label || award}
+              </span>
+            ))}
           </div>
         </div>
       </div>
@@ -51,11 +40,28 @@ function LeaderRow({ leader }) {
   )
 }
 
+function PeopleSection({ title, people }) {
+  if (!people.length) return null
+  return (
+    <section className="mt-6 first:mt-0">
+      <h2 className="all-star-display text-2xl uppercase text-gray-950">{title}</h2>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        {people.map((person, index) => <PersonCard key={`${index}-${person.name}`} person={person} />)}
+      </div>
+    </section>
+  )
+}
+
+function formatMonth(monthKey) {
+  if (!/^\d{4}-\d{2}$/.test(String(monthKey || ''))) return 'This month'
+  return new Date(`${monthKey}-01T12:00:00`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+}
+
 function LoadingBoard() {
   return (
     <div className="rounded-2xl border border-amber-200 bg-white px-6 py-12 text-center shadow-sm">
       <span className="inline-block animate-pulse text-5xl text-[#d5aa3d]" aria-hidden="true">★</span>
-      <p className="mt-3 text-sm font-bold text-gray-700">Loading the school’s All-Star board…</p>
+      <p className="mt-3 text-sm font-bold text-gray-700">Loading the school’s All-Stars…</p>
     </div>
   )
 }
@@ -64,6 +70,8 @@ export default function PublicSchoolLeaderboard() {
   const { token } = useParams()
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
+  const thisMonth = data?.thisMonth || []
+  const earlier = data?.earlier || []
 
   useEffect(() => {
     let active = true
@@ -92,7 +100,7 @@ export default function PublicSchoolLeaderboard() {
     <div className="min-h-screen bg-[#f6f1e4]">
       {TEST_ENVIRONMENT_LABEL && (
         <div className="bg-fuchsia-700 px-4 py-2 text-center text-[10px] font-black uppercase tracking-[0.16em] text-white">
-          {TEST_ENVIRONMENT_LABEL} · NFC leaderboard preview · Test data only
+          {TEST_ENVIRONMENT_LABEL} · NFC board preview · Test data only
         </div>
       )}
       <header className="relative overflow-hidden border-b-4 border-[#d5aa3d] bg-black px-4 py-8 text-white sm:py-10">
@@ -102,11 +110,11 @@ export default function PublicSchoolLeaderboard() {
             <img src={warrenLogo} alt="Warren Township" className="h-12 w-12 rounded-xl border border-amber-300/40 bg-white object-contain p-1" />
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-[#e9c866]">Warren Student Nutrition Team</p>
-              <p className="mt-1 text-xs text-white/50">School All-Star leaderboard</p>
+              <p className="mt-1 text-xs text-white/50">School All-Star board</p>
             </div>
           </div>
           <h1 className="all-star-display mt-7 text-5xl uppercase leading-none sm:text-6xl">
-            {data?.school?.shortName || 'All-Star'} <span className="text-[#e7bd4d]">Leaders</span>
+            {data?.school?.shortName || 'Warren'} <span className="whitespace-nowrap text-[#e7bd4d]">All-Stars</span>
           </h1>
           <p className="all-star-script mt-3 text-xl text-[#f1d98c] sm:text-2xl">See who’s shining this school year.</p>
           {data && (
@@ -124,16 +132,17 @@ export default function PublicSchoolLeaderboard() {
         {error && (
           <div className="rounded-2xl border border-red-200 bg-white px-6 py-12 text-center shadow-sm">
             <p className="text-4xl" aria-hidden="true">☆</p>
-            <h2 className="all-star-display mt-3 text-2xl uppercase text-gray-950">Leaderboard unavailable</h2>
+            <h2 className="all-star-display mt-3 text-2xl uppercase text-gray-950">Board unavailable</h2>
             <p className="mt-2 text-sm text-red-700">{error}</p>
           </div>
         )}
-        {data && data.leaders.length > 0 && (
-          <div className="space-y-3">
-            {data.leaders.map(leader => <LeaderRow key={`${leader.rank}-${leader.name}`} leader={leader} />)}
+        {data && (thisMonth.length > 0 || earlier.length > 0) && (
+          <div>
+            <PeopleSection title={`Recognized in ${formatMonth(data.month)}`} people={thisMonth} />
+            <PeopleSection title="Earlier this school year" people={earlier} />
           </div>
         )}
-        {data && data.leaders.length === 0 && (
+        {data && thisMonth.length === 0 && earlier.length === 0 && (
           <div className="rounded-2xl border border-dashed border-amber-300 bg-white px-6 py-12 text-center shadow-sm">
             <p className="text-5xl text-[#d5aa3d]" aria-hidden="true">☆</p>
             <h2 className="all-star-display mt-3 text-3xl uppercase text-gray-950">The board is ready</h2>
@@ -142,9 +151,9 @@ export default function PublicSchoolLeaderboard() {
         )}
 
         <section className="mt-6 rounded-2xl border border-amber-200 bg-[#fff9e9] p-4 text-xs leading-relaxed text-gray-600">
-          <p className="font-black uppercase tracking-wide text-[#9a651b]">How the board is counted</p>
-          <p className="mt-2">Earned-star rank is based on Star of the Day. Warren Star Shout-Outs, Shooting Star nominations, and Employee of the Month are compiled alongside it but counted separately.</p>
-          <p className="mt-2 font-semibold text-sky-800">Shooting Star nominations are tracked for Liz’s quarterly review but do not increase the earned-star rank.</p>
+          <p className="font-black uppercase tracking-wide text-[#9a651b]">About this board</p>
+          <p className="mt-2">Everyone at this school recognized this school year, in name order. Nobody is ranked: whether someone was recognized once or many times, their name is shown the same way.</p>
+          <p className="mt-2">Each name shows the kinds of recognition received: Star of the Day, Warren Star Shout-Outs, Shooting Star nominations, Building All-Star of the Month, and Employee of the Month.</p>
         </section>
         <p className="mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Read-only employee recognition display · No attendance or personnel records are shown</p>
       </main>

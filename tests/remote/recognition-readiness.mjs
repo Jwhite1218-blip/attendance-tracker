@@ -16,16 +16,16 @@ const FORBIDDEN_PUBLIC_FIELDS = [
   'recognizedBy',
   'sourceName',
 ]
-const EXPECTED_LEADER_FIELDS = [
-  'buildingAllStars',
-  'dailyStars',
-  'earnedStars',
-  'employeeOfMonth',
-  'name',
-  'rank',
-  'shootingNominations',
-  'shoutOuts',
-].sort()
+// Since 2026-11-11 the school boards name people and the kinds of
+// recognition they have had — no rank and no count of anything.
+const EXPECTED_PERSON_FIELDS = ['awards', 'name']
+const PUBLIC_AWARD_TYPES = new Set([
+  'star-of-day',
+  'star-shout-out',
+  'shooting-star',
+  'all-star-of-month',
+  'warren-employee-month',
+])
 
 async function request(path) {
   return fetch(`${baseUrl}${path}`, {
@@ -69,7 +69,10 @@ const checks = await Promise.all(PUBLIC_LEADERBOARD_SCHOOLS.map(async entry => {
   const body = await response.json()
   assert.equal(body.school?.name, location.name, `${location.name} resolved to the wrong school.`)
   assert.match(body.schoolYear || '', /^\d{4}-\d{4}$/)
-  assert.ok(Array.isArray(body.leaders), `${location.name} leaders must be an array.`)
+  assert.match(body.month || '', /^\d{4}-\d{2}$/)
+  assert.ok(Array.isArray(body.thisMonth), `${location.name} thisMonth must be an array.`)
+  assert.ok(Array.isArray(body.earlier), `${location.name} earlier must be an array.`)
+  assert.deepEqual(body.leaders, [], `${location.name} must not send a ranked list.`)
   assert.match(body.updatedAt || '', /^\d{4}-\d{2}-\d{2}T/)
 
   const serialized = JSON.stringify(body)
@@ -81,21 +84,25 @@ const checks = await Promise.all(PUBLIC_LEADERBOARD_SCHOOLS.map(async entry => {
     )
   }
 
-  body.leaders.forEach((leader, index) => {
-    assert.deepEqual(Object.keys(leader).sort(), EXPECTED_LEADER_FIELDS)
-    assert.equal(leader.rank, index + 1)
-    assert.equal(typeof leader.name, 'string')
-    assert.ok(leader.name.trim(), `${location.name} exposed a blank employee name.`)
-    for (const field of ['earnedStars', 'dailyStars', 'shoutOuts', 'shootingNominations', 'buildingAllStars', 'employeeOfMonth']) {
-      assert.ok(Number.isInteger(leader[field]) && leader[field] >= 0, `${location.name} has an invalid ${field}.`)
+  for (const group of [body.thisMonth, body.earlier]) {
+    const names = group.map(person => person.name)
+    assert.deepEqual(names, [...names].sort((left, right) => left.localeCompare(right)), `${location.name} is not in name order.`)
+  }
+  const people = [...body.thisMonth, ...body.earlier]
+  people.forEach(person => {
+    assert.deepEqual(Object.keys(person).sort(), EXPECTED_PERSON_FIELDS)
+    assert.equal(typeof person.name, 'string')
+    assert.ok(person.name.trim(), `${location.name} exposed a blank employee name.`)
+    assert.ok(Array.isArray(person.awards) && person.awards.length, `${location.name} lists somebody with no award.`)
+    for (const award of person.awards) {
+      assert.ok(PUBLIC_AWARD_TYPES.has(award), `${location.name} exposed award type ${award}.`)
     }
-    assert.equal(leader.earnedStars, leader.dailyStars, 'Only Daily Stars may count as earned stars.')
   })
 
   const page = await request(`/school-stars/${encodeURIComponent(entry.token)}`)
   assert.equal(page.status, 200, `${location.name} NFC page is unavailable.`)
 
-  return { school: location.name, leaders: body.leaders.length }
+  return { school: location.name, recognizedThisMonth: body.thisMonth.length, recognizedEarlier: body.earlier.length }
 }))
 
 const missing = await request('/api/public-leaderboard/not-a-real-school-token')
