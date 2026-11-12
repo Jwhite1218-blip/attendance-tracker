@@ -3,8 +3,10 @@ import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import AllStarBanner from '../components/AllStarBanner.jsx'
+import ManagerTabs from '../components/ManagerTabs.jsx'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { openStarCardWindow, starCardPreviewHtml } from '../lib/starCardPrinting.js'
+import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
 import { LOCATIONS, LOCATION_MAP } from '../data/locations.js'
 import {
   ANNUAL_AWARD_CATEGORIES,
@@ -150,9 +152,11 @@ function emptyRecognitionForm(type) {
   return { employeeIds: [], type, date: localDateKey(), criteria: [], otherReason: '', note: '', sourceName: '' }
 }
 
-// The extras a manager may record beyond the daily star. Employee of the Month
-// stays district-only, so it is filtered by role at render time.
-const BONUS_RECOGNITION_TYPES = ['shooting-star', 'star-shout-out', 'warren-employee-month']
+// The extras a manager may record beyond the daily star and the Shout-Out.
+// Employee of the Month stays district-only, so it is filtered by role at
+// render time. The Shout-Out was one of these until 2026-11-11, when it got
+// its own box beside Star of the Day.
+const BONUS_RECOGNITION_TYPES = ['shooting-star', 'warren-employee-month']
 
 export default function RecognitionProgram() {
   const access = useAuth()
@@ -181,11 +185,12 @@ export default function RecognitionProgram() {
   // main column; nominations and shout-outs are occasional extras and live in
   // the side panel, so the two never compete for a manager's attention.
   const [starForm, setStarForm] = useState(() => emptyRecognitionForm('star-of-day'))
+  const [shoutForm, setShoutForm] = useState(() => emptyRecognitionForm('star-shout-out'))
   const [bonusForm, setBonusForm] = useState(() => emptyRecognitionForm(''))
   const [aceForm, setAceForm] = useState(() => emptyRecognitionForm('ace-buck'))
   const [feedback, setFeedback] = useState(null)
   const [submittingSurface, setSubmittingSurface] = useState(null)
-  const [confirmations, setConfirmations] = useState({ star: null, bonus: null, ace: null })
+  const [confirmations, setConfirmations] = useState({ star: null, shout: null, bonus: null, ace: null })
 
   const employees = useMemo(
     () => getEmployeesWithEffectiveLocations(),
@@ -307,6 +312,7 @@ export default function RecognitionProgram() {
     .sort(byName)
   const bonusTypes = BONUS_RECOGNITION_TYPES.filter(type =>
     recognitionTypeAllowedForRole(role, type, canManageRecognitionAwards))
+  const canGiveShoutOut = recognitionTypeAllowedForRole(role, 'star-shout-out', canManageRecognitionAwards)
   // Buildings in the current view, named even when they have recognized
   // nobody — an empty row is the signal worth seeing.
   const buildingCounts = buildingRecognitionSummary(
@@ -351,7 +357,7 @@ export default function RecognitionProgram() {
     && record.date <= nominationQuarter.end
   ))
 
-  const surfaceSetters = { star: setStarForm, bonus: setBonusForm, ace: setAceForm }
+  const surfaceSetters = { star: setStarForm, shout: setShoutForm, bonus: setBonusForm, ace: setAceForm }
   const clearConfirmation = surface => setConfirmations(current => ({ ...current, [surface]: null }))
   const setFormValue = (surface, name, value) => {
     clearConfirmation(surface)
@@ -389,7 +395,7 @@ export default function RecognitionProgram() {
       otherReason: '',
       note: '',
       sourceName: '',
-      // The bonus panel folds back up; the other two have a fixed type.
+      // The bonus panel folds back up; the others have a fixed type.
       ...(surface === 'bonus' ? { type: '' } : {}),
     }))
     setLocalVersion(version => version + 1)
@@ -457,7 +463,7 @@ export default function RecognitionProgram() {
     if (!pendingPreview) return
     const { surface } = pendingPreview
     setPendingPreview(null)
-    const forms = { star: starForm, bonus: bonusForm, ace: aceForm }
+    const forms = { star: starForm, shout: shoutForm, bonus: bonusForm, ace: aceForm }
     await submitRecognition(surface, forms[surface])
   }
 
@@ -469,7 +475,9 @@ export default function RecognitionProgram() {
     }
     if (!openStarCardWindow(cards, { pad: true })) {
       setFeedback({ type: 'error', message: 'Your browser blocked the print window. Allow pop-ups for this site, then try again.' })
+      return
     }
+    rememberStarCardsPrinted(visibleRecords)
   }
 
   const handlePrintCard = surface => {
@@ -480,7 +488,10 @@ export default function RecognitionProgram() {
         type: 'error',
         message: 'Your browser blocked the print window. Allow pop-ups for this site, then use Print star card again.',
       })
+      return
     }
+    const ids = new Set(card.recognitionIds || [])
+    if (ids.size) rememberStarCardsPrinted(getAllRecognitions().filter(record => ids.has(record.id)))
   }
 
   // flushPendingWrites drops a write the server refuses outright and reports
@@ -545,7 +556,7 @@ export default function RecognitionProgram() {
         : chosen.length === 1
           ? `${who} received ${RECOGNITION_TYPE_MAP[record.type].label}.`
           : record.type === 'ace-buck'
-            ? `${chosen.length} ACE Coach Bucks recorded, one each for ${who}.`
+            ? `${chosen.length} Star Coach Bucks recorded, one each for ${who}.`
             : `${chosen.length} stars recorded, one each for ${who}. The card names all of them.`
       // Only the daily star has a printable card: the physical board is a Star
       // of the Day board, and a nomination is not an award yet.
@@ -558,6 +569,7 @@ export default function RecognitionProgram() {
           otherReason: record.otherReason,
           message: record.note,
           recognizedBy: record.recognizedBy,
+          recognitionIds: records.map(saved => saved.id),
         }
         : null
       await confirmRecognitionSaved()
@@ -778,6 +790,11 @@ export default function RecognitionProgram() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f7f3e9] pb-12">
+      {role === 'school' && (
+        <div className="mx-auto max-w-7xl px-3 pt-4 sm:px-6">
+          <ManagerTabs />
+        </div>
+      )}
       <div className="border-b-4 border-[#d5aa3d] bg-black px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5">
         <div className="mx-auto max-w-7xl">
           <AllStarBanner
@@ -843,7 +860,7 @@ export default function RecognitionProgram() {
                   value={compilation.shoutOuts}
                 />
               </a>
-              <SecondaryCount label="Shooting Star nominations" value={compilation.shootingNominations} />
+              <SecondaryCount label="Shooting Stars" value={compilation.shootingNominations} />
               <SecondaryCount label="Building All-Stars" value={compilation.buildingAllStars} />
               {canManageRecognitionAwards && (
                 <SecondaryCount label="Employee of the Month" value={compilation.employeeOfMonth} />
@@ -861,15 +878,75 @@ export default function RecognitionProgram() {
           </div>
         )}
 
+        {/* Jon, 2026-11-11: "make the Warren Star Shout-Out just as visible
+            as the Star of the Day submission." So the two ways to recognize
+            somebody sit side by side, the same size, first thing under the
+            command centre — a Shout-Out used to be one choice inside the
+            folded Bonus box. On a phone they stack, Star of the Day first,
+            and the Star form is long enough that the Shout-Out would sit a
+            long scroll below it — so a phone gets a button to each. */}
+        {canGiveShoutOut && (
+          <div className="mt-6 grid grid-cols-2 gap-2 lg:hidden">
+            <a href="#give-star" className="rounded-xl border border-[#d7b44b] bg-[#211b12] px-3 py-2.5 text-center text-xs font-black uppercase tracking-wide text-[#ffd75c]">
+              <span aria-hidden="true">★ </span>Star of the Day
+            </a>
+            <a href="#give-shout-out" className="rounded-xl border border-teal-300 bg-[#0f3b38] px-3 py-2.5 text-center text-xs font-black uppercase tracking-wide text-teal-100">
+              <span aria-hidden="true">❝ </span>Shout-Out
+            </a>
+          </div>
+        )}
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <RecognitionEntryForm
+            anchorId="give-star"
+            surface="star"
+            form={starForm}
+            title="Star of the Day"
+            subtitle="Catch someone shining. This is the daily award that earns stars."
+            employees={scopedEmployees}
+            peerManagers={peerManagers}
+            managerIds={managerIds}
+            ownLocationId={locationId}
+            canEdit={canEditRecognition}
+            isSubmitting={submittingSurface === 'star'}
+            confirmation={confirmations.star}
+            onFieldChange={setFormValue}
+            onToggleCriterion={toggleCriterion}
+            onSubmit={event => beginSubmit('star', starForm, event)}
+            onRetry={() => handleRetryConfirmation('star')}
+            onPrintCard={() => handlePrintCard('star')}
+          />
+          {canGiveShoutOut && (
+            <RecognitionEntryForm
+              anchorId="give-shout-out"
+              surface="shout"
+              form={shoutForm}
+              tone="teal"
+              title="Warren Star Shout-Out"
+              subtitle="Pass on a thank-you from a student, teacher, staff member or another manager — or thank a manager at any building."
+              employees={scopedEmployees}
+              peerManagers={peerManagers}
+              managerIds={managerIds}
+              ownLocationId={locationId}
+              canEdit={canEditRecognition}
+              isSubmitting={submittingSurface === 'shout'}
+              confirmation={confirmations.shout}
+              onFieldChange={setFormValue}
+              onToggleCriterion={toggleCriterion}
+              onSubmit={event => beginSubmit('shout', shoutForm, event)}
+              onRetry={() => handleRetryConfirmation('shout')}
+            />
+          )}
+        </div>
+
         {/* Liz, 2026-10-19: the page had too many boxes. Split down the
-            middle under the command centre — the feed on the left, the thing
-            a manager came here to do on the right. Everything that is a
-            report rather than an action moved below the fold. */}
+            middle — the feed on the left, the occasional extras on the
+            right. Everything that is a report rather than an action moved
+            below the fold. */}
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           {/* Stacked on a narrow screen the feed would come first, which is
               the wrong order for a manager standing in a kitchen with a
-              phone: they came to give a star, not to read. The form goes
-              first until there is room for both side by side. */}
+              phone: they came to recognize somebody, not to read. The extras
+              go first until there is room for both side by side. */}
           <div className="order-2 lg:order-none">
             <BoardPanel
               tab={boardTab}
@@ -899,26 +976,6 @@ export default function RecognitionProgram() {
           </div>
 
           <div className="space-y-6 order-1 lg:order-none">
-            <RecognitionEntryForm
-              surface="star"
-              form={starForm}
-              lockedType="star-of-day"
-              title="Star of the Day"
-              subtitle="Catch someone shining. This is the daily award that earns stars."
-              employees={scopedEmployees}
-              peerManagers={peerManagers}
-              managerIds={managerIds}
-              ownLocationId={locationId}
-              canEdit={canEditRecognition}
-              isSubmitting={submittingSurface === 'star'}
-              confirmation={confirmations.star}
-              onFieldChange={setFormValue}
-              onToggleCriterion={toggleCriterion}
-              onSubmit={event => beginSubmit('star', starForm, event)}
-              onRetry={() => handleRetryConfirmation('star')}
-              onPrintCard={() => handlePrintCard('star')}
-            />
-
             {bonusTypes.length > 0 && (
               <RecognitionEntryForm
                 surface="bonus"
@@ -926,7 +983,9 @@ export default function RecognitionProgram() {
                 selectableTypes={bonusTypes}
                 compact
                 title="Bonus recognition"
-                subtitle="Shooting Star nominations, Warren Star Shout-Outs, and Employee of the Month. Coach Bucks have their own section below."
+                subtitle={bonusTypes.includes(EMPLOYEE_OF_MONTH_TYPE)
+                  ? 'Shooting Stars and Employee of the Month. Shout-Outs have their own box above; Star Coach Bucks their own section below.'
+                  : 'Shooting Stars for the quarterly review. Shout-Outs have their own box above.'}
                 employees={scopedEmployees}
                 peerManagers={peerManagers}
                 managerIds={managerIds}
@@ -1032,14 +1091,25 @@ export default function RecognitionProgram() {
   )
 }
 
-// One entry form, used twice: the Star of the Day surface (type locked) and the
-// side-panel bonus surface (a small type picker). Keeping them separate is the
-// point — managers open this page to give a daily star, and nominations should
-// never sit in the way of that.
+// One entry form, used for every surface: Star of the Day and the Shout-Out
+// (each with its type fixed), the side-panel bonus surface (a small type
+// picker) and the Coach Buck. Keeping them separate is the point — managers
+// open this page to recognize somebody, and nominations should never sit in
+// the way of that.
+//
+// The header takes the recognition's own colour and mark: gold ★ for a star,
+// teal ❝ for a Shout-Out, the same as its chip in the feed.
+const FORM_TONES = {
+  gold: { glyph: '★', header: 'from-[#211b12] to-black', mark: 'border-[#e8c65c]/60 bg-[#e8c65c]/15 text-[#ffd75c]', subtitle: 'text-amber-100/80' },
+  teal: { glyph: '❝', header: 'from-[#0f3b38] to-black', mark: 'border-teal-300/60 bg-teal-300/15 text-teal-200', subtitle: 'text-teal-100/80' },
+}
+
 function RecognitionEntryForm({
+  anchorId,
   surface,
   form,
   selectableTypes,
+  tone = 'gold',
   compact = false,
   title,
   subtitle,
@@ -1058,6 +1128,7 @@ function RecognitionEntryForm({
   onPrintCard,
 }) {
   const term = useProgramTerms()
+  const palette = FORM_TONES[tone] || FORM_TONES.gold
   const currentType = RECOGNITION_TYPE_MAP[form.type]
   const criteriaOptions = RECOGNITION_CRITERIA[form.type] || []
   const messageRequired = requiresStarMessage(form.type)
@@ -1120,16 +1191,16 @@ function RecognitionEntryForm({
     : form.type === 'star-shout-out' ? 'Who is being thanked' : 'Team member'
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className={`border-b border-gray-100 text-white ${compact ? 'bg-[#211b12] px-4 py-3.5' : 'bg-gradient-to-r from-[#211b12] to-black px-5 py-5 sm:px-6'}`}>
+    <section id={anchorId} className="scroll-mt-20 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+      <div className={`border-b border-gray-100 text-white ${compact ? 'bg-[#211b12] px-4 py-3.5' : `bg-gradient-to-r ${palette.header} px-5 py-5 sm:px-6`}`}>
         <div className="flex items-center gap-3">
           <span
-            className={`flex flex-none items-center justify-center rounded-xl border border-[#e8c65c]/60 bg-[#e8c65c]/15 text-[#ffd75c] ${compact ? 'h-9 w-9 text-lg' : 'h-12 w-12 text-2xl'}`}
+            className={`flex flex-none items-center justify-center rounded-xl border ${palette.mark} ${compact ? 'h-9 w-9 text-lg' : 'h-12 w-12 text-2xl'}`}
             aria-hidden="true"
-          >★</span>
+          >{palette.glyph}</span>
           <div>
             <h2 className={`all-star-display uppercase tracking-wide ${compact ? 'text-lg' : 'text-2xl'}`}>{title}</h2>
-            <p className={`mt-1 text-amber-100/80 ${compact ? 'text-[11px]' : 'text-xs'}`}>{subtitle}</p>
+            <p className={`mt-1 ${palette.subtitle} ${compact ? 'text-[11px]' : 'text-xs'}`}>{subtitle}</p>
           </div>
         </div>
       </div>
@@ -1263,8 +1334,8 @@ function RecognitionEntryForm({
                     ? 'Nobody chosen yet.'
                     : isAceBuck
                       ? chosenIds.length === 1
-                        ? 'One Coach Buck.'
-                        : `${chosenIds.length} Coach Bucks — one each, counting toward their own ACE Coach milestones.`
+                        ? 'One Star Coach Buck.'
+                        : `${chosenIds.length} Star Coach Bucks — one each, counting toward their own milestones.`
                       : chosenIds.length === 1
                         ? 'One star, one card.'
                         : `${chosenIds.length} stars — one each, counting toward their own milestones and the monthly drawing. One card, naming all ${chosenIds.length}.`}
@@ -1389,8 +1460,12 @@ function RecognitionEntryForm({
           )}
 
           <label className="block">
+            {/* Star of the Day and the Shout-Out print a card, and their
+                message goes on it. Nothing else prints. */}
             <span className="text-xs font-bold uppercase tracking-wide text-gray-500">
-              Star card message
+              {form.type === 'star-of-day'
+                ? 'Star card message'
+                : form.type === 'star-shout-out' ? 'Card message' : 'Message'}
               {messageRequired && <span className="ml-1.5 text-[#b3261e]" aria-hidden="true">*</span>}
             </span>
             <textarea
@@ -1404,7 +1479,9 @@ function RecognitionEntryForm({
             />
             {messageRequired && (
               <span className="mt-1 block text-[11px] font-semibold text-[#9a651b]">
-                Required — say why they shine so the star means something.
+                {form.type === 'star-of-day'
+                  ? 'Required — say why they shine so the star means something.'
+                  : 'Required — say what they did so the recognition means something.'}
               </span>
             )}
           </label>
@@ -1426,7 +1503,7 @@ function RecognitionEntryForm({
                     : confirmation?.type === 'pending'
                       ? 'Awaiting confirmation'
                       : isAceBuck && chosenIds.length > 1
-                        ? `Award ${chosenIds.length} ACE Coach Bucks`
+                        ? `Award ${chosenIds.length} Star Coach Bucks`
                         : (currentType?.actionLabel || 'Add to the All-Star board')}
               </button>
               {confirmation && (
@@ -2209,7 +2286,7 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
         <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full bg-sky-100 text-xl" aria-hidden="true">☄️</span>
         <div>
           <p className="text-[10px] font-black uppercase tracking-[0.18em] text-sky-700">Quarterly review · {quarterLabel}</p>
-          <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Shooting Star Nominations</h2>
+          <h2 className="all-star-display mt-1 text-xl uppercase text-gray-950">Shooting Stars</h2>
           <p className="mt-1 text-xs leading-relaxed text-gray-500">Nominations put employees in the running for quarterly review. They do not add an earned star or monthly drawing entry.</p>
         </div>
       </div>
@@ -2230,7 +2307,7 @@ function ShootingStarNominations({ records, employeeMap, quarterLabel }) {
           {records.length > 6 && <p className="py-2 text-center text-[10px] font-bold uppercase tracking-wide text-sky-700">+ {records.length - 6} more nominations this quarter</p>}
         </div>
       ) : (
-        <p className="mt-4 rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-3 py-5 text-center text-xs text-sky-800">No Shooting Star nominations have been submitted for this quarter.</p>
+        <p className="mt-4 rounded-xl border border-dashed border-sky-200 bg-sky-50/50 px-3 py-5 text-center text-xs text-sky-800">No Shooting Stars have been submitted for this quarter.</p>
       )}
     </section>
   )
@@ -2278,10 +2355,10 @@ function AceBucksSection({
           >◆</span>
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-300">Manager program</p>
-            <h2 className="all-star-display mt-1 text-2xl uppercase">ACE Coach Bucks</h2>
+            <h2 className="all-star-display mt-1 text-2xl uppercase">Star Coach Bucks</h2>
             <p className="mt-1 max-w-2xl text-xs leading-relaxed text-emerald-100/80">
               The leadership side of the All-Star program. Kitchen managers already earn Stars for what
-              they do; Coach Bucks are for how they lead, awarded by the district office to the fifteen
+              they do; Star Coach Bucks are for how they lead, awarded by the district office to the fifteen
               people running kitchens.
             </p>
           </div>
@@ -2290,13 +2367,13 @@ function AceBucksSection({
 
       <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Coach Buck</h3>
+          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-[#15583f]">Award a Star Coach Buck</h3>
           <div className="mt-3">
             <RecognitionEntryForm
               surface="ace"
               form={form}
               compact
-              title="ACE Coach Buck"
+              title="Star Coach Buck"
               subtitle="District recognition for a kitchen manager."
               employees={employees}
               peerManagers={peerManagers}

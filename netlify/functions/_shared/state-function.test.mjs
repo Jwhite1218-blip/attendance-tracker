@@ -4,7 +4,7 @@ import employees from '../../../src/data/employees.json' with { type: 'json' }
 import { createSessionToken, sessionFromRequest } from './auth.mjs'
 import { registerServerSession } from './server-session.mjs'
 import { createMemoryBlobStore } from './test-blob-store.mjs'
-import { handleBackupRestore, handleMutate, handleStateRequest, schoolRecognitionView } from '../state.mjs'
+import { handleBackupRestore, handleMutate, handleStateRequest, schoolRecognitionView, schoolStarCardPrintView, starCardPrintMutationForSession } from '../state.mjs'
 import { MANAGER_GRADE_POSITIONS } from '../../../src/data/recognitionStore.js'
 
 // Liz, 2026-10-20: termination date, last day worked and reason were
@@ -1450,4 +1450,154 @@ test('once the roster is re-keyed, an old number cannot be written or restored b
   const restore = await handleBackupRestore(store, LIZ_SESSION, { confirmation: 'RESTORE', backup: oldBackup }, { roster: REKEYED_ROSTER })
   assert.equal(restore.status, 400)
   assert.match((await restore.json()).error, /before employee numbers were removed/)
+})
+
+// A printed star card is shared kitchen state. The kitchen that owns the
+// star can file the mark; a star from another building, a nomination, and an
+// attempt to un-print are not stored. The reply and a later read both hide
+// the other building's marks.
+test('a kitchen marks its own star card printed and cannot clear another kitchen', async () => {
+  const kitchens = employees.filter(employee => employee.location !== 'Admin')
+  const building = kitchens[0].location
+  const mine = kitchens.filter(employee => employee.location === building)
+  const other = kitchens.find(employee => employee.location !== building)
+  assert.ok(mine.length >= 2 && other, 'the roster needs two people in one kitchen and a second kitchen')
+  const idOf = employee => String(employee.kronos_id || employee.id)
+  const star = (id, employee, extra = {}) => ({
+    id,
+    employeeId: idOf(employee),
+    locationId: employee.location,
+    type: 'star-of-day',
+    ...extra,
+  })
+  const ownStar = star('own-star', mine[0])
+  const groupA = star('group-a', mine[0], { groupId: 'lunch' })
+  const groupB = star('group-b', mine[1], { groupId: 'lunch' })
+  const otherStar = star('other-star', other)
+  const shout = { ...star('shout', mine[0]), type: 'shooting-star' }
+  const printedAt = '2026-11-11T18:00:00.000Z'
+  const mark = recognitionIds => ({ printedAt, recognitionIds })
+  const store = stateStore({
+    'all-star-recognition-v1': {
+      'own-star': ownStar,
+      'group-a': groupA,
+      'group-b': groupB,
+      'other-star': otherStar,
+      shout,
+    },
+    'star-card-prints-v1': {
+      'other-star': { ...mark(['other-star']), printedBy: 'Other kitchen' },
+    },
+  })
+  const access = {
+    role: 'school',
+    locationId: building,
+    displayName: 'Kitchen Lead',
+    canEditRecognition: true,
+  }
+
+  const response = await handleMutate(store, access, {
+    key: 'star-card-prints-v1',
+    mutation: {
+      type: 'object-patch',
+      set: {
+        'own-star': mark(['own-star']),
+        'group:lunch': mark(['group-a', 'group-b']),
+        'other-star': mark(['other-star']),
+        shout: mark(['shout']),
+        'not-a-star': { printedAt: 'yesterday', recognitionIds: ['own-star'] },
+      },
+      remove: ['other-star'],
+    },
+  })
+  assert.equal(response.status, 200)
+  const saved = await store.get('star-card-prints-v1')
+  assert.equal(saved['own-star'].printedBy, 'Kitchen Lead')
+  assert.deepEqual(saved['group:lunch'].recognitionIds, ['group-a', 'group-b'])
+  assert.equal(saved['other-star'].printedBy, 'Other kitchen', 'another kitchen stays printed')
+  assert.equal(saved.shout, undefined)
+  assert.equal(saved['not-a-star'], undefined)
+
+  const body = await response.json()
+  assert.equal(body.value['own-star'].printedBy, 'Kitchen Lead')
+  assert.equal(body.value['other-star'], undefined, 'the write reply does not include the other kitchen')
+
+  const replaced = await handleMutate(store, access, {
+    key: 'star-card-prints-v1',
+    mutation: { type: 'replace', value: {} },
+  })
+  assert.equal(replaced.status, 400)
+  assert.ok((await store.get('star-card-prints-v1'))['own-star'])
+})
+
+test('printed cards include a shout-out, and not a coach buck or a nomination', () => {
+  const printedAt = '2026-11-11T18:00:00.000Z'
+  const mark = ids => ({ printedAt, recognitionIds: ids })
+  const next = starCardPrintMutationForSession({
+    type: 'object-patch',
+    set: {
+      buck: mark(['buck']),
+      shout: mark(['shout']),
+      nom: mark(['nom']),
+    },
+    remove: [],
+  }, { role: 'admin', displayName: 'District' }, {
+    buck: { id: 'buck', employeeId: 'emp-lead', locationId: 'HawthorneE', type: 'ace-buck' },
+    shout: { id: 'shout', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'star-shout-out' },
+    nom: { id: 'nom', employeeId: 'emp-cook', locationId: 'HawthorneE', type: 'shooting-star' },
+  }, new Set())
+  assert.equal(next.set.buck, undefined)
+  assert.ok(next.set.shout)
+  assert.equal(next.set.nom, undefined)
+})
+
+test('a kitchen read shows printed cards for its own stars only', async () => {
+  const previousSecret = process.env.ATTENDANCE_SESSION_SECRET
+  process.env.ATTENDANCE_SESSION_SECRET = 'test-session-secret-that-is-long-enough'
+  try {
+    const kitchens = employees.filter(employee => employee.location !== 'Admin')
+    const building = kitchens[0].location
+    const mine = kitchens.find(employee => employee.location === building)
+    const other = kitchens.find(employee => employee.location !== building)
+    const idOf = employee => String(employee.kronos_id || employee.id)
+    const star = (key, employee) => ({
+      id: key,
+      employeeId: idOf(employee),
+      locationId: employee.location,
+      type: 'star-of-day',
+    })
+    const sessions = createMemoryBlobStore()
+    const store = stateStore({
+      __state_meta__: { initializedAt: '2026-11-11T00:00:00.000Z' },
+      'all-star-recognition-v1': {
+        'own-star': star('own-star', mine),
+        'other-star': star('other-star', other),
+      },
+      'star-card-prints-v1': {
+        'own-star': { printedAt: '2026-11-11T18:00:00.000Z', recognitionIds: ['own-star'], printedBy: 'Lead' },
+        'other-star': { printedAt: '2026-11-11T18:00:00.000Z', recognitionIds: ['other-star'], printedBy: 'Other' },
+      },
+    })
+    const request = await authenticatedRequest({
+      role: 'school',
+      locationId: building,
+      canEditRecognition: true,
+    }, sessions)
+    const response = await handleStateRequest(request, { stateStore: store, sessionStore: sessions })
+    assert.equal(response.status, 200)
+    const body = await response.json()
+    assert.equal(body.entries['star-card-prints-v1']['own-star'].printedBy, 'Lead')
+    assert.equal(body.entries['star-card-prints-v1']['other-star'], undefined)
+
+    const view = schoolStarCardPrintView(
+      { 'other-star': { recognitionIds: ['other-star'] } },
+      { 'other-star': star('other-star', other) },
+      new Set([idOf(mine)]),
+      [building],
+    )
+    assert.deepEqual(view, {})
+  } finally {
+    if (previousSecret === undefined) delete process.env.ATTENDANCE_SESSION_SECRET
+    else process.env.ATTENDANCE_SESSION_SECRET = previousSecret
+  }
 })

@@ -15,10 +15,12 @@ import {
   RECOGNITION_TYPE_MAP,
   aceBucksInSchoolYear,
   dailyStarsInMonth,
+  dailyStarsInSchoolYear,
   getAllRecognitions,
   recognitionsOfTypeInSchoolYear,
   schoolYearStartFor,
 } from '../data/recognitionStore.js'
+import { useLanguage } from './LanguageProvider.jsx'
 
 // 'T00:00:00' keeps a date key in local time. Parsed bare it would be UTC
 // midnight and render as the day before.
@@ -31,33 +33,39 @@ function formatDateKey(dateKey) {
   })
 }
 
-// Stars by the month, the other three by the school year. Stars are the
-// daily rhythm, where a running total says nothing about how this month is
-// going; the other three are rare enough that a month of them would usually
-// read nought.
-export function recognitionTilesFor({ locationIds = [], today = new Date() } = {}) {
+// Stars by the month on the district dashboard. On a manager's dashboard
+// Liz asked for the school year, the same window as the three tiles beside
+// it. `starSpan: 'year'` is that; the default stays the month so the two
+// pages do not change together by accident.
+export function recognitionTilesFor({ locationIds = [], today = new Date(), starSpan = 'month' } = {}) {
   const records = getAllRecognitions()
   const monthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
   const monthName = today.toLocaleDateString('en-US', { month: 'long' })
   const startYear = schoolYearStartFor(today)
   const schoolYearLabel = `${startYear}–${String(startYear + 1).slice(2)}`
+  const starsForYear = starSpan === 'year'
 
   return [
     {
       id: 'stars',
-      label: `Stars in ${monthName}`,
-      period: `${monthName} ${today.getFullYear()}`,
-      records: dailyStarsInMonth(records, monthKey, locationIds),
+      label: starsForYear ? 'Stars of the Day' : `Stars in ${monthName}`,
+      labelKey: starsForYear ? 'managerHome.starsThisYear' : null,
+      period: starsForYear ? schoolYearLabel : `${monthName} ${today.getFullYear()}`,
+      records: starsForYear
+        ? dailyStarsInSchoolYear(records, startYear, locationIds)
+        : dailyStarsInMonth(records, monthKey, locationIds),
     },
     {
       id: 'ace-buck',
-      label: 'ACE Bucks',
+      label: 'Star Coach Bucks',
+      labelKey: 'managerHome.starCoachBucks',
       period: schoolYearLabel,
       records: aceBucksInSchoolYear(records, startYear, locationIds),
     },
     {
       id: 'shooting-star',
-      label: 'Shooting Star Nominations',
+      label: 'Shooting Stars',
+      labelKey: 'managerHome.shootingStars',
       period: schoolYearLabel,
       records: recognitionsOfTypeInSchoolYear(records, 'shooting-star', startYear, locationIds),
     },
@@ -71,16 +79,17 @@ export function recognitionTilesFor({ locationIds = [], today = new Date() } = {
 }
 
 export default function RecognitionMetrics({ tiles }) {
+  const { t } = useLanguage()
   const [open, setOpen] = useState(null)
   const openTile = tiles.find(tile => tile.id === open) || null
 
   return (
     <>
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+      <div className="mt-3 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {tiles.map(tile => (
           <MetricTile
             key={tile.id}
-            label={tile.label}
+            label={tile.labelKey ? t(tile.labelKey) : tile.label}
             description={tile.period}
             count={tile.records.length}
             expanded={open === tile.id}
@@ -106,13 +115,15 @@ export default function RecognitionMetrics({ tiles }) {
 // up here. An award for somebody since removed from the roster still shows
 // — it happened, and dropping the row would make the count look wrong.
 function RecognitionDrilldown({ id, tile }) {
+  const { t } = useLanguage()
   const term = useProgramTerms()
   const records = tile.records
+  const label = tile.labelKey ? t(tile.labelKey) : tile.label
 
   return (
-    <section id={id} className="bg-white rounded-xl border border-brand-200 p-5 mb-8" aria-live="polite">
+    <section id={id} className="mt-3 rounded-xl border border-brand-200 bg-white p-5" aria-live="polite">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-sm font-semibold text-gray-800">{tile.label} · {tile.period}</h2>
+        <h2 className="text-sm font-semibold text-gray-800">{label} · {tile.period}</h2>
         <span className="text-xs font-medium text-gray-400">{records.length} record{records.length === 1 ? '' : 's'}</span>
       </div>
 

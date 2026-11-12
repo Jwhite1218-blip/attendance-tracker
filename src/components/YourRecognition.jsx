@@ -50,7 +50,7 @@ export default function YourRecognition({ employeeId }) {
               {stars} earned star{stars === 1 ? '' : 's'}
               {bucks > 0 && (
                 <span className="ml-2 inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 align-middle text-xs font-semibold text-emerald-200">
-                  <span aria-hidden="true">◆</span>{bucks} Coach Buck{bucks === 1 ? '' : 's'}
+                  <span aria-hidden="true">◆</span>{bucks} Star Coach Buck{bucks === 1 ? '' : 's'}
                 </span>
               )}
             </p>

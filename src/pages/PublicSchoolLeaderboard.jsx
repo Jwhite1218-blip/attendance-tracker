@@ -12,7 +12,7 @@ const REFRESH_INTERVAL_MS = 60 * 1000
 const AWARD_LABELS = {
   'star-of-day': { label: 'Star of the Day', colors: 'border-amber-200 bg-amber-50 text-amber-950' },
   'star-shout-out': { label: 'Shout-Out', colors: 'border-purple-200 bg-purple-50 text-purple-900' },
-  'shooting-star': { label: 'Shooting Star nominee', colors: 'border-sky-200 bg-sky-50 text-sky-900' },
+  'shooting-star': { label: 'Shooting Star', colors: 'border-sky-200 bg-sky-50 text-sky-900' },
   'all-star-of-month': { label: 'Building All-Star', colors: 'border-amber-300 bg-[#fff5c7] text-amber-950' },
   'warren-employee-month': { label: 'Employee of the Month', colors: 'border-amber-300 bg-[#fff5c7] text-amber-950' },
 }
@@ -153,7 +153,7 @@ export default function PublicSchoolLeaderboard() {
         <section className="mt-6 rounded-2xl border border-amber-200 bg-[#fff9e9] p-4 text-xs leading-relaxed text-gray-600">
           <p className="font-black uppercase tracking-wide text-[#9a651b]">About this board</p>
           <p className="mt-2">Everyone at this school recognized this school year, in name order. Nobody is ranked: whether someone was recognized once or many times, their name is shown the same way.</p>
-          <p className="mt-2">Each name shows the kinds of recognition received: Star of the Day, Warren Star Shout-Outs, Shooting Star nominations, Building All-Star of the Month, and Employee of the Month.</p>
+          <p className="mt-2">Each name shows the kinds of recognition received: Star of the Day, Warren Star Shout-Outs, Shooting Stars, Building All-Star of the Month, and Employee of the Month.</p>
         </section>
         <p className="mt-5 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-400">Read-only employee recognition display · No attendance or personnel records are shown</p>
       </main>

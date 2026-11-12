@@ -4,6 +4,7 @@ import {
   collectMonthExceptions,
   getCurrentMonthBirthdays,
   getUpcomingRequestedTimeOff,
+  peopleMarkedOn,
 } from './dashboardInsights.js'
 import { normalizeBirthday } from './employeeFields.js'
 
@@ -64,6 +65,30 @@ test('month exceptions take only the named month, oldest first', () => {
     ['2026-10-02 Alpha NCNS', '2026-10-20 Zeta UNEX', '2026-10-20 Alpha BER'],
   )
   assert.equal(list[1].note, 'called')
+})
+
+test('who is marked on a day is the people with a code that day, by name', () => {
+  const roster = [
+    { kronos_id: 'emp-zeta', first_name: 'Ann', last_name: 'Zeta' },
+    { kronos_id: 'emp-alpha', first_name: 'Bob', last_name: 'Alpha' },
+    { kronos_id: 'emp-blank', first_name: 'Cara', last_name: 'Blank' },
+  ]
+  const records = {
+    'emp-zeta': { '2026-11-11': { code: 'RTO', note: 'Appointment' }, '2026-11-10': { code: 'LI' } },
+    'emp-alpha': { '2026-11-11': { code: 'LI' } },
+    'emp-blank': { '2026-11-11': { code: '' } },
+  }
+  const read = (empId, dateKey) => records[empId]?.[dateKey]
+
+  const marked = peopleMarkedOn(roster, '2026-11-11', read)
+  assert.deepEqual(
+    marked.map(item => `${item.employee.last_name} ${item.code}`),
+    ['Alpha LI', 'Zeta RTO'],
+  )
+  assert.equal(marked[1].note, 'Appointment')
+  assert.deepEqual(peopleMarkedOn(roster, '2026-11-12', read), [])
+  assert.deepEqual(peopleMarkedOn(null, '2026-11-11', read), [])
+  assert.deepEqual(peopleMarkedOn(roster, 'today', read), [])
 })
 
 test('a month with nothing marked collects nothing rather than throwing', () => {

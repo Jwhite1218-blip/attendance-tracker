@@ -19,6 +19,7 @@ import {
   recognitionEarnsStar,
   toStarCardEntries,
   dailyStarsInMonth,
+  dailyStarsInSchoolYear,
   aceBucksInSchoolYear,
   recognitionsOfTypeInSchoolYear,
   addRecognitionGroup,
@@ -519,6 +520,22 @@ test('the month star tile counts only daily stars, only this month', () => {
     recognition({ id: 'g', date: '2026-10-15', type: 'ace-buck' }),
   ]
   assert.equal(dailyStarsInMonth(records, '2026-10').length, 2)
+})
+
+test('the school-year star count keeps July through June and drops everything else', () => {
+  const records = [
+    recognition({ id: 'july', date: '2026-07-01' }),
+    recognition({ id: 'june', date: '2027-06-30' }),
+    recognition({ id: 'before', date: '2026-06-30' }),
+    recognition({ id: 'after', date: '2027-07-01' }),
+    recognition({ id: 'buck', date: '2026-11-02', type: 'ace-buck' }),
+    recognition({ id: 'shout', date: '2026-11-03', type: 'star-shout-out' }),
+    recognition({ id: 'other-school', date: '2026-11-04', locationId: 'SchoolB' }),
+  ]
+  assert.deepEqual(
+    dailyStarsInSchoolYear(records, 2026, ['SchoolA']).map(record => record.id),
+    ['july', 'june'],
+  )
 })
 
 test('the month star tile follows the school pills, and all district means all', () => {

@@ -18,6 +18,7 @@ import TransferModal from '../components/TransferModal.jsx'
 import AddEmployeeModal from '../components/AddEmployeeModal.jsx'
 import EmployeeEditForm from '../components/EmployeeEditForm.jsx'
 import { hasLizAdminAccess } from '../data/futureTools.js'
+import ManagerTabs from '../components/ManagerTabs.jsx'
 import { rosterActionMode } from '../data/approvalRequests.js'
 
 function formatDate(dateStr) {
@@ -150,6 +151,7 @@ export default function LocationView() {
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-8" onMouseLeave={() => setIsPainting(false)}>
+      {role === 'school' && <div className="mb-4"><ManagerTabs /></div>}
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs sm:text-sm text-charcoal-200 mb-3 sm:mb-4">
         <Link to="/" className="hover:text-brand-300">Dashboard</Link>

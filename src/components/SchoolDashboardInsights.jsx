@@ -1,56 +1,28 @@
-// The three cards at the top of a school's screens: birthdays, upcoming
-// requested time off, and this month's exceptions.
+// The school overview on a manager's dashboard: birthdays, upcoming requested
+// time off, and who has an attendance mark today.
 //
-// Lifted out of LocationView on 2026-10-11 so the manager's Dashboard can
-// show the same three. Liz: they "need to show up on the dashboard of the
-// school and not just the overview".
-//
-// Rebuilt on 2026-10-26 to use the same tile and the same drill-down panel
-// as the district dashboard. Before that each page had its own copy of
-// both, and they had already drifted — different padding, a different
-// empty state, and rows that could be clicked on one page but not the
-// other. Liz: the two dashboards should differ by which buildings they
-// cover and nothing else.
-import MetricTile from './MetricTile.jsx'
-import InsightDrilldown from './InsightDrilldown.jsx'
+// Liz, 2026-11-11: birthdays, requested time off, and "who's marked today"
+// are lists, not counts behind a dropdown. A manager should see the names
+// without a click. The district dashboard keeps its own tiles and is not
+// this component.
+import { CODE_MAP } from '../data/attendanceCodes.js'
+import { useLanguage } from './LanguageProvider.jsx'
+import { useProgramTerms } from './useProgramTerms.js'
+
+function personName(employee) {
+  return `${employee?.first_name || ''} ${employee?.last_name || ''}`.trim()
+}
 
 export default function SchoolDashboardInsights({
-  activeInsight,
   birthdays,
-  monthName,
-  monthExceptions,
+  markedToday = [],
   onEmployeeSelect,
-  onInsightChange,
   requestedTimeOff,
+  children,
 }) {
-  // The same three labels and the same three periods the district page
-  // uses, so a manager and Liz reading "October Exceptions" are reading
-  // the same measure.
-  const cards = [
-    {
-      id: 'birthdays',
-      label: `${monthName} Birthdays`,
-      count: birthdays.length,
-      description: 'All active staff celebrating this month',
-      items: birthdays,
-    },
-    {
-      id: 'time-off',
-      label: 'Upcoming Requested Time Off',
-      count: requestedTimeOff.length,
-      description: 'Approved full and half days from today forward',
-      items: requestedTimeOff,
-    },
-    {
-      id: 'exceptions',
-      label: `${monthName} Exceptions`,
-      count: monthExceptions.length,
-      description: 'Marked attendance exceptions so far this month',
-      items: monthExceptions,
-    },
-  ]
-
-  const active = cards.find(card => card.id === activeInsight) || null
+  const { t, formatDate } = useLanguage()
+  const today = new Date()
+  const monthLabel = formatDate(today, { month: 'long' })
 
   return (
     <section aria-labelledby="school-overview-heading">
@@ -59,30 +31,96 @@ export default function SchoolDashboardInsights({
         <p className="text-xs text-charcoal-200 mt-1">Current milestones and upcoming requested time off for this school.</p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
-        {cards.map(card => (
-          <MetricTile
-            key={card.id}
-            label={card.label}
-            description={card.description}
-            count={card.count}
-            expanded={activeInsight === card.id}
-            onToggle={() => onInsightChange(activeInsight === card.id ? null : card.id)}
-            controls="school-insight-details"
-          />
-        ))}
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-3">
+        <NameListCard
+          title={t('managerHome.birthdaysTitle', { month: monthLabel })}
+          empty={t('managerHome.birthdaysEmpty')}
+          items={birthdays}
+          onEmployeeSelect={onEmployeeSelect}
+          detail={item => formatDate(new Date(today.getFullYear(), today.getMonth(), item.day), {
+            month: 'long',
+            day: 'numeric',
+          })}
+        />
+
+        <NameListCard
+          title={t('managerHome.timeOffTitle')}
+          empty={t('managerHome.timeOffEmpty')}
+          items={requestedTimeOff}
+          onEmployeeSelect={onEmployeeSelect}
+          detail={item => (
+            <span className="block text-right">
+              <span className="block">{formatDate(item.dateKey, { month: 'short', day: 'numeric' })}</span>
+              <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wide">
+                {item.record?.code === 'RTO.5' ? t('managerHome.timeOffHalf') : t('managerHome.timeOffFull')}
+              </span>
+            </span>
+          )}
+        />
+
+        <NameListCard
+          title={t('managerHome.markedTodayTitle')}
+          description={t('managerHome.markedTodayHint')}
+          empty={t('managerHome.markedTodayEmpty')}
+          items={markedToday}
+          onEmployeeSelect={onEmployeeSelect}
+          detail={item => <AttendanceMark item={item} />}
+        />
       </div>
 
-      {active && (
-        <InsightDrilldown
-          id="school-insight-details"
-          type={active.id}
-          title={active.label}
-          monthName={monthName}
-          items={active.items}
-          onEmployeeSelect={onEmployeeSelect}
-        />
-      )}
+      {children}
     </section>
+  )
+}
+
+function NameListCard({ title, description, empty, items, detail, onEmployeeSelect }) {
+  const rows = Array.isArray(items) ? items : []
+
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white p-5 text-left">
+      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      {description && <p className="mt-1 text-xs text-gray-400">{description}</p>}
+      {rows.length === 0 ? (
+        <p className="mt-4 text-sm text-gray-500">{empty}</p>
+      ) : (
+        <ul className="mt-3 divide-y divide-gray-100">
+          {rows.map(item => {
+            const employee = item.employee
+            const note = item.note || item.record?.note
+            const key = `${employee?.kronos_id || employee?.id}-${item.day || item.dateKey || item.code || ''}`
+            return (
+              <li key={key}>
+                <button
+                  type="button"
+                  onClick={() => onEmployeeSelect?.(employee)}
+                  className="flex w-full items-center justify-between gap-3 py-2 text-left"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-gray-800">{personName(employee)}</span>
+                    {note && <span className="mt-0.5 block text-xs text-gray-500">{note}</span>}
+                  </span>
+                  <span className="flex-none text-sm font-semibold text-brand-700">{detail(item)}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </article>
+  )
+}
+
+function AttendanceMark({ item }) {
+  const term = useProgramTerms()
+  const known = CODE_MAP[item.code]
+  const short = known?.shortLabel || item.code
+  const full = term.codeLabel(item.code, known?.label || item.code)
+  return (
+    <span
+      className="inline-flex rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-800"
+      title={full}
+    >
+      {short}
+    </span>
   )
 }

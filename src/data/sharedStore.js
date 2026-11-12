@@ -8,6 +8,7 @@ const FIXED_STORAGE_KEYS = new Set([
   'employee-custom-records',
   'employee-assignment-history-v1',
   'all-star-recognition-v1',
+  'star-card-prints-v1',
   'training-records-v1',
   'program-settings-v1',
   'pending-approvals-v1',
@@ -50,7 +51,10 @@ export function canWriteManagedKeyForAccess(access, key) {
   if (ATTENDANCE_KEY_PATTERN.test(key) || key === 'hr-attendance-progress-v2' || key === 'hr-flags') {
     return access.canEditAttendance !== false
   }
-  if (key === 'all-star-recognition-v1') {
+  // Printed star cards are part of recording recognition: the kitchen that
+  // can give a star can mark its card printed. The rows are narrowed to
+  // that kitchen on the server, the same way recognition itself is.
+  if (key === 'all-star-recognition-v1' || key === 'star-card-prints-v1') {
     return (access.role === 'admin' || access.role === 'school')
       && access.canEditRecognition === true
   }

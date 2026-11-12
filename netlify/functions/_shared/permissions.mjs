@@ -8,6 +8,7 @@ export const TRAINING_KEY = 'training-records-v1'
 export const PROGRAM_SETTINGS_KEY = 'program-settings-v1'
 export const APPROVALS_KEY = 'pending-approvals-v1'
 export const RECOGNITION_KEY = 'all-star-recognition-v1'
+export const STAR_CARD_PRINTS_KEY = 'star-card-prints-v1'
 export const HR_STATUS_KEY = 'hr-attendance-progress-v2'
 export const LEGACY_HR_STATUS_KEY = 'hr-flags'
 
@@ -35,6 +36,7 @@ export const MANAGED_FIXED_STATE_KEYS = Object.freeze([
   EMPLOYEE_NOTES_KEY,
   ASSIGNMENT_HISTORY_KEY,
   RECOGNITION_KEY,
+  STAR_CARD_PRINTS_KEY,
   TRAINING_KEY,
   PROGRAM_SETTINGS_KEY,
   APPROVALS_KEY,
@@ -56,18 +58,20 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   const attendanceId = attendanceEmployeeId(key)
   const isAttendanceState = Boolean(attendanceId) || key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY
   const isRecognitionState = key === RECOGNITION_KEY
+  const isStarCardPrints = key === STAR_CARD_PRINTS_KEY
   const canEditRecognition = session.canEditRecognition === true
     || (session.canEditRecognition === undefined && session.canEditAttendance !== false)
 
   if (isAttendanceState && session.canEditAttendance === false) return false
-  if (isRecognitionState && !canEditRecognition) return false
+  if ((isRecognitionState || isStarCardPrints) && !canEditRecognition) return false
 
   if (session.role === 'school') {
     if (attendanceId) return allowedEmployeeIds.has(String(attendanceId))
     // Recognition is written by building managers for their own team. The rows
     // themselves are narrowed to this building's roster in handleMutate, so
     // reaching the key is not the same as reaching another building's staff.
-    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY || isRecognitionState
+    // Marking a star card printed is the same act: their kitchen, their board.
+    return key === HR_STATUS_KEY || key === LEGACY_HR_STATUS_KEY || isRecognitionState || isStarCardPrints
   }
 
   if (session.role !== 'admin') return false
@@ -82,7 +86,7 @@ export function canWriteStateKey(session, key, allowedEmployeeIds = new Set()) {
   if (key === BLACKOUTS_KEY && session.canViewBlackouts === false) return false
 
   if (isAttendanceState) return true
-  if (isRecognitionState) return true
+  if (isRecognitionState || isStarCardPrints) return true
   if (key === EMPLOYEE_NOTES_KEY) return session.canEditAttendance !== false
   // Professional Standards hours are a compliance record kept at district
   // level: the entry form selects across every school at once. A read-only
