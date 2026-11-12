@@ -99,6 +99,11 @@ const UI_STRINGS = {
     'managerHome.markedTodayTitle': 'Who\'s marked today',
     'managerHome.markedTodayEmpty': 'No one is marked yet today.',
     'managerHome.markedTodayHint': 'People with an attendance mark for today.',
+    'managerHome.timeOffTitle': 'Upcoming requested time off',
+    'managerHome.timeOffEmpty': 'No upcoming time off.',
+    'managerHome.timeOffFull': 'Full day',
+    'managerHome.timeOffHalf': 'Half day',
+    'managerHome.starsThisYear': 'Stars',
     'managerTabs.label': 'Manager pages',
 
     'notices.youWereRecognized': 'You were recognized',
@@ -206,6 +211,11 @@ const UI_STRINGS = {
     'managerHome.markedTodayTitle': 'Quién está registrado hoy',
     'managerHome.markedTodayEmpty': 'Todavía no hay nadie registrado hoy.',
     'managerHome.markedTodayHint': 'Personas con una marca de asistencia para hoy.',
+    'managerHome.timeOffTitle': 'Próximo tiempo libre solicitado',
+    'managerHome.timeOffEmpty': 'No hay tiempo libre próximo.',
+    'managerHome.timeOffFull': 'Día completo',
+    'managerHome.timeOffHalf': 'Medio día',
+    'managerHome.starsThisYear': 'Estrellas',
     'managerTabs.label': 'Páginas del gerente',
 
     'notices.youWereRecognized': 'Le reconocieron',

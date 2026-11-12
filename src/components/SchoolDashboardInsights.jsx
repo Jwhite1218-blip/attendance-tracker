@@ -1,12 +1,10 @@
 // The school overview on a manager's dashboard: birthdays, upcoming requested
 // time off, and who has an attendance mark today.
 //
-// Liz, 2026-11-11: birthdays and "who's marked today" are lists, not counts
-// behind a dropdown. A manager should see the names without a click. Time
-// off stays a count that opens, the same tile as before. The district
-// dashboard keeps its own tiles and is not this component.
-import MetricTile from './MetricTile.jsx'
-import InsightDrilldown from './InsightDrilldown.jsx'
+// Liz, 2026-11-11: birthdays, requested time off, and "who's marked today"
+// are lists, not counts behind a dropdown. A manager should see the names
+// without a click. The district dashboard keeps its own tiles and is not
+// this component.
 import { CODE_MAP } from '../data/attendanceCodes.js'
 import { useLanguage } from './LanguageProvider.jsx'
 import { useProgramTerms } from './useProgramTerms.js'
@@ -16,18 +14,15 @@ function personName(employee) {
 }
 
 export default function SchoolDashboardInsights({
-  activeInsight,
   birthdays,
   markedToday = [],
-  monthName,
   onEmployeeSelect,
-  onInsightChange,
   requestedTimeOff,
+  children,
 }) {
   const { t, formatDate } = useLanguage()
   const today = new Date()
   const monthLabel = formatDate(today, { month: 'long' })
-  const timeOffOpen = activeInsight === 'time-off'
 
   return (
     <section aria-labelledby="school-overview-heading">
@@ -48,13 +43,19 @@ export default function SchoolDashboardInsights({
           })}
         />
 
-        <MetricTile
-          label="Upcoming Requested Time Off"
-          description="Approved full and half days from today forward"
-          count={requestedTimeOff.length}
-          expanded={timeOffOpen}
-          onToggle={() => onInsightChange(timeOffOpen ? null : 'time-off')}
-          controls="school-insight-details"
+        <NameListCard
+          title={t('managerHome.timeOffTitle')}
+          empty={t('managerHome.timeOffEmpty')}
+          items={requestedTimeOff}
+          onEmployeeSelect={onEmployeeSelect}
+          detail={item => (
+            <span className="block text-right">
+              <span className="block">{formatDate(item.dateKey, { month: 'short', day: 'numeric' })}</span>
+              <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wide">
+                {item.record?.code === 'RTO.5' ? t('managerHome.timeOffHalf') : t('managerHome.timeOffFull')}
+              </span>
+            </span>
+          )}
         />
 
         <NameListCard
@@ -67,18 +68,7 @@ export default function SchoolDashboardInsights({
         />
       </div>
 
-      {timeOffOpen && (
-        <div className="mt-3">
-          <InsightDrilldown
-            id="school-insight-details"
-            type="time-off"
-            title="Upcoming Requested Time Off"
-            monthName={monthName}
-            items={requestedTimeOff}
-            onEmployeeSelect={onEmployeeSelect}
-          />
-        </div>
-      )}
+      {children}
     </section>
   )
 }
@@ -96,7 +86,8 @@ function NameListCard({ title, description, empty, items, detail, onEmployeeSele
         <ul className="mt-3 divide-y divide-gray-100">
           {rows.map(item => {
             const employee = item.employee
-            const key = `${employee?.kronos_id || employee?.id}-${item.day || item.code || ''}`
+            const note = item.note || item.record?.note
+            const key = `${employee?.kronos_id || employee?.id}-${item.day || item.dateKey || item.code || ''}`
             return (
               <li key={key}>
                 <button
@@ -106,7 +97,7 @@ function NameListCard({ title, description, empty, items, detail, onEmployeeSele
                 >
                   <span className="min-w-0">
                     <span className="block text-sm font-semibold text-gray-800">{personName(employee)}</span>
-                    {item.note && <span className="mt-0.5 block text-xs text-gray-500">{item.note}</span>}
+                    {note && <span className="mt-0.5 block text-xs text-gray-500">{note}</span>}
                   </span>
                   <span className="flex-none text-sm font-semibold text-brand-700">{detail(item)}</span>
                 </button>

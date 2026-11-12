@@ -432,6 +432,18 @@ export function dailyStarsInMonth(records, monthKey, locationIds = []) {
   )
 }
 
+// The manager dashboard counts stars for the school year, the same window
+// ACE Bucks and the nomination tiles already use. July through June, not
+// the calendar month.
+export function dailyStarsInSchoolYear(records, startYear, locationIds = []) {
+  const scope = new Set((locationIds || []).map(String))
+  return (records || []).filter(record =>
+    earnsDailyStar(record)
+    && isRecognitionInSchoolYear(record, startYear)
+    && inLocationScope(record, scope)
+  )
+}
+
 // Liz, 2026-10-26, asked for ACE Bucks and then the two nomination counts
 // "for the year". The recognition year is the school year, not the calendar
 // year — an award earned in May belongs with one earned the previous

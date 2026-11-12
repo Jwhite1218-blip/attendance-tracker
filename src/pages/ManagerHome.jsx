@@ -14,7 +14,7 @@
 // Recognition news is first. A star recorded hours later is easy to miss if
 // it only shows up in the history, so a personal celebration and this
 // kitchen's unprinted Star of the Day cards sit above the rest of the page.
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import { useLanguage } from '../components/LanguageProvider.jsx'
@@ -40,7 +40,6 @@ function todayKey() {
 
 export default function ManagerHome() {
   const navigate = useNavigate()
-  const [activeInsight, setActiveInsight] = useState(null)
   const { locationId, locationIds, onLocationChange, canEditRecognition, dataVersion, employeeId } = useAuth()
   const { t, formatDate } = useLanguage()
   const school = LOCATION_MAP[locationId]
@@ -89,7 +88,7 @@ export default function ManagerHome() {
   // One building's worth of the district's recognition row. The scope is
   // this kitchen, which is the whole difference between the two pages.
   const recognitionTiles = useMemo(
-    () => recognitionTilesFor({ locationIds: [locationId] }),
+    () => recognitionTilesFor({ locationIds: [locationId], starSpan: 'year' }),
     [locationId, dataVersion]
   )
 
@@ -100,15 +99,6 @@ export default function ManagerHome() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-8">
       <ManagerTabs />
-
-      <RecognitionNotifications
-        employeeId={employeeId}
-        locationId={locationId}
-        canPrint={canEditRecognition}
-        dataVersion={dataVersion}
-      />
-
-      <YourRecognition employeeId={employeeId} />
 
       <YourKitchens
         locationIds={locationIds}
@@ -142,14 +132,21 @@ export default function ManagerHome() {
       </header>
 
       <SchoolDashboardInsights
-        activeInsight={activeInsight}
-        onInsightChange={setActiveInsight}
         onEmployeeSelect={openEmployeeRecord}
         markedToday={markedToday}
         {...schoolInsights}
+      >
+        {canEditRecognition && <RecognitionMetrics tiles={recognitionTiles} />}
+      </SchoolDashboardInsights>
+
+      <RecognitionNotifications
+        employeeId={employeeId}
+        locationId={locationId}
+        canPrint={canEditRecognition}
+        dataVersion={dataVersion}
       />
 
-      {canEditRecognition && <RecognitionMetrics tiles={recognitionTiles} />}
+      <YourRecognition employeeId={employeeId} />
 
       <HrFollowUpPanel
         flaggedEmployees={flaggedEmployees}
