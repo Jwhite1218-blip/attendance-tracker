@@ -5,6 +5,7 @@ import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js
 import { LOCATIONS } from '../data/locations.js'
 import AttendanceCodeReference from '../components/AttendanceCodeReference.jsx'
 import EmployeeCardPicker from '../components/EmployeeCardPicker.jsx'
+import ManagerTabs from '../components/ManagerTabs.jsx'
 
 export default function LedgerView() {
   const { role, locationId: myLocationId, dataVersion } = useAuth()
@@ -27,6 +28,7 @@ export default function LedgerView() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {role === 'school' && <div className="mb-5"><ManagerTabs /></div>}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-white">Employee Cards</h1>
         <p className="text-sm text-charcoal-200 mt-1">

@@ -99,6 +99,7 @@ const UI_STRINGS = {
     'managerHome.markedTodayTitle': 'Who\'s marked today',
     'managerHome.markedTodayEmpty': 'No one is marked yet today.',
     'managerHome.markedTodayHint': 'People with an attendance mark for today.',
+    'managerTabs.label': 'Manager pages',
 
     'notices.youWereRecognized': 'You were recognized',
     'notices.new': 'New',
@@ -205,6 +206,7 @@ const UI_STRINGS = {
     'managerHome.markedTodayTitle': 'Quién está registrado hoy',
     'managerHome.markedTodayEmpty': 'Todavía no hay nadie registrado hoy.',
     'managerHome.markedTodayHint': 'Personas con una marca de asistencia para hoy.',
+    'managerTabs.label': 'Páginas del gerente',
 
     'notices.youWereRecognized': 'Le reconocieron',
     'notices.new': 'Nuevo',

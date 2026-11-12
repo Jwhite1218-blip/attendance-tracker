@@ -3,6 +3,7 @@ import { useProgramTerms } from '../components/useProgramTerms.js'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import AllStarBanner from '../components/AllStarBanner.jsx'
+import ManagerTabs from '../components/ManagerTabs.jsx'
 import { getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { openStarCardWindow, starCardPreviewHtml } from '../lib/starCardPrinting.js'
 import { rememberStarCardsPrinted } from '../data/recognitionNoticeStore.js'
@@ -812,6 +813,11 @@ export default function RecognitionProgram() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-[#f7f3e9] pb-12">
+      {role === 'school' && (
+        <div className="mx-auto max-w-7xl px-3 pt-4 sm:px-6">
+          <ManagerTabs />
+        </div>
+      )}
       <div className="border-b-4 border-[#d5aa3d] bg-black px-3 pb-4 pt-3 sm:px-6 sm:pb-6 sm:pt-5">
         <div className="mx-auto max-w-7xl">
           <AllStarBanner

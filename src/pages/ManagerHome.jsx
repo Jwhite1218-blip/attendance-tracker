@@ -15,7 +15,7 @@
 // it only shows up in the history, so a personal celebration and this
 // kitchen's unprinted Star of the Day cards sit above the rest of the page.
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
 import { useLanguage } from '../components/LanguageProvider.jsx'
 import { LOCATION_MAP } from '../data/locations.js'
@@ -27,6 +27,7 @@ import HrFollowUpPanel from '../components/HrFollowUpPanel.jsx'
 import YourRecognition from '../components/YourRecognition.jsx'
 import RecognitionNotifications from '../components/RecognitionNotifications.jsx'
 import RecognitionMetrics, { recognitionTilesFor } from '../components/RecognitionMetrics.jsx'
+import ManagerTabs from '../components/ManagerTabs.jsx'
 import { attendanceSeverityOf, getAllFlaggedEmployees, splitFlaggedByEmploymentStatus } from '../data/hrFlags.js'
 import confetti from '../assets/allstars/confetti.jpg'
 import goldStar from '../assets/allstars/star-3d.png'
@@ -98,6 +99,8 @@ export default function ManagerHome() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 px-3 py-5 sm:px-6 sm:py-8">
+      <ManagerTabs />
+
       <RecognitionNotifications
         employeeId={employeeId}
         locationId={locationId}
@@ -154,46 +157,7 @@ export default function ManagerHome() {
         showLocation={false}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <TrackerButton
-          to={`/location/${encodeURIComponent(locationId)}`}
-          glyph="🗓"
-          title={t('managerHome.attendanceTracker')}
-          description={t('managerHome.attendanceTrackerHint')}
-        />
-        {canEditRecognition && (
-          <TrackerButton
-            to="/recognition"
-            glyph="★"
-            title={t('nav.allStars')}
-            description={t('managerHome.recognitionHint')}
-          />
-        )}
-        <TrackerButton
-          to="/ledger"
-          glyph="👤"
-          title={t('nav.employeeRecords')}
-          description={t('managerHome.recordsHint')}
-        />
-      </div>
     </div>
-  )
-}
-
-function TrackerButton({ to, glyph, title, description }) {
-  return (
-    <Link
-      to={to}
-      className="flex items-start gap-3 rounded-2xl border border-[#e8c65c]/35 bg-gradient-to-br from-[#2a2218] to-[#14110c] p-4 text-white shadow-sm transition hover:border-[#e8c65c]"
-    >
-      <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border border-[#e8c65c]/40 bg-[#e8c65c]/15 text-xl text-[#ffd75c]" aria-hidden="true">
-        {glyph}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-[#f8e7b0]">{title}</span>
-        <span className="mt-0.5 block text-xs text-amber-100/70">{description}</span>
-      </span>
-    </Link>
   )
 }
 
