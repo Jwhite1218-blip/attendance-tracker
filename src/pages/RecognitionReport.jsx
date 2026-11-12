@@ -11,14 +11,26 @@
 //
 // All the filtering lives in recognitionReports.js, where it is tested
 // without a browser. This file is the form.
+//
+// Jon, 2026-11-11: counts and rankings — by person, by building, by who
+// submitted — as views of the same filtered records. Only for district
+// administrators, the tier that can open Settings. The leaderboards came off
+// the screens everybody works from that day because recognition had become
+// a contest; the people who run the programme still need the numbers, and
+// the administrators giving the most stars do not need a ranking of it.
+// That is a choice about what to show, not a secret: every admin session
+// already receives these records, and the flat list names who gave each one.
 
 import { useMemo, useState } from 'react'
 import { useAuth } from '../components/PinGate.jsx'
 import { LOCATIONS } from '../data/locations.js'
-import { getEmployeeByKey } from '../data/employeeLocations.js'
+import { getEmployeeByKey, getEmployeesWithEffectiveLocations } from '../data/employeeLocations.js'
 import { getAllRecognitions, schoolYearStartFor } from '../data/recognitionStore.js'
 import { reportToCsv } from '../data/customReports.js'
+import { hasLizAdminAccess } from '../data/futureTools.js'
 import {
+  RECOGNITION_COUNT_VIEWS,
+  buildRecognitionCountsReport,
   buildRecognitionReport,
   recognitionReportFilename,
   recognitionReportMonths,
@@ -41,7 +53,9 @@ function downloadCsv(report, filename) {
 }
 
 export default function RecognitionReport() {
-  const { dataVersion } = useAuth()
+  const access = useAuth()
+  const { dataVersion } = access
+  const seesCounts = hasLizAdminAccess(access)
   const records = useMemo(() => getAllRecognitions(), [dataVersion])
   const startYear = useMemo(() => schoolYearStartFor(new Date()), [])
   const schoolYearLabel = `${startYear}–${String(startYear + 1).slice(2)}`
@@ -67,11 +81,37 @@ export default function RecognitionReport() {
   const [selectedTypes, setSelectedTypes] = useState(() => awardTypes.map(type => type.id))
   const [monthKey, setMonthKey] = useState('')
 
+  // 'records' is the flat list everybody with this report sees; the count
+  // views exist only for district administrators. Each count view keeps its
+  // own column to rank by, so switching views does not lose a sort.
+  const [view, setView] = useState('records')
+  const [sortByView, setSortByView] = useState({})
+  const activeView = seesCounts ? view : 'records'
+
+  // How many people work in each building now, for the per-head and
+  // coverage columns of the building view.
+  const staffByLocation = useMemo(() => {
+    const counts = {}
+    for (const employee of getEmployeesWithEffectiveLocations()) {
+      const locationId = String(employee.location || '')
+      if (locationId) counts[locationId] = (counts[locationId] || 0) + 1
+    }
+    return counts
+  }, [dataVersion])
+
   const options = { startYear, locationIds: selectedLocations, types: selectedTypes, monthKey }
   const report = useMemo(
-    () => buildRecognitionReport(records, getEmployeeByKey, options),
-    [records, selectedLocations, selectedTypes, monthKey, startYear]
+    () => (activeView === 'records'
+      ? buildRecognitionReport(records, getEmployeeByKey, options)
+      : buildRecognitionCountsReport(
+        records,
+        { resolveEmployee: getEmployeeByKey, staffByLocation },
+        options,
+        { view: activeView, sortBy: sortByView[activeView] }
+      )),
+    [records, selectedLocations, selectedTypes, monthKey, startYear, activeView, sortByView, staffByLocation]
   )
+  const countsView = activeView !== 'records'
 
   const toggle = (setter, value) => setter(current => (
     current.includes(value) ? current.filter(item => item !== value) : [...current, value]
@@ -82,6 +122,18 @@ export default function RecognitionReport() {
   const periodLabel = monthKey
     ? months.find(month => month.key === monthKey)?.label || monthKey
     : `${schoolYearLabel} school year`
+  const rowUnits = {
+    records: ['recognition', 'recognitions'],
+    person: ['person', 'people'],
+    building: ['building', 'buildings'],
+    submitter: ['submitter', 'submitters'],
+  }[activeView]
+  const rankedBy = report.columns?.find(column => column.id === report.sortBy)?.label.toLowerCase()
+  const previewSummary = [
+    `${report.rows.length} ${rowUnits[report.rows.length === 1 ? 0 : 1]}`,
+    periodLabel,
+    countsView && `ranked by ${rankedBy} — choose a column heading to rank by it instead`,
+  ].filter(Boolean).join(' · ')
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -90,11 +142,12 @@ export default function RecognitionReport() {
           <h1 className="text-2xl font-bold text-white">All-Star Recognition Report</h1>
           <p className="text-sm text-charcoal-200 mt-1">
             Every recognition given, by building, by award and by month. Preview it here, then export a CSV that opens in Excel.
+            {seesCounts && ' Counts and rankings by person, building and who submitted them are below.'}
           </p>
         </div>
         <button
           type="button"
-          onClick={() => downloadCsv(report, recognitionReportFilename(options))}
+          onClick={() => downloadCsv(report, recognitionReportFilename(options, activeView))}
           disabled={!canExport}
           className="self-start px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 disabled:opacity-40 disabled:cursor-not-allowed"
         >
@@ -186,12 +239,29 @@ export default function RecognitionReport() {
       </div>
 
       <section className="bg-white rounded-xl border border-gray-200 overflow-hidden" aria-labelledby="recognition-report-preview">
+        {seesCounts && (
+          <div className="flex flex-wrap gap-1 border-b border-gray-200 bg-gray-50 px-3 pt-3 sm:px-4">
+            {[{ id: 'records', label: 'Every recognition' }, ...RECOGNITION_COUNT_VIEWS].map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setView(item.id)}
+                aria-current={activeView === item.id ? 'true' : undefined}
+                className={`rounded-t-lg px-4 py-2.5 text-xs font-semibold transition-colors ${
+                  activeView === item.id
+                    ? 'border border-b-white border-gray-200 bg-white text-brand-700'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
             <h2 id="recognition-report-preview" className="text-sm font-semibold text-gray-800">Report Preview</h2>
-            <p className="text-xs text-gray-400 mt-1">
-              {report.rows.length} recognition{report.rows.length === 1 ? '' : 's'} · {periodLabel}
-            </p>
+            <p className="text-xs text-gray-400 mt-1">{previewSummary}</p>
           </div>
           {nothingChosen && <p className="text-xs font-medium text-amber-600">Choose at least one building and one award type.</p>}
         </div>
@@ -201,17 +271,45 @@ export default function RecognitionReport() {
             <table className="w-full">
               <thead className="sticky top-0 bg-gray-50 z-10">
                 <tr className="border-b border-gray-200">
-                  {report.columns.map(column => (
-                    <th key={column.id} className="text-left text-xs font-medium text-gray-500 uppercase tracking-wide px-4 py-3 whitespace-nowrap">{column.label}</th>
-                  ))}
+                  {report.columns.map(column => {
+                    // In a count view every number except the rank itself
+                    // can be ranked by; the flat list has no such columns.
+                    const sortable = countsView && column.numeric && column.id !== 'rank'
+                    const sorted = sortable && report.sortBy === column.id
+                    return (
+                      <th
+                        key={column.id}
+                        aria-sort={sorted ? 'descending' : undefined}
+                        className={`text-xs font-medium uppercase tracking-wide px-4 py-3 whitespace-nowrap ${column.numeric ? 'text-right' : 'text-left'} ${sorted ? 'text-brand-700' : 'text-gray-500'}`}
+                      >
+                        {sortable ? (
+                          <button
+                            type="button"
+                            onClick={() => setSortByView(current => ({ ...current, [activeView]: column.id }))}
+                            className="uppercase tracking-wide hover:text-brand-700"
+                          >
+                            {column.label}{sorted ? ' ▼' : ''}
+                          </button>
+                        ) : column.label}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
                 {report.rows.map((row, index) => (
-                  <tr key={`${row.date}-${row.employee}-${index}`} className="border-b border-gray-100 even:bg-gray-50/40">
-                    {report.columns.map(column => (
-                      <td key={column.id} className="text-sm text-gray-700 px-4 py-2.5">{row[column.id] || '—'}</td>
-                    ))}
+                  <tr key={`${row.date || row.rank}-${row.employee || row.school || row.submitter}-${index}`} className="border-b border-gray-100 even:bg-gray-50/40">
+                    {report.columns.map(column => {
+                      const value = row[column.id]
+                      return (
+                        <td
+                          key={column.id}
+                          className={`text-sm px-4 py-2.5 ${column.numeric ? 'text-right tabular-nums' : ''} ${column.id === 'rank' ? 'font-semibold text-gray-900' : 'text-gray-700'}`}
+                        >
+                          {value === '' || value == null ? '—' : value}
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>

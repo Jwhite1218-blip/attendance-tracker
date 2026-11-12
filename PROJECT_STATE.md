@@ -1,6 +1,10 @@
 # Attendance Tracker — Project State
 
-Last verified: 2026-10-30
+Last verified: 2026-11-11
+
+**2026-11-11: no leaderboards.** Nothing on the recognition screens or the
+school pages ranks people by how many stars they have. See "Shipped
+2026-11-11" below.
 
 **2026-10-30: the district payroll number is gone — from the records, the
 database, every Netlify copy and the repository's history.** See "Shipped
@@ -31,11 +35,12 @@ individual bugs.
 - Canonical branch: `main`
 - Production site: `allstartracker`
 - Production URL: `https://allstartracker.netlify.app`
-- Verified production commit: `35707af6b53a2cbe0a1d35888528a79a5ebfdd97`
-- Test suite: 508 passing (`npm test`)
+- Verified production commit: `7a66e34052eea8b3a67e778dfdfc98319c099ae2`
+- Test suite: 507 passing (`npm test`)
 - Page render check: 34 clean (`npm run verify:pages`)
-- Confirmed live: `/version.json` returns that commit, 2026-10-30, and it is
-  the only deploy Netlify holds for the site
+- Confirmed live: `/version.json` returns that commit, 2026-11-11, about 20
+  seconds after the push; `npm run test:recognition:remote` passes for all
+  15 school pages
 
 ## Environment roles
 - Production: `allstartracker` — Supabase-backed live data and the enabled end-of-day report.
@@ -511,7 +516,7 @@ payroll numbers were typed into this repository during the work — two as
 test examples, one in a commit message quoting a screenshot — and had to be
 rewritten out with the rest. Hence the first rule above.
 
-## Built 2026-11-11 — no leaderboards (not yet deployed)
+## Shipped 2026-11-11 — no leaderboards
 
 Jon's decision, after looking at how stars were being given. From the
 2026-10-30 backup (315 Stars of the Day, Aug 30 – Oct 31): in October 82 of
@@ -542,7 +547,7 @@ counting, so the rankings came out:
   `{ name, awards: [type…] }` in name order, and sends `leaders` empty for
   pages still open on the old script. The month is the district's
   (Indianapolis), not UTC. `npm run test:recognition:remote` checks the new
-  shape, so it fails against production until this is deployed.
+  shape, and passed for all 15 schools once this was live.
 - **The levels band** reads Settings (`starLevels()`) rather than the
   shipped defaults, so a renamed milestone matches the progress line above.
 - Removed with their tests: `topLeaderboardEntries`,
@@ -566,6 +571,34 @@ first real award has happened.
   manager-grade staff. Managers would lose their star levels and past
   building totals would drop; past drawings are unaffected. A dry-run list
   of every record that would change goes to Liz before anything is touched.
+
+## Built 2026-11-11 (later) — counts and rankings, in the report (not yet deployed)
+
+Jon, the same day: the numbers are still wanted, just not on the screens
+people work from. The All-Star recognition report (Reports → All-Star
+recognition report) gains three views beside its flat list, all on the same
+building / award / month filters and all exporting to CSV:
+
+- **By person** — counts per award type and a total.
+- **By building** — staff there now, people recognized, % of staff
+  recognized, counts, total and per staff member.
+- **By who submitted** — the name recorded and the login it came from,
+  counts, people recognized, most to one person, % dated in the last week
+  of the month, and how many were entered 7+ days after their date. Two
+  people sharing one login under one name are one row.
+
+Each view is ranked (ties share a rank; the next skips) by the total, or by
+any number column whose heading is clicked. `buildRecognitionCountsReport`
+in recognitionReports.js.
+
+**Only district administrators see them** — `hasLizAdminAccess`, the tier
+that opens Settings. Every other login with this report keeps the flat list
+and no tabs; the render check forbids the tabs for a limited administrator.
+This is about what is shown, not a secret: every admin session already
+receives these records, and the flat list names who gave each one.
+
+514 tests, 35 page renders clean; driven in a browser through the harness
+as a district administrator and as a limited one.
 
 ## Decided by Liz, 2026-10-19
 
@@ -606,7 +639,7 @@ Answered by Liz directly, so these are settled unless she reopens them.
    been made or decided. The first one is worth watching end to end.
 
 3. **ACE Coach standings for managers — settled 2026-11-11 by removing
-   standings altogether; see "Built 2026-11-11".** Kept for the reasoning. Today a
+   standings altogether; see "Shipped 2026-11-11".** Kept for the reasoning. Today a
    manager sees their own Coach Buck count and next milestone on their own
    record, and nothing about anyone else. Two reasons: the section is
    admin-only, and a building login is only sent recognition for its own

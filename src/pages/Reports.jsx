@@ -11,7 +11,7 @@
 
 import { Link } from 'react-router-dom'
 import { useAuth } from '../components/PinGate.jsx'
-import { canAccessRecognitionProgram, canViewAttendance } from '../data/futureTools.js'
+import { canAccessRecognitionProgram, canViewAttendance, hasLizAdminAccess } from '../data/futureTools.js'
 
 function ReportCard({ to, title, description }) {
   return (
@@ -44,7 +44,11 @@ export default function Reports() {
     seesRecognition && {
       to: '/reports/recognition',
       title: 'All-Star recognition report',
-      description: 'Every recognition given, filtered by building, award type and month, ready to export as a spreadsheet.',
+      // The count and ranking views are for district administrators only;
+      // see RecognitionReport for why.
+      description: hasLizAdminAccess(access)
+        ? 'Every recognition given, plus counts and rankings by person, building and who submitted them — filtered by building, award type and month, ready to export.'
+        : 'Every recognition given, filtered by building, award type and month, ready to export as a spreadsheet.',
     },
     seesAttendance && {
       to: '/reports/master',

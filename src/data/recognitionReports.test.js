@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildRecognitionCountsReport,
   buildRecognitionReport,
   filterRecognitionsForReport,
   recognitionReportFilename,
@@ -138,5 +139,98 @@ test('the filename says which period and award it holds', () => {
   assert.equal(
     recognitionReportFilename({ startYear: 2026, monthKey: '2026-10', types: ['ace-buck'] }),
     'recognition-report-2026-10-ace-buck.csv',
+  )
+})
+
+// --- counts and rankings (district administrators, 2026-11-11) --------------
+
+const PEOPLE = {
+  901: { first_name: 'Ana', last_name: 'Vale', position: 'Cook', location: 'LibertyPkE' },
+  902: { first_name: 'Ben', last_name: 'Cole', position: 'Food Service Worker', location: 'LibertyPkE' },
+  903: { first_name: 'Cara', last_name: 'Dunn', position: 'Food Service Worker', location: 'CrestonMS' },
+  904: { first_name: 'Dee', last_name: 'Fox', position: 'Cook', location: 'CrestonMS' },
+}
+const COUNT_RECORDS = [
+  award({ id: 'a1', employeeId: '901', locationId: 'LibertyPkE', date: '2026-10-27', recognizedBy: 'Liberty Park Manager', recognizedByLocationId: 'LibertyPkE', createdAt: '2026-10-27T15:00:00Z' }),
+  award({ id: 'a2', employeeId: '901', locationId: 'LibertyPkE', date: '2026-10-28', recognizedBy: 'Liberty Park Manager', recognizedByLocationId: 'LibertyPkE', createdAt: '2026-10-28T15:00:00Z' }),
+  award({ id: 'a3', employeeId: '901', locationId: 'LibertyPkE', date: '2026-10-29', recognizedBy: 'Liberty Park Manager', recognizedByLocationId: 'LibertyPkE', createdAt: '2026-10-29T15:00:00Z' }),
+  award({ id: 'b1', employeeId: '902', locationId: 'LibertyPkE', date: '2026-10-06', recognizedBy: 'Marlene', recognizedByLocationId: 'district', createdAt: '2026-10-20T15:00:00Z' }),
+  award({ id: 'b2', employeeId: '902', locationId: 'LibertyPkE', type: 'star-shout-out', date: '2026-10-07', recognizedBy: 'marlene ', recognizedByLocationId: 'district', createdAt: '2026-10-07T15:00:00Z' }),
+  award({ id: 'c1', employeeId: '903', locationId: 'CrestonMS', date: '2026-10-08', recognizedBy: 'Marlene', recognizedByLocationId: 'district', createdAt: '2026-10-08T15:00:00Z' }),
+  award({ id: 'c2', employeeId: '903', locationId: 'CrestonMS', type: 'ace-buck', date: '2026-10-09', recognizedBy: 'Marlene', recognizedByLocationId: 'district', createdAt: '2026-10-09T15:00:00Z' }),
+]
+const countsFor = (view, options = {}, sortBy) => buildRecognitionCountsReport(
+  COUNT_RECORDS,
+  { resolveEmployee: id => PEOPLE[String(id)] || null, staffByLocation: { LibertyPkE: 4, CrestonMS: 5 } },
+  { startYear: 2026, ...options },
+  { view, sortBy },
+)
+const column = (report, id) => report.rows.map(row => row[id])
+
+test('by person: counts per award type, a total, and a rank', () => {
+  const report = countsFor('person')
+  assert.deepEqual(column(report, 'employee'), ['Ana Vale', 'Ben Cole', 'Cara Dunn'])
+  assert.deepEqual(column(report, 'total'), [3, 2, 2])
+  assert.deepEqual(column(report, 'count:star-of-day'), [3, 1, 1])
+  assert.deepEqual(column(report, 'count:star-shout-out'), [0, 1, 0])
+  assert.equal(report.columns[0].id, 'rank')
+})
+
+test('people level on a count share a rank, and the next rank skips', () => {
+  const report = countsFor('person')
+  assert.deepEqual(column(report, 'rank'), [1, 2, 2])
+  const byBucks = countsFor('person', {}, 'count:ace-buck')
+  assert.deepEqual(column(byBucks, 'employee'), ['Cara Dunn', 'Ana Vale', 'Ben Cole'])
+  assert.deepEqual(column(byBucks, 'rank'), [1, 2, 2])
+})
+
+test('only the award types chosen get a column, and only they are counted', () => {
+  const report = countsFor('person', { types: ['star-of-day'] })
+  const ids = report.columns.map(item => item.id)
+  assert.ok(ids.includes('count:star-of-day'))
+  assert.ok(!ids.includes('count:star-shout-out'))
+  assert.deepEqual(column(report, 'total'), [3, 1, 1])
+})
+
+test('by building: coverage and per-head use the staff there now', () => {
+  const report = countsFor('building')
+  const liberty = report.rows.find(row => row.school === 'Liberty Park Elementary')
+  assert.equal(liberty.staff, 4)
+  assert.equal(liberty.people, 2)
+  assert.equal(liberty.coverage, 50)
+  assert.equal(liberty.total, 5)
+  assert.equal(liberty.per_staff, 1.3)
+  assert.equal(report.rows[0].school, 'Liberty Park Elementary')
+})
+
+test('by who submitted: one row per name and login, with the patterns worth seeing', () => {
+  const report = countsFor('submitter')
+  // "marlene " and "Marlene" from the same login are one submitter.
+  assert.equal(report.rows.length, 2)
+  const marlene = report.rows.find(row => row.submitter === 'Marlene')
+  assert.equal(marlene.login, 'District admin')
+  assert.equal(marlene.total, 4)
+  assert.equal(marlene.people, 2)
+  assert.equal(marlene.most_to_one, 2)
+  assert.equal(marlene.entered_late, 1)
+  assert.equal(marlene.final_week, 0)
+  const liberty = report.rows.find(row => row.submitter === 'Liberty Park Manager')
+  assert.equal(liberty.login, 'Liberty Park Elementary')
+  assert.equal(liberty.most_to_one, 3)
+  // 27, 28 and 29 October are all in the month's last seven days.
+  assert.equal(liberty.final_week, 100)
+})
+
+test('an unknown column to rank by falls back to the total', () => {
+  assert.equal(countsFor('person', {}, 'nonsense').sortBy, 'total')
+  assert.equal(countsFor('person', {}, 'employee').sortBy, 'total')
+})
+
+test('a count view exports through the same CSV writer, rank first', () => {
+  const [header] = reportToCsv(countsFor('person', { types: ['star-of-day'] })).split('\r\n')
+  assert.equal(header, 'Rank,Employee,School,Position,Stars of the Day,Total')
+  assert.equal(
+    recognitionReportFilename({ startYear: 2026, monthKey: '2026-10' }, 'submitter'),
+    'recognition-report-2026-10-by-submitter.csv',
   )
 })

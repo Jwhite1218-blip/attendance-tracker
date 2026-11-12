@@ -184,8 +184,17 @@ const PAGES = [
     manager: ['Employee Records'],
   }],
   ['CustomReport', CustomReport, '/reports/custom', [LIZ]],
-  ['RecognitionReport', RecognitionReport, '/reports/recognition', [LIZ], {
-    admin: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month'],
+  // The count and ranking views are for district administrators only
+  // (Jon, 2026-11-11): another administrator gets the flat list and nothing
+  // that ranks anybody.
+  ['RecognitionReport', RecognitionReport, '/reports/recognition', [LIZ, LIMITED_ADMIN], {
+    // Delimited, because the page's own description begins "Every
+    // recognition given" — the tab is the thing being looked for.
+    admin: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month',
+            '>Every recognition<', '>By person<', '>By building<', '>By who submitted<'],
+    limited: ['All-Star Recognition Report', 'Buildings', 'Award types', 'Month'],
+  }, {
+    limited: ['>Every recognition<', '>By person<', '>By building<', '>By who submitted<'],
   }],
   ['MasterReport', MasterReport, '/reports/master', [LIZ]],
   ['DailyReport', DailyReport, '/reports/daily', [LIZ]],
